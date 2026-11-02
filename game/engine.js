@@ -1,6 +1,7 @@
 // =====================================================================
-//  ENGINE: primitivas de dibujo, personajes, fondos y sonido.
+//  ENGINE — Canvas primitives, characters, backgrounds, SFX
 // =====================================================================
+const S = 2;
 const W = 320, H = 180;
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
@@ -62,10 +63,11 @@ function star(cx, cy, c) {
   px(cx - 1, cy + 2, c); px(cx + 1, cy + 2, c);
 }
 
-// ---------- Personajes: monigotes oscuros ----------
-const FIG = { body: '#0b0a10', edge: '#3a3646', eye: '#e8e4dc' };
+const FIG = { body: '#10101a', edge: '#4a4660', eye: '#f0ecdc' };
 
 function figure(x, y, o, t) {
+  const sc = o.scale || 1;
+  if (sc !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.translate(-x, -y); }
   const f = o.face || 1;
   let bob = Math.round(Math.sin(t / 420 + x) * 0.6);
   if (o.talk) bob -= Math.round(Math.abs(Math.sin(t / 90)));
@@ -78,7 +80,6 @@ function figure(x, y, o, t) {
     : o.sitting ? [[x - 8, y], [x + 8, y]] : [[x - 4, y], [x + 4, y]];
   const armL = o.lifted ? [x - 7, sh - 6] : [x - 6, y - 11];
   const armR = o.armless ? [x + 3, sh + 4] : o.lifted ? [x + 7, sh - 6] : [x + 6, y - 11];
-
   for (const [col, extra] of [[FIG.edge, 1], [FIG.body, 0]]) {
     const th = 2 + extra * 2;
     disc(hx, hy, 5 + extra, col);
@@ -89,21 +90,27 @@ function figure(x, y, o, t) {
   }
   px(hx + f * 1, hy - 1, FIG.eye); px(hx + f * 3, hy - 1, FIG.eye);
   if (o.pain) { px(hx + f * 1, hy - 2, FIG.eye); px(hx + f * 3, hy, FIG.eye); }
-
   if (o.hat === 'headset') {
-    line(hx - 5, hy - 1, hx - 4, hy - 5, '#5a5668');
-    line(hx - 4, hy - 5, hx + 4, hy - 5, '#5a5668');
-    line(hx + 4, hy - 5, hx + 5, hy - 1, '#5a5668');
-    rect(hx - 7, hy - 2, 2, 4, '#7a7690'); rect(hx + 6, hy - 2, 2, 4, '#7a7690');
+    line(hx - 5, hy - 1, hx - 4, hy - 5, '#7a7890');
+    line(hx - 4, hy - 5, hx + 4, hy - 5, '#7a7890');
+    line(hx + 4, hy - 5, hx + 5, hy - 1, '#7a7890');
+    rect(hx - 7, hy - 2, 2, 4, '#9a96b0'); rect(hx + 6, hy - 2, 2, 4, '#9a96b0');
   } else if (o.hat === 'cap') {
-    rect(hx - 5, hy - 6, 11, 3, '#2c2a3a');
-    rect(hx + (f > 0 ? 2 : -9), hy - 4, 8, 2, '#2c2a3a');
-    px(hx - 1, hy - 5, '#6a3a3a');
+    rect(hx - 5, hy - 6, 11, 3, '#3a384e');
+    rect(hx + (f > 0 ? 2 : -9), hy - 4, 8, 2, '#3a384e');
+    px(hx - 1, hy - 5, '#8a4a4a');
   }
   if (o.armless) {
-    rect(armR[0] - 1, armR[1] - 1, 3, 3, '#cfc6b4');
-    if (o.bleed) px(armR[0], armR[1] + 2, '#7a1018');
+    if (o.bandaged) {
+      rect(armR[0] - 1, armR[1] - 1, 3, 3, '#d8d0c0');
+      px(armR[0], armR[1] - 1, '#b0a890');
+      px(armR[0] - 1, armR[1], '#b0a890');
+    } else {
+      rect(armR[0] - 1, armR[1] - 1, 3, 3, '#cfc6b4');
+      px(armR[0], armR[1] + 2, '#7a1018');
+    }
   }
+  if (sc !== 1) ctx.restore();
 }
 
 function avatarHead(cx, cy, hat, t, dim) {
@@ -120,13 +127,13 @@ function avatarHead(cx, cy, hat, t, dim) {
   }
 }
 
-// ---------- Corrompido ----------
 function corrupted(x, y, o, t) {
+  const sc = o.scale || 1;
+  if (sc !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.translate(-x, -y); }
   const jit = o.rage ? Math.round((hash(Math.floor(t / 40)) - 0.5) * 4) : 0;
   x += jit;
-  const body = '#100a10', edge = '#4a1a26', glow = '#ff2a3c';
+  const body = '#180e18', edge = '#6a2438', glow = '#ff3a50';
   const sway = Math.round(Math.sin(t / 600) * 1.5);
-
   const coat = [[x - 14, y - 50], [x + 12, y - 52], [x + 16, y - 20], [x + 13, y],
     [x + 8, y - 6], [x + 4, y + 1], [x - 1, y - 7], [x - 6, y + 1], [x - 10, y - 5], [x - 16, y - 1], [x - 18, y - 22]];
   poly(coat.map(([a, b]) => [a - 1, b - 1]), edge);
@@ -155,9 +162,9 @@ function corrupted(x, y, o, t) {
     const k = Math.floor(t / 120) * 10 + i;
     if (hash(k) > 0.55) px(x - 22 + hash(k + 1) * 50, y - 70 + hash(k + 2) * 70, hash(k + 3) > 0.5 ? glow : '#c8a8ff');
   }
+  if (sc !== 1) ctx.restore();
 }
 
-// ---------- Brecha ----------
 function rift(cx, cy, w, h, t) {
   if (w <= 0) return;
   const n = 14, L = [], R = [];
@@ -169,18 +176,58 @@ function rift(cx, cy, w, h, t) {
     L.push([cx - w * k + j1 * k, yy]); R.unshift([cx + w * k + j2 * k, yy]);
   }
   const all = L.concat(R);
-  poly(all.map(([a, b]) => [a + (a < cx ? -2 : 2), b]), '#f0e8ff');
-  poly(all, '#4a1a7a');
-  poly(all.map(([a, b]) => [cx + (a - cx) * 0.6, b]), '#12041e');
+  poly(all.map(([a, b]) => [a + (a < cx ? -2 : 2), b]), '#e0d0ff');
+  poly(all, '#6a28a0');
+  poly(all.map(([a, b]) => [cx + (a - cx) * 0.6, b]), '#1a0830');
   for (let i = 0; i < 8; i++) {
     const k = Math.floor(t / 60) + i * 13;
-    px(cx + (hash(k) - 0.5) * w, cy + (hash(k + 5) - 0.5) * h * 0.8, '#c8a8ff');
+    px(cx + (hash(k) - 0.5) * w, cy + (hash(k + 5) - 0.5) * h * 0.8, '#d8b8ff');
   }
 }
 
-// ---------- Fondos ----------
 const BG = {};
 BG.black = () => rect(0, 0, W, H, '#000');
+
+BG.arena = (s, t) => {
+  rect(0, 0, W, H, '#0c0814');
+  for (let y = 80; y < H; y++) {
+    const k = (y - 80) / (H - 80);
+    const r = Math.floor(14 + k * 22), g = Math.floor(10 + k * 14), b = Math.floor(24 + k * 28);
+    rect(0, y, W, 1, `rgb(${r},${g},${b})`);
+  }
+  for (let i = -6; i <= 6; i++) {
+    const sx = 160 + i * 28, ey = 180;
+    const topX = 160 + i * 6, topY = 80;
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = '#8060c0'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(topX, topY); ctx.lineTo(sx, ey); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  for (let j = 0; j < 5; j++) {
+    const y = 90 + j * 18;
+    const spread = 0.3 + (y - 80) / 100 * 0.7;
+    ctx.globalAlpha = 0.18; rect(160 - spread * 160, y, spread * 320, 1, '#a070e0'); ctx.globalAlpha = 1;
+  }
+  ctx.globalAlpha = 0.15;
+  for (let y = 0; y < 40; y++) rect(0, y, W, 1, '#e03050');
+  ctx.globalAlpha = 0.18;
+  for (let y = 40; y < 80; y++) {
+    const a = Math.sin(((y - 40) / 40) * Math.PI) * 0.18;
+    ctx.globalAlpha = a; rect(0, y, W, 1, '#8040c0');
+  }
+  ctx.globalAlpha = 1;
+  for (let i = 0; i < 20; i++) {
+    const k = Math.floor(t / 120) * 20 + i;
+    const px2 = (hash(k) * W + t * 0.02) % W;
+    const py = 10 + hash(k + 1) * 70;
+    const a2 = 0.4 + 0.3 * Math.sin(t / 300 + i);
+    ctx.globalAlpha = a2;
+    const col = hash(k + 2) > 0.5 ? '#ff3050' : '#b080ff';
+    px(px2, py, col);
+    ctx.globalAlpha = 1;
+  }
+  ctx.globalAlpha = 0.3; rect(0, 0, 8, H, '#000'); rect(W - 8, 0, 8, H, '#000'); ctx.globalAlpha = 1;
+};
 
 BG.call = (s, t) => {
   rect(0, 0, W, H, '#16151c');
@@ -252,7 +299,7 @@ BG.room = (s, t) => {
   rect(0, 132, W, 48, '#1e1828');
   for (let x = 0; x < W; x += 24) rect(x, 132, 1, 48, '#241c30');
   rect(0, 132, W, 1, '#2c2438');
-  if (!s.monitorOff) for (let i = 0; i < 40; i += 2) rect(110 + i, 134 + (i % 4), 40 - i, 1, 'rgba(58,90,152,0.08)');
+  if (!s.monitorOff) for (let i = 0; i < 40; i += 2) rect(110 + i, 134 + (i % 4), 40 - i, 1, 'rgba(70,110,180,0.2)');
 };
 
 BG.branch = (s, t) => {
@@ -280,32 +327,35 @@ BG.branch = (s, t) => {
   const lampOn = hash(Math.floor(t / 80)) > 0.12;
   if (lampOn) {
     rect(266, 61, 8, 2, '#f0d890');
-    poly([[262, 63], [278, 63], [292, 138], [248, 138]], 'rgba(240,216,144,0.07)');
+    poly([[262, 63], [278, 63], [292, 138], [248, 138]], 'rgba(240,216,144,0.15)');
   }
   rect(0, 138, W, 42, '#16141a');
   for (let x = 0; x < W; x += 20) rect(x, 150, 10, 1, '#24222a');
   for (let i = 0; i < 60; i++) {
     const rx = (hash(i) * W + t * 0.05) % W, ry = (hash(i + 40) * H + t * 0.4) % H;
-    rect(rx, ry, 1, 3, 'rgba(160,160,200,0.18)');
+    rect(rx, ry, 1, 3, 'rgba(190,190,230,0.4)');
   }
 };
 
-// ---------- Sonido ----------
 const SFX = {
   ac: null, muted: false,
   init() { if (!this.ac) try { this.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} },
   tone(freq, dur, type = 'square', vol = 0.04, slide = 0) {
     if (this.muted || !this.ac) return;
+    const v = vol * (CFG.sfxVol / 100);
+    if (v <= 0) return;
     try {
       const o = this.ac.createOscillator(), g = this.ac.createGain(), n = this.ac.currentTime;
       o.type = type; o.frequency.setValueAtTime(freq, n);
       if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), n + dur);
-      g.gain.setValueAtTime(vol, n); g.gain.exponentialRampToValueAtTime(0.0001, n + dur);
+      g.gain.setValueAtTime(v, n); g.gain.exponentialRampToValueAtTime(0.0001, n + dur);
       o.connect(g).connect(this.ac.destination); o.start(n); o.stop(n + dur);
     } catch(e){}
   },
   noise(dur, vol = 0.2, f0 = 2000, f1 = 200) {
     if (this.muted || !this.ac) return;
+    vol = vol * (CFG.sfxVol / 100);
+    if (vol <= 0) return;
     try {
       const n = this.ac.currentTime, len = Math.floor(this.ac.sampleRate * dur);
       const buf = this.ac.createBuffer(1, len, this.ac.sampleRate), d = buf.getChannelData(0);
@@ -334,28 +384,3 @@ const SFX = {
     }
   },
 };
-
-// =====================================================================
-//  SAVE SYSTEM
-// =====================================================================
-const SAVE = {
-  _key: 'distorsion-externa-save',
-  _data: null,
-  load() {
-    try {
-      const raw = localStorage.getItem(this._key);
-      this._data = raw ? JSON.parse(raw) : {};
-    } catch(e) { this._data = {}; }
-    return this._data;
-  },
-  save(updates) {
-    try {
-      Object.assign(this._data, updates);
-      localStorage.setItem(this._key, JSON.stringify(this._data));
-      const el = document.getElementById('save-indicator');
-      if (el) { el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 1200); }
-    } catch(e) {}
-  },
-  get(key, fallback) { return this._data && this._data[key] !== undefined ? this._data[key] : fallback; },
-};
-SAVE.load();

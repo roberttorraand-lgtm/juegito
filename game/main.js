@@ -1,13 +1,13 @@
 // =====================================================================
-//  Bucle principal: hub, reproductor de la historia y efectos.
+//  MAIN — State, story runner, input, render loop
 // =====================================================================
 const $ = (id) => document.getElementById(id);
 const ui = {
-  hub: $('hub'), chapters: $('chapters'),
+  hub: $('hub'), levels: $('levels'), confirm: $('confirm'), settings: $('settings'),
+  combatUI: $('combat-ui'),
   card: $('card'), cardTitle: document.querySelector('.c-title'),
   cardSub: document.querySelector('.c-sub'), box: $('box'), name: $('name'),
   text: $('text'), next: $('next'),
-  ch1status: $('ch1-status'),
 };
 
 const G = {
@@ -15,54 +15,50 @@ const G = {
   shakeUntil: 0, flash: null, fade: 0, fadeAnim: null,
   typing: null, waiting: null, skip: false,
   hubView: 'main',
+  hubTab: 'ventana',
+  hubNavSel: 0,
+  mapSel: 0,
+  mapModeSel: 0,
+  scene: null,
+  steps: [],
+  pendingScene: null,
 };
 
-// ---- Hub menu ----
-function showHub() {
-  G.mode = 'hub'; G.hubView = 'main'; G.s = {}; G.actors = {}; G.fade = 0;
-  ui.card.classList.add('hidden'); hideBox();
-  ui.hub.classList.remove('hidden');
-  ui.chapters.classList.add('hidden');
-  updateChapterStatus();
-  refreshHubBtns();
+function isSceneUnlocked(sc) {
+  if (!sc.requires) return true;
+  return SAVE.get('done_' + sc.requires, false);
 }
 
-function updateChapterStatus() {
-  const done = SAVE.get('ep1_completed', false);
-  if (ui.ch1status) ui.ch1status.textContent = done ? '✓ Completado' : '● Nuevo';
-}
+function isSceneDone(sc) { return SAVE.get('done_' + sc.id, false); }
 
-function showChapters() {
-  G.hubView = 'chapters';
-  ui.chapters.classList.remove('hidden');
-  refreshHubBtns();
-  SFX.play('select');
-}
-
-function hideChapters() {
-  G.hubView = 'main';
-  ui.chapters.classList.add('hidden');
-  refreshHubBtns();
-  SFX.play('select');
-}
-
-function startStory() {
-  G.mode = 'play'; G.idx = 0; G.s = { bg: 'black' }; G.actors = {}; G.fade = 1;
-  ui.hub.classList.add('hidden');
-  ui.chapters.classList.add('hidden');
-  SAVE.save({ current_idx: 0 });
-  run();
-}
-
+// Init hub (hub.js defines showHub)
 showHub();
 
-// ---------- Reproductor ----------
+// ---------- Story runner ----------
 function run() {
-  while (G.idx < STORY.length) {
-    const st = STORY[G.idx++];
-    if (st.card) SAVE.save({ current_idx: G.idx - 1 });
+  while (G.idx < G.steps.length) {
+    const st = G.steps[G.idx++];
     if (handle(st)) return;
   }
+  finishScene();
+}
+
+function finishScene() {
+  hideBox();
+  const sc = G.scene;
+  SAVE.save({ ['done_' + sc.id]: true, current_scene: null });
+  const nextIdx = SCENES.indexOf(sc) + 1;
+  const next = nextIdx < SCENES.length && SCENES[nextIdx].ep === sc.ep ? SCENES[nextIdx] : null;
+  if (next) {
+    ui.cardTitle.textContent = `ESCENA ${sc.num} COMPLETADA`;
+    ui.cardSub.textContent = 'Siguiente: ' + next.title;
+  } else {
+    ui.cardTitle.textContent = 'FIN DEL EPISODIO ' + sc.ep;
+    ui.cardSub.textContent = 'Continuará...';
+  }
+  ui.card.classList.remove('hidden');
+  G.mode = 'end'; G.waiting = 'card';
+  G._nextScene = next;
 }
 
 function later(ms, fn) { setTimeout(fn, G.skip ? Math.min(ms, 60) : ms); }
@@ -108,15 +104,6 @@ function handle(st) {
     return true;
   }
   if (st.say || st.narr || st.scream) { showText(st); return true; }
-  if (st.end) {
-    hideBox();
-    ui.cardTitle.textContent = 'FIN DEL EPISODIO 1';
-    ui.cardSub.textContent = 'Continuará...';
-    ui.card.classList.remove('hidden');
-    G.mode = 'end'; G.waiting = 'card';
-    SAVE.save({ ep1_completed: true, current_idx: null });
-    return true;
-  }
   return false;
 }
 
@@ -143,7 +130,8 @@ function tick() {
   const ch = ty.full[ty.shown - 1];
   if (ch && ch !== ' ' && ty.shown % 2 && ty.who) SFX.blip(ty.who);
   if (ty.shown >= ty.full.length) return finishTyping();
-  const pause = /[.,!?]/.test(ch) ? 90 : 28;
+  const spd = CFG.textSpeed === 'muyrapido' ? 0.3 : CFG.textSpeed === 'rapido' ? 0.6 : 1;
+  const pause = (/[.,!?]/.test(ch) ? 90 : 28) * spd;
   ty.timer = setTimeout(tick, pause);
 }
 
@@ -171,53 +159,15 @@ function advance() {
   if (G.waiting === 'card') {
     ui.card.classList.add('hidden');
     G.waiting = null;
-    if (G.mode === 'end') return showHub();
+    if (G.mode === 'end') {
+      if (G._nextScene) { startScene(G._nextScene); G._nextScene = null; }
+      else showHub();
+      return;
+    }
     G.mode = 'play';
     return run();
   }
 }
-
-// ---------- Hub Input ----------
-let hubBtns = [];
-let hubSel = 0;
-
-function refreshHubBtns() {
-  if (G.hubView === 'chapters') {
-    hubBtns = [...ui.chapters.querySelectorAll('.ch-card:not([data-locked]), .ch-back')];
-  } else {
-    hubBtns = [...document.querySelectorAll('#hub-side .hub-btn:not([disabled])')];
-  }
-  hubSel = 0;
-  hubBtns.forEach((x, j) => x.classList.toggle('sel', j === 0));
-}
-
-function hubAct(btn) {
-  if (!btn) return;
-  SFX.init();
-  const hub = btn.dataset.hub;
-  const ch = btn.dataset.ch;
-  if (hub === 'historia') showChapters();
-  else if (hub === 'back') hideChapters();
-  else if (ch === '1') { SFX.play('select'); startStory(); }
-}
-
-document.querySelectorAll('.hub-btn').forEach(b => {
-  b.addEventListener('mouseenter', () => {
-    if (b.disabled || G.hubView !== 'main') return;
-    const idx = hubBtns.indexOf(b);
-    if (idx >= 0) { hubSel = idx; hubBtns.forEach((x, j) => x.classList.toggle('sel', j === idx)); }
-  });
-  b.addEventListener('click', (e) => { e.stopPropagation(); if (!b.disabled) hubAct(b); });
-});
-
-document.querySelectorAll('.ch-card, .ch-back').forEach(b => {
-  b.addEventListener('mouseenter', () => {
-    if (b.dataset.locked !== undefined || G.hubView !== 'chapters') return;
-    const idx = hubBtns.indexOf(b);
-    if (idx >= 0) { hubSel = idx; hubBtns.forEach((x, j) => x.classList.toggle('sel', j === idx)); }
-  });
-  b.addEventListener('click', (e) => { e.stopPropagation(); if (b.dataset.locked === undefined) hubAct(b); });
-});
 
 // ---------- Keyboard ----------
 document.addEventListener('keydown', (e) => {
@@ -225,17 +175,61 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'h' || e.key === 'H') { ui.box.classList.toggle('dim'); return; }
   if (e.key === 'Control') { if (!G.skip) { G.skip = true; if (G.waiting === 'text' || G.waiting === 'card') advance(); } return; }
   if (G.mode === 'hub') {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      if (hubBtns.length > 1) {
-        hubSel = (hubSel + (e.key === 'ArrowDown' ? 1 : hubBtns.length - 1)) % hubBtns.length;
-        hubBtns.forEach((x, j) => x.classList.toggle('sel', j === hubSel));
+    if (G.hubView === 'main') {
+      const enabled = getEnabledNavIndices();
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const cur = enabled.indexOf(G.hubNavSel);
+        const next = cur >= 0
+          ? enabled[(cur + (e.key === 'ArrowRight' ? 1 : enabled.length - 1)) % enabled.length]
+          : enabled[0];
+        G.hubNavSel = next;
         SFX.init(); SFX.play('select');
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (G.hubTab === 'mapa') {
+          const ep1 = SCENES.filter(s => s.ep === 1);
+          const unlocked = ep1.filter(s => isSceneUnlocked(s));
+          if (unlocked.length > 0) {
+            G.mapSel = (G.mapSel + (e.key === 'ArrowDown' ? 1 : unlocked.length - 1)) % unlocked.length;
+            SFX.init(); SFX.play('select');
+          }
+        }
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (G.hubTab === 'mapa' && G.mapSel >= 0) {
+          const ep1 = SCENES.filter(s => s.ep === 1);
+          const sc = ep1[G.mapSel];
+          if (sc && isSceneUnlocked(sc)) { SFX.play('select'); showConfirm(sc); }
+        } else {
+          activateNavBtn(HUB_NAV[G.hubNavSel].id);
+        }
+      } else if (e.key === 'Tab') {
+        e.preventDefault();
+        if (G.hubTab === 'mapa') {
+          G.mapModeSel = (G.mapModeSel + 1) % MAP_MODES.length;
+          SFX.play('select');
+        }
       }
-    } else if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault(); hubAct(hubBtns[hubSel]);
-    } else if (e.key === 'Escape' && G.hubView === 'chapters') {
-      hideChapters();
+    } else if (G.hubView === 'confirm' || G.hubView === 'levels' || G.hubView === 'settings') {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        if (hubBtns.length > 1) {
+          hubSel = (hubSel + (e.key === 'ArrowDown' ? 1 : hubBtns.length - 1)) % hubBtns.length;
+          hubBtns.forEach((x, j) => x.classList.toggle('sel', j === hubSel));
+          SFX.init(); SFX.play('select');
+        }
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault(); hubAct(hubBtns[hubSel]);
+      }
     }
+    if (e.key === 'Escape') {
+      if (G.hubView === 'confirm') hideConfirm();
+      else if (G.hubView === 'levels') hideLevels();
+      else if (G.hubView === 'settings') hideSettings();
+      else if (G.hubTab === 'mapa') { G.hubTab = 'ventana'; SFX.play('select'); }
+    }
+    return;
+  }
+  if (G.mode === 'combat') {
+    if (e.key === 'Escape' && !CB.animating) endCombat();
     return;
   }
   if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) advance(); }
@@ -244,65 +238,14 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('keyup', (e) => { if (e.key === 'Control') G.skip = false; });
 window.addEventListener('blur', () => { G.skip = false; });
 document.getElementById('game').addEventListener('click', (e) => {
-  if (G.mode !== 'hub') advance();
+  if (G.mode !== 'hub' && G.mode !== 'combat') advance();
 });
-
-// ---------- Hub background ----------
-function drawHub(t) {
-  rect(0, 0, W, H, '#050407');
-  for (let i = 0; i < 28; i++) {
-    const bw = 8 + hash(i) * 16, bh = 14 + hash(i + 3) * 60, bx = i * 12 - 4;
-    rect(bx, 130 - bh, bw, bh + 50, '#0a0812');
-    for (let k = 0; k < 4; k++) if (hash(i * 7 + k) > 0.6) px(bx + 2 + hash(i + k) * (bw - 4), 132 - bh + hash(k + i * 3) * bh, '#6a4a28');
-  }
-  for (let y = 0; y < 50; y++) {
-    const a = 0.03 * (1 - y / 50);
-    ctx.globalAlpha = a; rect(0, y, W, 1, '#4a1a3a'); ctx.globalAlpha = 1;
-  }
-  for (let y = 90; y < 130; y++) {
-    const a = 0.06 * Math.sin(((y - 90) / 40) * Math.PI);
-    ctx.globalAlpha = a; rect(0, y, W, 1, '#c0283a'); ctx.globalAlpha = 1;
-  }
-  rect(170, 60, 120, 80, '#0e0c14');
-  rect(170, 60, 120, 2, '#1a1624');
-  for (let x = 180; x < 280; x += 20) for (let y = 68; y < 110; y += 14) {
-    rect(x, y, 10, 7, '#080610');
-    if (hash(x + y * 7) > 0.88) px(x + 3, y + 3, '#6a4a28');
-  }
-  rect(220, 104, 30, 36, '#080610');
-  rect(222, 106, 12, 34, '#12101a'); rect(236, 106, 12, 34, '#12101a');
-  rect(234, 106, 2, 34, '#080610');
-  rect(300, 66, 1, 74, '#0e0c14');
-  if (hash(Math.floor(t / 90)) > 0.1) {
-    rect(294, 65, 8, 2, '#f0d890');
-    poly([[290, 67], [306, 67], [312, 140], [284, 140]], 'rgba(240,216,144,0.04)');
-  }
-  rect(0, 140, W, 40, '#0a0812');
-  rect(0, 140, W, 1, '#1a1624');
-  figure(150, 156, { hat: 'headset', face: 1 }, t);
-  figure(136, 156, { hat: 'cap', face: 1 }, t);
-  for (let i = 0; i < 40; i++) {
-    const rx = (hash(i) * W + t * 0.04) % W, ry = (hash(i + 40) * H + t * 0.35) % H;
-    rect(rx, ry, 1, 2, 'rgba(140,140,180,0.12)');
-  }
-  for (let i = 0; i < 6; i++) {
-    const k = Math.floor(t / 300) * 6 + i;
-    if (hash(k) > 0.4) {
-      const px2 = hash(k + 1) * W, py = 60 + hash(k + 2) * 60;
-      const a2 = 0.15 + 0.1 * Math.sin(t / 400 + i);
-      ctx.globalAlpha = a2; disc(px2, py, 1, '#c8a8ff'); ctx.globalAlpha = 1;
-    }
-  }
-  ctx.globalAlpha = 0.5; rect(0, 0, 90, H, '#050407'); ctx.globalAlpha = 1;
-  ctx.globalAlpha = 0.06;
-  for (let y = 0; y < H; y += 2) rect(0, y, W, 1, '#000');
-  ctx.globalAlpha = 1;
-}
 
 // ---------- Render ----------
 function render(t) {
   const now = performance.now();
   ctx.save();
+  ctx.scale(S, S);
   if (now < G.shakeUntil) ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
 
   if (G.mode === 'hub') {
@@ -319,14 +262,60 @@ function render(t) {
     }
     const r = G.s.rift;
     if (r) { r.w += (r.target - r.w) * 0.04; rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }
+    if (G.mode === 'combat') drawCombatBars();
   }
-  ctx.restore();
-
   if (G.flash) {
     const k = 1 - (now - G.flash.start) / G.flash.ms;
     if (k <= 0) G.flash = null;
     else { ctx.globalAlpha = Math.min(1, k * 1.2); rect(0, 0, W, H, G.flash.color); ctx.globalAlpha = 1; }
   }
+
+  if (CB.active && CB.anims.length > 0) {
+    CB.anims = CB.anims.filter(a => {
+      const elapsed = now - a.start;
+      if (elapsed > a.ms) return false;
+      const progress = elapsed / a.ms;
+      const alpha = progress < 0.15 ? progress / 0.15 : progress > 0.7 ? (1 - progress) / 0.3 : 1;
+      ctx.globalAlpha = Math.max(0, alpha);
+      if (a.type === 'impact') {
+        const rad = 2 + progress * 18;
+        ctx.strokeStyle = a.color; ctx.lineWidth = 2 - progress * 1.5;
+        ctx.beginPath(); ctx.arc(a.x, a.y, rad, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 1; return true;
+      }
+      if (a.type === 'dmg') {
+        const bounce = progress < 0.15 ? progress / 0.15 * -8 : -8 + (progress - 0.15) * 12;
+        ctx.font = a.big ? '12px VT323, monospace' : '10px VT323, monospace';
+        ctx.fillStyle = '#200';
+        ctx.fillText(a.text, (a.x + 1) | 0, (a.y + bounce + 1) | 0);
+        ctx.fillStyle = a.color;
+        ctx.fillText(a.text, a.x | 0, (a.y + bounce) | 0);
+      } else if (a.type === 'coin') {
+        ctx.font = '9px VT323, monospace';
+        if (a.color === '#ffd700' && progress < 0.2) {
+          ctx.globalAlpha = (0.2 - progress) / 0.2 * 0.6;
+          disc(a.x + 3, a.y - 4, 5, '#ffd700');
+          ctx.globalAlpha = Math.max(0, alpha);
+        }
+        ctx.fillStyle = a.color;
+        ctx.fillText(a.text, a.x | 0, (a.y - progress * 5) | 0);
+      } else {
+        const sz = a.big ? '10px' : '7px';
+        ctx.font = `${sz} VT323, monospace`;
+        ctx.fillStyle = a.color;
+        const yOff = a.type === 'total' ? -progress * 3 : -progress * 6;
+        if (a.big) {
+          ctx.fillStyle = '#000';
+          ctx.fillText(a.text, (a.x + 1) | 0, (a.y + yOff + 1) | 0);
+          ctx.fillStyle = a.color;
+        }
+        ctx.fillText(a.text, a.x | 0, (a.y + yOff) | 0);
+      }
+      ctx.globalAlpha = 1;
+      return true;
+    });
+  }
+
   if (G.fadeAnim) {
     const k = Math.min(1, (now - G.fadeAnim.start) / G.fadeAnim.ms);
     G.fade = G.fadeAnim.from + (G.fadeAnim.to - G.fadeAnim.from) * k;
@@ -334,6 +323,12 @@ function render(t) {
   if (G.fade > 0 && G.mode !== 'hub') {
     ctx.globalAlpha = Math.round(G.fade * 6) / 6; rect(0, 0, W, H, '#000'); ctx.globalAlpha = 1;
   }
+  if (CFG.scanlines && G.mode !== 'hub') {
+    ctx.globalAlpha = 0.08;
+    for (let y = 0; y < H; y += 2) rect(0, y, W, 1, '#000');
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
 
   requestAnimationFrame(render);
 }
