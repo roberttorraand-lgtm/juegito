@@ -10,16 +10,42 @@
   <div id="game">
     <canvas id="cv" width="320" height="180"></canvas>
 
-    <div id="title" class="screen">
-      <div class="t-small">PROJECT MOON FAN GAME</div>
-      <div class="t-ep">EPISODIO 1</div>
-      <div class="t-main">LA DISTORSIÓN EXTERNA</div>
-      <div class="menu">
-        <button data-act="start" class="sel">▶ Empezar</button>
-        <button data-act="quit">Salir</button>
+    <div id="hub" class="hidden">
+      <div id="hub-side">
+        <div class="hub-logo">
+          <div class="hl-small">PROJECT MOON FAN GAME</div>
+          <div class="hl-title">LA DISTORSIÓN EXTERNA</div>
+        </div>
+        <button class="hub-btn sel" data-hub="historia">Historia</button>
+        <button class="hub-btn" data-hub="personajes" disabled>Personajes</button>
+        <button class="hub-btn" data-hub="ajustes" disabled>Ajustes</button>
+        <div class="hub-sep"></div>
+        <div class="hub-foot">Fan game no oficial · Project Moon</div>
       </div>
-      <div class="t-foot">Fan game no oficial. Project Moon y Limbus Company pertenecen a sus respectivos dueños.</div>
     </div>
+
+    <div id="chapters" class="hidden">
+      <div class="ch-head">— HISTORIA —</div>
+      <div class="ch-card sel" data-ch="1">
+        <div class="ch-num">I</div>
+        <div class="ch-info">
+          <div class="ch-name">La Distorsión Externa</div>
+          <div class="ch-desc">Discord, una habitación y una sucursal abandonada.</div>
+          <div class="ch-status" id="ch1-status"></div>
+        </div>
+      </div>
+      <div class="ch-card" data-ch="2" data-locked>
+        <div class="ch-num">II</div>
+        <div class="ch-info">
+          <div class="ch-name">???</div>
+          <div class="ch-desc">Próximamente</div>
+          <div class="ch-status locked">🔒 Bloqueado</div>
+        </div>
+      </div>
+      <button class="ch-back" data-hub="back">← Volver</button>
+    </div>
+
+    <div id="save-indicator">● Guardado</div>
 
     <div id="card" class="screen hidden">
       <div class="c-title"></div>
@@ -32,7 +58,7 @@
       <div id="next">▼</div>
     </div>
 
-    <div id="hint">Clic / Espacio: avanzar · Ctrl: saltar · M: sonido · F11: pantalla completa</div>
+    <div id="hint">Clic / Espacio: avanzar · Ctrl: saltar · H: ocultar texto · M: sonido</div>
   </div>
   <script src="engine.js"></script>
   <script src="story.js"></script>
