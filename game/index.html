@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>La Distorsión Externa</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game">
+    <canvas id="cv" width="320" height="180"></canvas>
+
+    <div id="title" class="screen">
+      <div class="t-small">PROJECT MOON FAN GAME</div>
+      <div class="t-ep">EPISODIO 1</div>
+      <div class="t-main">LA DISTORSIÓN EXTERNA</div>
+      <div class="menu">
+        <button data-act="start" class="sel">▶ Empezar</button>
+        <button data-act="quit">Salir</button>
+      </div>
+      <div class="t-foot">Fan game no oficial. Project Moon y Limbus Company pertenecen a sus respectivos dueños.</div>
+    </div>
+
+    <div id="card" class="screen hidden">
+      <div class="c-title"></div>
+      <div class="c-sub"></div>
+    </div>
+
+    <div id="box" class="hidden">
+      <div id="name"></div>
+      <div id="text"></div>
+      <div id="next">▼</div>
+    </div>
+
+    <div id="hint">Clic / Espacio: avanzar · Ctrl: saltar · M: sonido · F11: pantalla completa</div>
+  </div>
+  <script src="engine.js"></script>
+  <script src="story.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

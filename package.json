@@ -1,0 +1,31 @@
+{
+  "name": "la-distorsion-externa",
+  "version": "0.1.0",
+  "description": "Fan game no oficial - Episodio 1: La Distorsión Externa",
+  "main": "main.js",
+  "author": "roberttorraand-lgtm",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable --publish never"
+  },
+  "build": {
+    "appId": "com.juegito.distorsionexterna",
+    "productName": "La Distorsion Externa",
+    "files": [
+      "main.js",
+      "game/**/*"
+    ],
+    "win": {
+      "target": "portable"
+    },
+    "portable": {
+      "artifactName": "La-Distorsion-Externa-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^38.8.6",
+    "electron-builder": "^26.18.0"
+  }
+}
