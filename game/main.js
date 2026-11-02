@@ -245,7 +245,6 @@ document.getElementById('game').addEventListener('click', (e) => {
 function render(t) {
   const now = performance.now();
   ctx.save();
-  ctx.scale(S, S);
   if (now < G.shakeUntil) ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
 
   if (G.mode === 'hub') {
@@ -323,12 +322,14 @@ function render(t) {
   if (G.fade > 0 && G.mode !== 'hub') {
     ctx.globalAlpha = Math.round(G.fade * 6) / 6; rect(0, 0, W, H, '#000'); ctx.globalAlpha = 1;
   }
-  if (CFG.scanlines && G.mode !== 'hub') {
-    ctx.globalAlpha = 0.08;
-    for (let y = 0; y < H; y += 2) rect(0, y, W, 1, '#000');
-    ctx.globalAlpha = 1;
-  }
   ctx.restore();
+
+  // CRT toggle
+  gameSprite.filters = CFG.scanlines ? [crtFilter] : [];
+
+  updateGameTexture();
+  updateEffects(t);
+  pixiRender();
 
   requestAnimationFrame(render);
 }

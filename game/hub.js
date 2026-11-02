@@ -251,6 +251,7 @@ function bindSettingsEvents() {
   if (slToggle) slToggle.addEventListener('click', (e) => {
     e.stopPropagation();
     CFG.persist('scanlines', !CFG.scanlines);
+    setCRTEnabled(CFG.scanlines);
     const box = slToggle.querySelector('.st-toggle-box');
     box.classList.toggle('on', CFG.scanlines);
     slToggle.querySelector('.st-toggle-label').textContent = CFG.scanlines ? 'Activado' : 'Desactivado';
@@ -431,12 +432,6 @@ function drawHub(t) {
   }
 
   drawNavBar(t);
-
-  if (CFG.scanlines) {
-    ctx.globalAlpha = 0.06;
-    for (let y = 0; y < H; y += 2) rect(0, y, W, 1, '#000');
-    ctx.globalAlpha = 1;
-  }
 }
 
 function drawVentana(t) {

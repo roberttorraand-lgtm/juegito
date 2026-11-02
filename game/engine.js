@@ -1,11 +1,7 @@
 // =====================================================================
 //  ENGINE — Canvas primitives, characters, backgrounds, SFX
+//  Uses globals from renderer.js: ctx, cv, W, H
 // =====================================================================
-const S = 2;
-const W = 320, H = 180;
-const cv = document.getElementById('cv');
-const ctx = cv.getContext('2d');
-ctx.imageSmoothingEnabled = false;
 
 function rect(x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x | 0, y | 0, w | 0, h | 0); }
 function px(x, y, c) { rect(x, y, 1, 1, c); }
