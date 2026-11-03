@@ -324,12 +324,7 @@ function render(t) {
   }
   ctx.restore();
 
-  // CRT toggle
-  gameSprite.filters = CFG.scanlines ? [crtFilter] : [];
-
-  updateGameTexture();
-  updateEffects(t);
-  pixiRender();
+  drawScanlines();
 
   requestAnimationFrame(render);
 }
