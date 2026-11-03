@@ -136,9 +136,9 @@ function updateCombatActors() {
   const aliveAllies = CB.allies.filter(u => u.hp > 0);
   const aliveEnemies = CB.enemies.filter(u => u.hp > 0);
   aliveAllies.forEach((u, i) => {
-    const x = 55 + i * 55;
+    const x = 50 + i * 52;
     G.actors[u.id] = {
-      ...u, x, y: 148, face: 1, scale: 1.5,
+      ...u, x, y: 100, face: 1, scale: 1.6,
       hat: u.hat, armless: u.armless, bandaged: u.bandaged,
       shake: u.staggered, pain: u.staggered,
     };
@@ -146,7 +146,7 @@ function updateCombatActors() {
   aliveEnemies.forEach((u, i) => {
     const x = 250 - i * 55;
     G.actors[u.id] = {
-      ...u, x, y: 148, face: -1, scale: 1.7,
+      ...u, x, y: 102, face: -1, scale: 1.1,
       kind: u.kind, rage: u.hp < u.maxHp * 0.3,
       shake: u.staggered, blind: u.staggered,
     };
@@ -182,11 +182,10 @@ function renderCombatUI() {
     </div>`;
   };
   CB.allies.forEach(u => { html += barHtml(u); });
-  html += '</div><div class="cb-bars">';
+  html += `</div><div style="text-align:center"><div class="cb-turn">Turno ${CB.turn}</div><div class="cb-phase">${phaseLabel()}</div></div>`;
+  html += '<div class="cb-bars">';
   CB.enemies.forEach(u => { html += barHtml(u); });
   html += '</div></div>';
-
-  html += `<div style="text-align:center"><span class="cb-turn">Turno ${CB.turn}</span> <span class="cb-phase">— ${phaseLabel()}</span></div>`;
 
   if (CB.phase === 'select') {
     html += '<div class="cb-board">';
@@ -355,23 +354,10 @@ function drawCombatBars() {
   CB.all.forEach(u => {
     const a = G.actors[u.id];
     if (!a || u.hp <= 0) return;
-    const bx = a.x - 16, by = a.y - 46;
-    ctx.font = '5px VT323, monospace';
-    ctx.fillStyle = '#c9c2b6';
-    ctx.fillText(u.name, bx, by - 2);
-    rect(bx, by, 32, 3, '#1a1624');
-    const hpPct = u.hp / u.maxHp;
-    const hpCol = hpPct < 0.3 ? '#c0283a' : '#3fbf6a';
-    rect(bx, by, Math.round(32 * hpPct), 3, hpCol);
-    rect(bx, by + 4, 32, 2, '#1a1624');
-    const stPct = u.staggerHp / u.maxStagger;
-    rect(bx, by + 4, Math.round(32 * stPct), 2, '#d8a840');
-    ctx.font = '4px VT323, monospace';
-    ctx.fillStyle = '#9c97a8';
-    ctx.fillText(`${u.hp}/${u.maxHp}`, bx + 33, by + 3);
-    if (u.staggered) {
-      const blink = Math.floor(performance.now() / 400) % 2;
-      if (blink) { ctx.fillStyle = '#ff3b4a'; ctx.font = '5px VT323, monospace'; ctx.fillText('STAGGER', bx, by + 14); }
+    if (u.staggered && Math.floor(performance.now() / 400) % 2) {
+      ctx.font = '12px VT323, monospace';
+      ctx.fillStyle = '#000'; ctx.fillText('STAGGER', a.x - 17, a.y + 1);
+      ctx.fillStyle = '#ff3b4a'; ctx.fillText('STAGGER', a.x - 18, a.y);
     }
   });
 }

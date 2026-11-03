@@ -588,10 +588,10 @@ BG.call = (s, t) => {
   rect(0, 13, W, 1, '#1a1924');
   disc(9, 7, 3, '#3fbf6a');
   px(8, 6, '#7fffaa');
-  ctx.fillStyle = '#9c97a8'; ctx.font = '6px monospace';
+  ctx.fillStyle = '#9c97a8'; ctx.font = '10px VT323, monospace';
   ctx.fillText('LLAMADA DE VOZ · PICHA BRAVA', 16, 9);
   // Time indicator
-  ctx.fillStyle = '#5d5868'; ctx.font = '5px monospace';
+  ctx.fillStyle = '#5d5868'; ctx.font = '8px VT323, monospace';
   const mins = Math.floor(t / 60000) % 60;
   const secs = Math.floor(t / 1000) % 60;
   ctx.fillText(`${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`, 280, 9);
@@ -622,18 +622,21 @@ BG.call = (s, t) => {
         rect(p.x + 2 + hash(k) * 120, gy, gw, 2, hash(k + 3) > 0.5 ? '#ff2a3c' : '#2a2630');
       }
     }
-    // Avatar
-    avatarHead(p.x + 68, 62, p.hat, t, off);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(p.x + 1, 23, 134, 94); ctx.clip();
+    ctx.translate(p.x + 68, 56); ctx.scale(1.6, 1.6); ctx.translate(-(p.x + 68), -56);
+    avatarHead(p.x + 68, 56, p.hat, t, off);
+    ctx.restore();
     // Name
-    ctx.fillStyle = off ? '#4a4656' : '#c9c2b6'; ctx.font = '7px monospace';
+    ctx.fillStyle = off ? '#4a4656' : '#c9c2b6'; ctx.font = '11px VT323, monospace';
     ctx.fillText(p.name, p.x + 6, 118);
     // Status
     if (off) {
-      ctx.fillStyle = '#7a3a44'; ctx.font = '5px monospace';
+      ctx.fillStyle = '#7a3a44'; ctx.font = '8px VT323, monospace';
       ctx.fillText('DESCONECTADO', p.x + 34, 100);
       disc(p.x + 130, 118, 2, '#5a2030');
     } else if (s.silent === p.id) {
-      ctx.fillStyle = '#5d5868'; ctx.font = '6px monospace';
+      ctx.fillStyle = '#5d5868'; ctx.font = '10px VT323, monospace';
       ctx.fillText('...', p.x + 64, 100);
     } else {
       disc(p.x + 130, 118, 2, speaking ? '#3fbf6a' : '#3a5a3a');
@@ -658,10 +661,10 @@ BG.share = (s, t) => {
   // Screen share overlay
   rect(24, 16, 272, 114, '#3fbf6a');
   rect(26, 18, 268, 110, '#08070c');
-  ctx.fillStyle = '#3fbf6a'; ctx.font = '6px monospace';
+  ctx.fillStyle = '#3fbf6a'; ctx.font = '10px VT323, monospace';
   ctx.fillText('GONZA COMPARTE PANTALLA', 30, 26);
   rect(296, 18, -18, 8, '#08070c');
-  ctx.fillStyle = '#5d5868'; ctx.font = '4px monospace';
+  ctx.fillStyle = '#5d5868'; ctx.font = '7px VT323, monospace';
   ctx.fillText('EN VIVO', 282, 24);
   // Gacha cards
   const cards = [{ x: 46, gold: true }, { x: 128, gold: false }, { x: 210, gold: true }];
@@ -690,7 +693,7 @@ BG.share = (s, t) => {
       star(c.x + 32, 108, col);
     }
     // Card rarity label
-    ctx.font = '4px monospace';
+    ctx.font = '7px VT323, monospace';
     ctx.fillStyle = col;
     ctx.fillText(c.gold ? '★★★' : '★', c.x + (c.gold ? 22 : 30), 116);
   });
@@ -715,7 +718,7 @@ BG.room = (s, t) => {
   // Star details in poster
   for (let i = 0; i < 8; i++) px(Math.round(32 + hash(i) * 44), Math.round(25 + hash(i + 9) * 36), '#8a90a8');
   // Poster label
-  ctx.font = '3px monospace'; ctx.fillStyle = '#6a6a80';
+  ctx.font = '5px VT323, monospace'; ctx.fillStyle = '#6a6a80';
   ctx.fillText('LOBOTOMY', 33, 62);
 
   // Shelf decoration
@@ -848,7 +851,7 @@ BG.branch = (s, t) => {
   rect(128, 36, 64, 14, '#121016');
   rect(129, 37, 62, 12, '#0e0c14');
   const sign = Math.sin(t / 90) * Math.sin(t / 37) > 0.3 ? '#c84a3a' : '#3a1a1a';
-  ctx.fillStyle = sign; ctx.font = '6px monospace'; ctx.fillText('SUCURSAL ???', 136, 46);
+  ctx.fillStyle = sign; ctx.font = '10px VT323, monospace'; ctx.fillText('SUCURSAL ???', 136, 46);
   // Sign border flicker
   if (Math.sin(t / 90) > 0.8) rect(128, 36, 64, 1, '#c84a3a');
 

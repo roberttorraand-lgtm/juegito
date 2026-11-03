@@ -242,9 +242,13 @@ document.getElementById('game').addEventListener('click', (e) => {
 });
 
 // ---------- Render ----------
+const hintEl = $('hint');
 function render(t) {
   const now = performance.now();
+  const hintOn = G.mode !== 'hub' && G.mode !== 'combat';
+  if (hintOn !== G._hintOn) { G._hintOn = hintOn; hintEl.classList.toggle('hidden', !hintOn); }
   ctx.save();
+  ctx.scale(SCALE, SCALE);
   if (now < G.shakeUntil) ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
 
   if (G.mode === 'hub') {
@@ -284,13 +288,13 @@ function render(t) {
       }
       if (a.type === 'dmg') {
         const bounce = progress < 0.15 ? progress / 0.15 * -8 : -8 + (progress - 0.15) * 12;
-        ctx.font = a.big ? '12px VT323, monospace' : '10px VT323, monospace';
+        ctx.font = a.big ? '18px VT323, monospace' : '16px VT323, monospace';
         ctx.fillStyle = '#200';
         ctx.fillText(a.text, (a.x + 1) | 0, (a.y + bounce + 1) | 0);
         ctx.fillStyle = a.color;
         ctx.fillText(a.text, a.x | 0, (a.y + bounce) | 0);
       } else if (a.type === 'coin') {
-        ctx.font = '9px VT323, monospace';
+        ctx.font = '14px VT323, monospace';
         if (a.color === '#ffd700' && progress < 0.2) {
           ctx.globalAlpha = (0.2 - progress) / 0.2 * 0.6;
           disc(a.x + 3, a.y - 4, 5, '#ffd700');
@@ -299,7 +303,7 @@ function render(t) {
         ctx.fillStyle = a.color;
         ctx.fillText(a.text, a.x | 0, (a.y - progress * 5) | 0);
       } else {
-        const sz = a.big ? '10px' : '7px';
+        const sz = a.big ? '16px' : '11px';
         ctx.font = `${sz} VT323, monospace`;
         ctx.fillStyle = a.color;
         const yOff = a.type === 'total' ? -progress * 3 : -progress * 6;
@@ -322,9 +326,8 @@ function render(t) {
   if (G.fade > 0 && G.mode !== 'hub') {
     ctx.globalAlpha = Math.round(G.fade * 6) / 6; rect(0, 0, W, H, '#000'); ctx.globalAlpha = 1;
   }
-  ctx.restore();
-
   drawScanlines();
+  ctx.restore();
 
   requestAnimationFrame(render);
 }

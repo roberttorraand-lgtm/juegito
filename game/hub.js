@@ -371,13 +371,13 @@ function drawNavBar(t) {
 
   rect(2, NAV_Y + 3, 52, 15, '#0e0c14');
   rect(2, NAV_Y + 3, 52, 1, '#4a3018');
-  ctx.font = '5px VT323, monospace';
-  ctx.fillStyle = '#c09050'; ctx.fillText('LV', 5, NAV_Y + 10);
   ctx.font = '8px VT323, monospace';
+  ctx.fillStyle = '#c09050'; ctx.fillText('LV', 5, NAV_Y + 10);
+  ctx.font = '13px VT323, monospace';
   ctx.fillStyle = '#e8e4dc'; ctx.fillText('001', 14, NAV_Y + 11);
   rect(34, NAV_Y + 6, 16, 3, '#2a1810');
   rect(34, NAV_Y + 6, 6, 3, '#3fbf6a');
-  ctx.font = '4px VT323, monospace';
+  ctx.font = '7px VT323, monospace';
   ctx.fillStyle = '#8a6030'; ctx.fillText('EP.1', 34, NAV_Y + 15);
 
   const btnW = 38, gap = 4;
@@ -391,7 +391,7 @@ function drawNavBar(t) {
 
     if (!nav.enabled) {
       rect(bx, NAV_Y + 4, btnW, 14, '#0e0c14');
-      ctx.font = '5px VT323, monospace';
+      ctx.font = '8px VT323, monospace';
       ctx.fillStyle = '#2a2620';
       ctx.fillText(nav.label, bx + btnW / 2 - nav.label.length * 1.5, NAV_Y + 13);
     } else {
@@ -404,10 +404,10 @@ function drawNavBar(t) {
         rect(bx + 1, NAV_Y + 5, btnW - 2, 12, 'rgba(192,40,58,0.15)');
         ctx.globalAlpha = 1;
       }
-      ctx.font = '6px VT323, monospace';
+      ctx.font = '10px VT323, monospace';
       ctx.fillStyle = sel ? '#fff' : (active ? '#c09050' : '#8a8070');
       ctx.fillText(nav.icon, bx + 4, NAV_Y + 13);
-      ctx.font = '5px VT323, monospace';
+      ctx.font = '8px VT323, monospace';
       ctx.fillText(nav.label, bx + 12, NAV_Y + 13);
     }
   });
@@ -461,9 +461,9 @@ function drawVentana(t) {
   rect(cx, cy, cw, 1, '#4a3018');
   rect(cx, cy + ch - 1, cw, 1, '#2a1810');
 
-  ctx.font = '5px VT323, monospace';
+  ctx.font = '8px VT323, monospace';
   ctx.fillStyle = '#8a6030'; ctx.fillText('PROJECT MOON FAN GAME', cx + 28, cy + 14);
-  ctx.font = '10px VT323, monospace';
+  ctx.font = '16px VT323, monospace';
   ctx.fillStyle = '#e8e4dc'; ctx.fillText('LA DISTORSIÓN', cx + 30, cy + 30);
   ctx.fillText('EXTERNA', cx + 58, cy + 42);
   ctx.globalAlpha = 0.5;
@@ -478,9 +478,9 @@ function drawVentana(t) {
 
   const lastScene = SCENES.filter(s => isSceneDone(s)).pop();
   const nextScene = SCENES.find(s => !isSceneDone(s) && isSceneUnlocked(s));
-  ctx.font = '5px VT323, monospace';
+  ctx.font = '8px VT323, monospace';
   ctx.fillStyle = '#8a8070'; ctx.fillText('PROGRESO ACTUAL', cx + 10, cy + 60);
-  ctx.font = '6px VT323, monospace';
+  ctx.font = '10px VT323, monospace';
   if (nextScene) {
     ctx.fillStyle = '#c09050'; ctx.fillText('Próximo:', cx + 10, cy + 70);
     ctx.fillStyle = '#e8e4dc'; ctx.fillText(`Esc.${nextScene.num}: ${nextScene.title}`, cx + 48, cy + 70);
@@ -500,21 +500,21 @@ function drawVentana(t) {
 
   const rx = 260, ry = 14, rw = 52, rh = 46;
   metalRect(rx, ry, rw, rh);
-  ctx.font = '4px VT323, monospace';
+  ctx.font = '7px VT323, monospace';
   ctx.fillStyle = '#8a6030'; ctx.fillText('EPISODIO I', rx + 6, ry + 12);
-  ctx.font = '5px VT323, monospace';
+  ctx.font = '8px VT323, monospace';
   ctx.fillStyle = '#e8e4dc'; ctx.fillText('La Distorsión', rx + 4, ry + 22);
   ctx.fillStyle = '#c09050'; ctx.fillText('Externa', rx + 14, ry + 30);
   rect(rx + 4, ry + 34, rw - 8, 3, '#2a1810');
   rect(rx + 4, ry + 34, Math.round((rw - 8) * doneCount / Math.max(1, SCENES.length)), 3, '#c0283a');
-  ctx.font = '4px VT323, monospace';
+  ctx.font = '7px VT323, monospace';
   ctx.fillStyle = '#5d5850'; ctx.fillText(`${doneCount}/${SCENES.length}`, rx + 4, ry + 43);
 
   metalRect(rx, ry + rh + 6, rw, 82);
   const previewY = ry + rh + 10;
-  figure(rx + 14, previewY + 56, { hat: 'headset', face: 1, scale: 1.1 }, t);
-  figure(rx + 36, previewY + 56, { hat: 'cap', face: -1, scale: 1.1 }, t);
-  ctx.font = '4px VT323, monospace';
+  figure(rx + 14, previewY + 56, { hat: 'headset', face: 1, scale: 1.5 }, t);
+  figure(rx + 36, previewY + 56, { hat: 'cap', face: -1, scale: 1.5 }, t);
+  ctx.font = '7px VT323, monospace';
   ctx.fillStyle = '#5d5850'; ctx.fillText('LOBELTO', rx + 4, previewY + 68);
   ctx.fillText('GONZA', rx + 28, previewY + 68);
 
@@ -538,7 +538,7 @@ function drawVentana(t) {
   const light2 = Math.sin(t / 600 + 1) > 0 ? '#3fbf6a' : '#183a18';
   disc(16, 100, 3, light1);
   disc(16, 110, 3, light2);
-  ctx.font = '4px VT323, monospace';
+  ctx.font = '7px VT323, monospace';
   ctx.fillStyle = '#4a3018'; ctx.fillText('DIST.EXT', 12, 125);
   ctx.fillText('v0.1', 22, 133);
   ctx.fillText('EP.I', 22, 141);
@@ -600,14 +600,14 @@ function drawMap(t) {
       rect(lx + 6, my + 2, lw - 12, 20, 'rgba(192,40,58,0.12)');
       ctx.globalAlpha = 1;
     }
-    ctx.font = '7px VT323, monospace';
+    ctx.font = '11px VT323, monospace';
     ctx.fillStyle = sel ? '#fff' : '#8a8070';
     ctx.fillText(mode.icon, lx + 10, my + 11);
-    ctx.font = '5px VT323, monospace';
+    ctx.font = '8px VT323, monospace';
     ctx.fillText(mode.label, lx + 10, my + 19);
   });
 
-  ctx.font = '4px VT323, monospace';
+  ctx.font = '7px VT323, monospace';
   ctx.fillStyle = '#4a3018'; ctx.fillText('— MODOS —', lx + 8, ly + lh - 6);
 
   const mx = 78, my = 10, mw = 152, mh = 140;
@@ -615,7 +615,7 @@ function drawMap(t) {
   rect(mx, my, mw, 1, '#4a3018');
 
   rect(mx, my, mw, 10, '#18141e');
-  ctx.font = '5px VT323, monospace';
+  ctx.font = '8px VT323, monospace';
   ctx.fillStyle = '#c09050'; ctx.fillText('LA CIUDAD', mx + mw / 2 - 18, my + 7);
 
   CITY_CONNECTIONS.forEach(([a, b]) => {
@@ -638,14 +638,14 @@ function drawMap(t) {
       disc(d.x, d.y, d.r + 2, '#c0283a');
       ctx.globalAlpha = 1;
     }
-    ctx.font = d.id === 'nido' ? '5px VT323, monospace' : '3px VT323, monospace';
+    ctx.font = d.id === 'nido' ? '8px VT323, monospace' : '5px VT323, monospace';
     ctx.fillStyle = d.id === 'nido' ? '#c09050' : '#6a6050';
     ctx.fillText(d.name, d.x - d.name.length * 1.2, d.y + d.r + 6);
   });
 
   const epMarker = (x, y, label, col) => {
     rect(x - 1, y - 1, 3, 3, col);
-    ctx.font = '3px VT323, monospace';
+    ctx.font = '5px VT323, monospace';
     ctx.fillStyle = col; ctx.fillText(label, x + 4, y + 1);
   };
   epMarker(60, 112, 'Ep1.Esc2', '#c0283a');
@@ -656,7 +656,7 @@ function drawMap(t) {
   rect(rx, ry, rw, 1, '#4a3018');
 
   rect(rx, ry, rw, 14, '#18141e');
-  ctx.font = '6px VT323, monospace';
+  ctx.font = '10px VT323, monospace';
   ctx.fillStyle = '#c09050'; ctx.fillText('EPISODIO I', rx + 14, ry + 10);
 
   const ep1 = SCENES.filter(s => s.ep === 1);
@@ -676,18 +676,18 @@ function drawMap(t) {
       ctx.globalAlpha = 1;
     }
 
-    ctx.font = '4px VT323, monospace';
+    ctx.font = '7px VT323, monospace';
     ctx.fillStyle = unlocked ? '#8a6030' : '#3a3020';
     ctx.fillText(`ESCENA ${sc.num}`, rx + 8, sy + 7);
 
-    ctx.font = '5px VT323, monospace';
+    ctx.font = '8px VT323, monospace';
     ctx.fillStyle = unlocked ? '#e8e4dc' : '#3a3630';
     ctx.fillText(sc.title, rx + 8, sy + 15);
 
     if (done) { ctx.fillStyle = '#3fbf6a'; ctx.fillText('✓', rx + rw - 14, sy + 15); }
     else if (!unlocked) { ctx.fillStyle = '#3a3020'; ctx.fillText('🔒', rx + rw - 14, sy + 15); }
 
-    ctx.font = '3px VT323, monospace';
+    ctx.font = '5px VT323, monospace';
     ctx.fillStyle = unlocked ? '#5d5850' : '#2a2620';
     const descShort = sc.desc.length > 28 ? sc.desc.slice(0, 26) + '..' : sc.desc;
     ctx.fillText(descShort, rx + 8, sy + 21);
