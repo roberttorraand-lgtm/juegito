@@ -435,24 +435,7 @@ function drawHub(t) {
 }
 
 function drawVentana(t) {
-  for (let i = 0; i < 28; i++) {
-    const bw = 8 + hash(i) * 16, bh = 14 + hash(i + 3) * 60, bx = i * 12 - 4;
-    rect(bx, 130 - bh, bw, bh + 50, '#12101c');
-    for (let k = 0; k < 4; k++) if (hash(i * 7 + k) > 0.6)
-      px(bx + 2 + hash(i + k) * (bw - 4), 132 - bh + hash(k + i * 3) * bh, '#c08a3a');
-  }
-  for (let y = 0; y < 50; y++) {
-    ctx.globalAlpha = 0.12 * (1 - y / 50); rect(0, y, W, 1, '#6a2050'); ctx.globalAlpha = 1;
-  }
-  for (let y = 90; y < 130; y++) {
-    ctx.globalAlpha = 0.2 * Math.sin(((y - 90) / 40) * Math.PI); rect(0, y, W, 1, '#e03048'); ctx.globalAlpha = 1;
-  }
-  rect(0, 140, W, 20, '#0a0812');
-  rect(0, 140, W, 1, '#1a1624');
-  for (let i = 0; i < 40; i++) {
-    const rx = (hash(i) * W + t * 0.04) % W, ry = (hash(i + 40) * 155 + t * 0.35) % 155;
-    rect(rx, ry, 1, 3, 'rgba(180,180,220,0.3)');
-  }
+  drawHubBackdrop(t);
 
   metalFrame(4, 4, W - 8, NAV_Y - 8);
 

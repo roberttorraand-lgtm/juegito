@@ -26,6 +26,6 @@ SAVE.load();
 const CFG = {
   sfxVol: SAVE.get('cfg_sfxVol', 80),
   textSpeed: SAVE.get('cfg_textSpeed', 'normal'),
-  scanlines: SAVE.get('cfg_scanlines', true),
+  scanlines: SAVE.get('cfg_scanlines', false),
   persist(key, val) { this[key] = val; SAVE.save({ ['cfg_' + key]: val }); },
 };

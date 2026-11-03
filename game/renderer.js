@@ -6,5 +6,5 @@ const SCALE = 2;
 const cv = document.getElementById('cv');
 cv.width = W * SCALE;
 cv.height = H * SCALE;
-const ctx = cv.getContext('2d');
+let ctx = cv.getContext('2d');
 ctx.imageSmoothingEnabled = false;

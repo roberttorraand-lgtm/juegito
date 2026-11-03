@@ -265,6 +265,7 @@ function render(t) {
     }
     const r = G.s.rift;
     if (r) { r.w += (r.target - r.w) * 0.04; rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }
+    postFX(G.s, t);
     if (G.mode === 'combat') drawCombatBars();
   }
   if (G.flash) {
