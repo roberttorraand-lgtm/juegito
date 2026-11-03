@@ -495,8 +495,8 @@ function drawVentana(t) {
 
   metalRect(rx, ry + rh + 6, rw, 82);
   const previewY = ry + rh + 10;
-  figure(rx + 14, previewY + 56, { hat: 'headset', face: 1, scale: 1.5 }, t);
-  figure(rx + 36, previewY + 56, { hat: 'cap', face: -1, scale: 1.5 }, t);
+  figure(rx + 13, previewY + 56, { hat: 'headset', face: 1, scale: 1.3 }, t);
+  figure(rx + 39, previewY + 56, { hat: 'cap', face: -1, scale: 1.3 }, t);
   ctx.font = '7px VT323, monospace';
   ctx.fillStyle = '#5d5850'; ctx.fillText('LOBELTO', rx + 4, previewY + 68);
   ctx.fillText('GONZA', rx + 28, previewY + 68);

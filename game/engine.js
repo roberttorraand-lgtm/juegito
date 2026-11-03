@@ -59,22 +59,6 @@ function star(cx, cy, c) {
   px(cx - 1, cy + 2, c); px(cx + 1, cy + 2, c);
 }
 
-// ---- Sprite drawing utility ----
-function drawSprite(ox, oy, data, pal, flipX) {
-  for (let r = 0; r < data.length; r++) {
-    const row = data[r];
-    for (let c = 0; c < row.length; c++) {
-      const ch = row[c];
-      if (ch === '.' || ch === ' ') continue;
-      const col = pal[ch];
-      if (!col) continue;
-      const dx = flipX ? ox + row.length - 1 - c : ox + c;
-      ctx.fillStyle = col;
-      ctx.fillRect(dx, oy + r, 1, 1);
-    }
-  }
-}
-
 // ---- Color palettes ----
 const PAL = {
   skin:   { b: '#d4be8c', h: '#e8d4a8', s: '#b09868', d: '#8a7048' },
@@ -89,263 +73,68 @@ const PAL = {
   ego:    { body: '#180e1a', coat: '#24142a', glow: '#ff3a50', blade: '#2a1c3a', energy: '#c8a8ff', mask: '#d8d0c0', crack: '#100a10' },
 };
 
-// ---- Character heads as sprite data ----
-const HEAD_LOB = [
-  '...oooo...',
-  '..oHHHHo..',
-  '.oHHHHHHo.',
-  'oHHHHHHHHo',
-  'oHHssssHHo',
-  'oHsFFFsFHo',
-  '.oFFeFeF..',
-  '.oFFnFFF..',
-  '..oFmFo...',
-  '...ooo....',
-];
-const HEAD_LOB_PAL = {
-  o: PAL.outline, H: PAL.hair.lob,
-  s: PAL.skin.s, F: PAL.skin.b, e: '#1a1828',
-  n: PAL.skin.s, m: PAL.skin.d,
-};
-
-const HEAD_GON = [
-  '..CCCCCC..',
-  '.CCCCCCCc.',
-  'CCCCCCCCCc',
-  '.oHHHHHo..',
-  'oHHssssHo.',
-  'oHsFFFsFo.',
-  '.oFFeFeF..',
-  '.oFFnFFF..',
-  '..oFmFo...',
-  '...ooo....',
-];
-const HEAD_GON_PAL = {
-  o: PAL.outline, H: PAL.hair.gon,
-  C: PAL.cap.b, c: PAL.cap.s,
-  s: PAL.skin.s, F: PAL.skin.b, e: '#1a1828',
-  n: PAL.skin.s, m: PAL.skin.d,
-};
-
-// ---- Detailed figure drawing ----
+// ---- Lobelto & Gonza: black stickmen ----
 const FIG = { body: '#10101a', edge: '#4a4660', eye: '#f0ecdc' };
 
 function figure(x, y, o, t) {
   const sc = o.scale || 1;
   if (sc !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.translate(-x, -y); }
-
   const f = o.face || 1;
   let bob = Math.round(Math.sin(t / 420 + x) * 0.6);
   if (o.talk) bob -= Math.round(Math.abs(Math.sin(t / 90)));
   if (o.shake) x += Math.round(Math.sin(t / 25) * 1.2);
   y += bob;
-
-  const isLob = o.hat === 'headset';
-  const cloth = isLob ? PAL.lobCloth : PAL.gonCloth;
-  const hairC = isLob ? PAL.hair.lob : PAL.hair.gon;
-  const OL = PAL.outline;
-  const sk = PAL.skin;
-
-  const hx = x, hy = y - 34;
-  const neckY = y - 26;
-  const shoulderY = y - 24;
-  const hipY = y - 12;
-  const feetY = y;
-
-  // -- Shadow under feet --
-  ctx.globalAlpha = 0.25;
-  disc(x, feetY + 1, 6, '#000');
-  ctx.globalAlpha = 1;
-
-  // -- Back arm --
-  const backArmX = x - f * 5;
-  if ((!o.armless || f > 0)) {
-    const isBackArmMissing = o.armless && f < 0;
-    if (!isBackArmMissing) {
-      const bax = o.lifted ? backArmX - f * 3 : backArmX;
-      const bay = o.lifted ? shoulderY - 6 : y - 6;
-      line(x - f * 4, shoulderY + 2, bax, bay, OL, 5);
-      line(x - f * 4, shoulderY + 2, bax, bay, cloth.s, 4);
-      line(x - f * 4, shoulderY + 2, bax, bay, cloth.b, 3);
-      if (!o.lifted) {
-        rect(bax - 1, bay - 1, 3, 3, OL);
-        rect(bax, bay, 2, 2, sk.b);
-      }
-    }
+  const hx = x, hy = y - 27;
+  const sh = y - 20, hip = y - 10;
+  const legs = o.lifted
+    ? [[x - 2, y + 1], [x + 3, y + 2]]
+    : o.sitting ? [[x - 8, y], [x + 8, y]] : [[x - 4, y], [x + 4, y]];
+  const armL = o.lifted ? [x - 7, sh - 6] : [x - 6, y - 11];
+  const armR = o.armless ? [x + 3, sh + 4] : o.lifted ? [x + 7, sh - 6] : [x + 6, y - 11];
+  for (const [col, extra] of [[FIG.edge, 1], [FIG.body, 0]]) {
+    const th = 2 + extra * 2;
+    disc(hx, hy, 5 + extra, col);
+    line(x, hy + 4, x, hip, col, th);
+    line(x, sh, armL[0], armL[1], col, th);
+    line(x, sh, armR[0], armR[1], col, th);
+    for (const l of legs) line(x, hip, l[0], l[1], col, th);
   }
-
-  // -- Legs --
-  const legSpread = o.sitting ? 8 : 4;
-  const legLen = o.sitting ? 6 : 12;
-  for (let leg = -1; leg <= 1; leg += 2) {
-    const lx = x + leg * legSpread / 2;
-    const ly = o.sitting ? feetY : feetY;
-    // Thigh
-    rect(lx - 2, hipY, 5, OL === OL ? 1 : 0, OL);
-    poly([[lx - 2, hipY], [lx + 3, hipY], [lx + 2, hipY + legLen], [lx - 1, hipY + legLen]], OL);
-    poly([[lx - 1, hipY + 1], [lx + 2, hipY + 1], [lx + 1, hipY + legLen - 1], [lx, hipY + legLen - 1]], '#1a1a2e');
-    // Highlight
-    rect(lx - 1, hipY + 1, 1, legLen - 2, '#242440');
-    // Shoe
-    if (!o.sitting) {
-      const sx = lx + (leg < 0 ? -2 : -1);
-      rect(sx - 1, feetY - 2, 5, 3, OL);
-      rect(sx, feetY - 1, 3, 2, PAL.shoe.b);
-      px(sx, feetY - 1, PAL.shoe.h);
-    }
+  px(hx + f * 1, hy - 1, FIG.eye); px(hx + f * 3, hy - 1, FIG.eye);
+  if (o.pain) { px(hx + f * 1, hy - 2, FIG.eye); px(hx + f * 3, hy, FIG.eye); }
+  if (o.hat === 'headset') {
+    line(hx - 5, hy - 1, hx - 4, hy - 5, '#7a7890');
+    line(hx - 4, hy - 5, hx + 4, hy - 5, '#7a7890');
+    line(hx + 4, hy - 5, hx + 5, hy - 1, '#7a7890');
+    rect(hx - 7, hy - 2, 2, 4, '#9a96b0'); rect(hx + 6, hy - 2, 2, 4, '#9a96b0');
+  } else if (o.hat === 'cap') {
+    rect(hx - 5, hy - 6, 11, 3, '#3a384e');
+    rect(hx + (f > 0 ? 2 : -9), hy - 4, 8, 2, '#3a384e');
+    px(hx - 1, hy - 5, '#8a4a4a');
   }
-
-  // -- Torso --
-  const tw = 10;
-  poly([[x - tw / 2, shoulderY], [x + tw / 2, shoulderY], [x + tw / 2 - 1, hipY], [x - tw / 2 + 1, hipY]], OL);
-  poly([[x - tw / 2 + 1, shoulderY + 1], [x + tw / 2 - 1, shoulderY + 1],
-        [x + tw / 2 - 2, hipY - 1], [x - tw / 2 + 2, hipY - 1]], cloth.b);
-  // Shading
-  rect(x - tw / 2 + 1, shoulderY + 1, 2, hipY - shoulderY - 2, cloth.h);
-  rect(x + tw / 2 - 3, shoulderY + 1, 2, hipY - shoulderY - 2, cloth.s);
-  // Center detail (zipper/seam)
-  for (let zy = shoulderY + 3; zy < hipY - 2; zy += 2) px(x, zy, cloth.s);
-  // Collar
-  rect(x - 3, shoulderY - 1, 6, 2, cloth.s);
-  rect(x - 2, shoulderY - 1, 4, 1, cloth.h);
-  // Belt line
-  rect(x - tw / 2 + 2, hipY - 2, tw - 4, 1, cloth.s);
-
-  // Hoodie pocket (Lobelto) / jacket detail (Gonza)
-  if (isLob) {
-    rect(x - 3, hipY - 6, 6, 3, cloth.s);
-    rect(x - 2, hipY - 5, 4, 1, cloth.b);
-  } else {
-    // Jacket lapels
-    line(x - 1, shoulderY + 1, x - 3, hipY - 3, cloth.h);
-    line(x + 1, shoulderY + 1, x + 3, hipY - 3, cloth.h);
-  }
-
-  // -- Front arm --
-  const frontArmX = x + f * 5;
-  const isFrontArmMissing = o.armless && f > 0;
-  if (!isFrontArmMissing) {
-    const fax = o.lifted ? frontArmX + f * 3 : frontArmX;
-    const fay = o.lifted ? shoulderY - 6 : y - 6;
-    line(x + f * 4, shoulderY + 2, fax, fay, OL, 5);
-    line(x + f * 4, shoulderY + 2, fax, fay, cloth.b, 4);
-    line(x + f * 4, shoulderY + 2, fax, fay, cloth.h, 3);
-    if (!o.lifted) {
-      rect(fax - 1, fay - 1, 3, 3, OL);
-      rect(fax, fay, 2, 2, sk.h);
-      px(fax + 1, fay + 1, sk.s);
-    }
-  }
-
-  // -- Armless stump --
   if (o.armless) {
-    const stumpSide = f > 0 ? -1 : 1;
-    const stx = x + stumpSide * 5;
-    const sty = shoulderY + 6;
-    line(x + stumpSide * 4, shoulderY + 2, stx, sty, OL, 5);
-    line(x + stumpSide * 4, shoulderY + 2, stx, sty, cloth.b, 3);
     if (o.bandaged) {
-      rect(stx - 2, sty - 1, 4, 4, OL);
-      rect(stx - 1, sty, 3, 3, '#d8d0c0');
-      px(stx, sty, '#c0b8a0');
-      px(stx - 1, sty + 1, '#b0a890');
-      line(stx - 1, sty - 1, stx + 1, sty + 2, '#a09878');
+      rect(armR[0] - 1, armR[1] - 1, 3, 3, '#d8d0c0');
+      px(armR[0], armR[1] - 1, '#b0a890');
+      px(armR[0] - 1, armR[1], '#b0a890');
     } else {
-      rect(stx - 2, sty - 1, 4, 4, '#cfc6b4');
-      px(stx - 1, sty + 2, '#7a1018');
-      px(stx, sty + 3, '#5a0810');
+      rect(armR[0] - 1, armR[1] - 1, 3, 3, '#cfc6b4');
+      px(armR[0], armR[1] + 2, '#7a1018');
     }
   }
-
-  // -- Neck --
-  rect(x - 1, neckY, 3, 3, OL);
-  rect(x, neckY + 1, 2, 2, sk.b);
-
-  // -- Head --
-  const headData = isLob ? HEAD_LOB : HEAD_GON;
-  const headPal = isLob ? HEAD_LOB_PAL : HEAD_GON_PAL;
-  const headW = headData[0].length;
-  const headH = headData.length;
-  drawSprite(hx - Math.floor(headW / 2), hy - Math.floor(headH / 2), headData, headPal, f < 0);
-
-  // -- Face expressions override --
-  const faceX = hx - Math.floor(headW / 2);
-  const faceY = hy - Math.floor(headH / 2);
-  if (o.pain) {
-    // Furrowed brows
-    const brow1x = f > 0 ? faceX + 4 : faceX + headW - 5;
-    const brow2x = f > 0 ? faceX + 6 : faceX + headW - 7;
-    px(brow1x, faceY + 4, OL);
-    px(brow2x, faceY + 4, OL);
-    // Grimace
-    const mx = f > 0 ? faceX + 4 : faceX + headW - 6;
-    rect(mx, faceY + 8, 3, 1, '#5a2020');
-  }
-  if (o.talk) {
-    const mx = f > 0 ? faceX + 4 : faceX + headW - 6;
-    const openH = Math.abs(Math.sin(t / 80)) > 0.5 ? 2 : 1;
-    rect(mx, faceY + 8, 2, openH, '#4a2018');
-  }
-
-  // -- Headset (Lobelto) drawn over head --
-  if (isLob) {
-    // Band
-    line(hx - 6, hy - 1, hx - 5, hy - 6, PAL.headset.s);
-    line(hx - 5, hy - 6, hx + 5, hy - 6, PAL.headset.h);
-    line(hx + 5, hy - 6, hx + 6, hy - 1, PAL.headset.s);
-    // Ear cups
-    rect(hx - 8, hy - 3, 3, 6, PAL.headset.s);
-    rect(hx - 8, hy - 2, 3, 4, PAL.headset.b);
-    px(hx - 7, hy - 1, PAL.headset.h);
-    rect(hx + 6, hy - 3, 3, 6, PAL.headset.s);
-    rect(hx + 6, hy - 2, 3, 4, PAL.headset.b);
-    px(hx + 7, hy - 1, PAL.headset.h);
-    // Mic arm
-    line(hx - 7, hy + 2, hx - 4, hy + 5, PAL.headset.s);
-    rect(hx - 5, hy + 4, 2, 2, PAL.headset.mic);
-    px(hx - 5, hy + 4, PAL.headset.h);
-  }
-
   if (sc !== 1) ctx.restore();
 }
 
-// ---- Avatar head for call screens ----
 function avatarHead(cx, cy, hat, t, dim) {
   disc(cx, cy + 22, 16, dim ? '#1b1a22' : '#14131a');
-  disc(cx, cy, 12, dim ? '#24222c' : '#3a3646');
-  disc(cx, cy, 11, '#0b0a10');
-
+  disc(cx, cy, 11, dim ? '#24222c' : '#3a3646');
+  disc(cx, cy, 10, '#0b0a10');
+  if (!dim) { rect(cx + 2, cy - 2, 2, 2, FIG.eye); rect(cx + 6, cy - 2, 2, 2, FIG.eye); }
+  else { rect(cx + 1, cy - 1, 3, 1, '#4a4656'); rect(cx + 5, cy - 1, 3, 1, '#4a4656'); }
   if (hat === 'headset') {
-    disc(cx, cy, 10, PAL.hair.lob);
+    rect(cx - 9, cy - 11, 18, 2, '#5a5668');
+    rect(cx - 13, cy - 4, 4, 8, '#7a7690'); rect(cx + 9, cy - 4, 4, 8, '#7a7690');
   } else {
-    disc(cx, cy, 10, PAL.hair.gon);
-  }
-
-  // Face
-  disc(cx + 1, cy + 1, 7, dim ? '#1a182a' : PAL.skin.b);
-  if (!dim) {
-    rect(cx + 2, cy - 2, 2, 2, PAL.eye);
-    rect(cx + 6, cy - 2, 2, 2, PAL.eye);
-    px(cx + 3, cy - 1, PAL.outline);
-    px(cx + 7, cy - 1, PAL.outline);
-    px(cx + 4, cy + 1, PAL.skin.s);
-    rect(cx + 3, cy + 3, 3, 1, PAL.skin.d);
-  } else {
-    rect(cx + 1, cy - 1, 3, 1, '#4a4656');
-    rect(cx + 5, cy - 1, 3, 1, '#4a4656');
-  }
-
-  if (hat === 'headset') {
-    rect(cx - 10, cy - 12, 20, 2, PAL.headset.b);
-    rect(cx - 14, cy - 4, 5, 8, PAL.headset.b);
-    rect(cx - 13, cy - 3, 3, 6, PAL.headset.h);
-    rect(cx + 10, cy - 4, 5, 8, PAL.headset.b);
-    rect(cx + 11, cy - 3, 3, 6, PAL.headset.h);
-  } else {
-    rect(cx - 11, cy - 13, 22, 5, PAL.cap.b);
-    rect(cx - 10, cy - 12, 20, 3, PAL.cap.h);
-    rect(cx + 4, cy - 9, 14, 3, PAL.cap.b);
-    px(cx, cy - 11, PAL.cap.logo);
+    rect(cx - 10, cy - 12, 21, 5, '#2c2a3a'); rect(cx + 4, cy - 8, 14, 3, '#2c2a3a');
   }
 }
 
