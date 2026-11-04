@@ -599,7 +599,9 @@ function drawMap(t) {
 
   rect(mx, my, mw, 10, '#18141e');
   ctx.font = '8px VT323, monospace';
-  ctx.fillStyle = '#c09050'; ctx.fillText('LA CIUDAD', mx + mw / 2 - 18, my + 7);
+  ctx.fillStyle = '#c09050'; ctx.textAlign = 'center';
+  ctx.fillText('DISTRITO D', mx + mw / 2, my + 7);
+  ctx.textAlign = 'left';
 
   CITY_CONNECTIONS.forEach(([a, b]) => {
     const da = CITY_DISTRICTS.find(d => d.id === a);
