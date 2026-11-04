@@ -18,29 +18,38 @@ const DIE_ICON = {
   evade:  ['..#.#', '.#.#.', '#.#..', '.#.#.', '..#.#'],
 };
 
-// Allies build a 9-page deck from `copies`; pages cost Light to play.
+// Limbus Company skill rotation: each ally has Skill I/II/III, drawn from a
+// pool holding them 3/2/1 times, plus a Defense skill that is always offered.
+const SKILL_POOL = { 1: 3, 2: 2, 3: 1 };
+const SKILL_OFFER = 2;
+const TIER = {
+  0: { label: 'DEF', col: '#4a8ad8' },
+  1: { label: 'I', col: '#d8b040' },
+  2: { label: 'II', col: '#e87a30' },
+  3: { label: 'III', col: '#e03040' },
+  P: { label: '+', col: '#ffb040' },
+};
+
 const COMBAT_UNITS = {
   lobelto: {
     id: 'lobelto', name: 'LOBELTO', team: 'ally', maxHp: 60, maxSt: 32, speed: [2, 6], nDice: 1,
-    maxLight: 3, hat: 'headset', armless: true, bandaged: true, bx: 62, by: 96, scale: 1.3,
+    hat: 'headset', armless: true, bandaged: true, bx: 62, by: 96, scale: 1.3,
     pages: [
-      { name: 'Puñetazo desesperado', cost: 1, copies: 2, dice: [['blunt', 4, 7], ['blunt', 3, 6]] },
-      { name: 'Cabezazo táctico', cost: 1, copies: 2, dice: [['blunt', 5, 9]] },
-      { name: 'Esquivar y gritar', cost: 0, copies: 2, dice: [['evade', 3, 6], ['blunt', 2, 4]] },
-      { name: 'Cubrirse', cost: 0, copies: 2, dice: [['block', 4, 7], ['block', 3, 5]] },
-      { name: 'Ataque a ciegas', cost: 3, copies: 1, dice: [['blunt', 6, 10], ['blunt', 5, 8]] },
+      { name: 'Puñetazo desesperado', tier: 1, dice: [['blunt', 3, 6], ['blunt', 2, 5]] },
+      { name: 'Cabezazo táctico', tier: 2, dice: [['blunt', 5, 8], ['blunt', 3, 5]] },
+      { name: 'Ataque a ciegas', tier: 3, dice: [['blunt', 6, 9], ['blunt', 4, 7]] },
     ],
+    defense: { name: 'Esquivar y gritar', tier: 0, dice: [['evade', 3, 7]] },
   },
   gonza: {
     id: 'gonza', name: 'GONZA', team: 'ally', maxHp: 65, maxSt: 34, speed: [3, 7], nDice: 1,
-    maxLight: 3, hat: 'cap', bx: 104, by: 110, scale: 1.3,
+    hat: 'cap', bx: 104, by: 110, scale: 1.3,
     pages: [
-      { name: 'Patada lateral', cost: 1, copies: 2, dice: [['blunt', 4, 7], ['blunt', 3, 6]] },
-      { name: 'Golpe con tubo', cost: 2, copies: 2, dice: [['blunt', 6, 10]] },
-      { name: 'Combo callejero', cost: 2, copies: 2, dice: [['blunt', 3, 5], ['blunt', 3, 5], ['blunt', 3, 6]] },
-      { name: 'Guardia firme', cost: 0, copies: 2, dice: [['block', 5, 8], ['blunt', 3, 5]] },
-      { name: 'Furia callejera', cost: 3, copies: 1, dice: [['blunt', 7, 11], ['blunt', 4, 7]] },
+      { name: 'Patada lateral', tier: 1, dice: [['blunt', 3, 6], ['blunt', 2, 5]] },
+      { name: 'Combo callejero', tier: 2, dice: [['blunt', 2, 5], ['blunt', 2, 5], ['blunt', 2, 5]] },
+      { name: 'Furia callejera', tier: 3, dice: [['blunt', 6, 10], ['blunt', 4, 7]] },
     ],
+    defense: { name: 'Guardia firme', tier: 0, dice: [['block', 4, 8]] },
   },
   corrupted: {
     id: 'corrupted', name: 'EMPLEADO', tag: 'E.G.O.', tagCol: '#8a2030', team: 'enemy', maxHp: 55, maxSt: 28, speed: [1, 5], nDice: 2,
@@ -78,8 +87,7 @@ const COMBAT_UNITS = {
     ],
   },
 };
-const HAND_START = 2, HAND_MAX = 8;
-const FORGOTTEN_PIECE = { name: 'Pieza olvidada', cost: 0, copies: 0, dice: [['pierce', 4, 8], ['pierce', 2, 5]] };
+const FORGOTTEN_PIECE = { name: 'Pieza olvidada', tier: 'P', dice: [['pierce', 4, 8], ['pierce', 2, 5]] };
 
 const CB = {
   active: false, turn: 0, phase: 'select',
@@ -103,25 +111,33 @@ function shuffle(a) {
 function makeUnit(t) {
   const u = { ...t, hp: t.maxHp, st: t.maxSt, staggered: false, staggerTurns: 0 };
   if (t.team === 'ally') {
-    u.light = t.maxLight;
-    u.deck = shuffle(t.pages.flatMap(p => Array.from({ length: p.copies }, () => ({ page: p }))));
-    u.hand = [];
-    u.discard = [];
-    drawCards(u, HAND_START);
+    u.pool = [];
+    u.offer = [];
+    u.defCard = { page: t.defense };
+    u.bonus = null;
+    refillOffer(u);
   }
   return u;
 }
 
-// When the deck runs out, the discard pile is shuffled back in.
-function drawCards(u, n) {
-  let drawn = 0;
-  for (let k = 0; k < n && u.hand.length < HAND_MAX; k++) {
-    if (!u.deck.length) { u.deck = shuffle(u.discard); u.discard = []; }
-    if (!u.deck.length) break;
-    u.hand.push(u.deck.pop());
-    drawn++;
+function skillPool(u) {
+  return shuffle(u.pages.flatMap(p => Array.from({ length: SKILL_POOL[p.tier] }, () => ({ page: p }))));
+}
+
+// The skill not used stays offered; empty slots are refilled from the pool,
+// which is rebuilt and reshuffled once it runs out.
+function refillOffer(u) {
+  let added = 0;
+  while (u.offer.length < SKILL_OFFER) {
+    if (!u.pool.length) u.pool = skillPool(u);
+    u.offer.push(u.pool.pop());
+    added++;
   }
-  return drawn;
+  return added;
+}
+
+function skillOptions(u) {
+  return [...u.offer, u.defCard, u.bonus].filter(Boolean);
 }
 
 // ---------------------------------------------------------------------
@@ -156,10 +172,9 @@ function newTurn() {
   if (CB.turn > 1) {
     for (const u of CB.allies) {
       if (!alive(u)) continue;
-      u.light = Math.min(u.maxLight, u.light + 1);
-      if (drawCards(u, 1)) {
+      if (refillOffer(u)) {
         const p = headPos(u);
-        spawnAnim('text', p.x, p.y - 14, '+1 página', '#ffe08a', 1100);
+        spawnAnim('text', p.x, p.y - 14, 'Nueva habilidad', '#ffe08a', 1100);
       }
     }
   }
@@ -192,21 +207,15 @@ function selectDie(d) {
 }
 
 function unassign(d) {
-  if (!d.card) return;
-  d.unit.light += d.card.page.cost;
   d.card = null;
   d.page = null;
 }
 
-// Clicking the card already on the die takes it back and refunds its Light.
+// Clicking the skill already on the die takes it back.
 function toggleCard(card) {
   const d = CB.sel;
   if (!d) return;
   if (d.card === card) { unassign(d); SFX.play('select'); return; }
-  const budget = d.unit.light + (d.card ? d.card.page.cost : 0);
-  if (card.page.cost > budget) return;
-  unassign(d);
-  d.unit.light -= card.page.cost;
   d.card = card;
   d.page = card.page;
   if (!d.target) {
@@ -239,8 +248,8 @@ async function combatExecute() {
 
   for (const d of allyDice()) {
     if (!d.card) continue;
-    d.unit.hand = d.unit.hand.filter(c => c !== d.card);
-    d.unit.discard.push(d.card);
+    d.unit.offer = d.unit.offer.filter(c => c !== d.card);
+    if (d.card === d.unit.bonus) d.unit.bonus = null;
   }
 
   const acts = CB.dice
@@ -286,10 +295,10 @@ function endTurn() {
   for (const e of CB.enemies) {
     e.rebooting = false;
     if (!e.givesPieces || !alive(e) || Math.random() >= e.givesPieces) continue;
-    const takers = CB.allies.filter(u => alive(u) && u.hand.length < HAND_MAX);
+    const takers = CB.allies.filter(u => alive(u) && !u.bonus);
     if (!takers.length) continue;
     const u = takers[rnd(0, takers.length - 1)];
-    u.hand.push({ page: FORGOTTEN_PIECE });
+    u.bonus = { page: FORGOTTEN_PIECE };
     const pe = headPos(e), pu = headPos(u);
     spawnAnim('text', pe.x, pe.y - 4, '*clac*', '#ffb040', 1200);
     spawnAnim('text', pu.x, pu.y - 22, '+ Pieza olvidada', '#ffb040', 1600);
@@ -481,18 +490,16 @@ function autoAssign(mode) {
     if (!canAct(d.unit) || !foes.length) continue;
     unassign(d);
     let best = null, bestScore = -Infinity;
-    for (const card of d.unit.hand) {
-      if (card.page.cost > d.unit.light) continue;
+    for (const card of skillOptions(d.unit)) {
       for (const e of foes) {
         // a die with no page (rebooting enemy) takes a free hit: just maximise damage
-        let score = mode === 'win' && e.page ? winRate(card.page, e.page) : expDamage(card.page) / (mode === 'win' ? 20 : 1);
+        let score = mode === 'win' && e.page ? winRate(card.page, e.page) + expDamage(card.page) / 25 : expDamage(card.page) / (mode === 'win' ? 20 : 1);
         if (used.has(e)) score -= mode === 'win' ? 0.5 : 20;
         if (e.target === d) score += mode === 'win' ? 0.05 : 0.5;
         if (score > bestScore) { bestScore = score; best = [card, e]; }
       }
     }
     if (!best) continue;
-    d.unit.light -= best[0].page.cost;
     d.card = best[0]; d.page = best[0].page; d.target = best[1];
     used.add(best[1]);
   }
@@ -715,8 +722,6 @@ function selectPanel(t) {
     const cx = 22 + i * 38, u = d.unit, ok = canAct(u), sel = CB.sel === d;
     const pcy = 162, pr = 14;
     if (ok) hitArea(cx - 16, 126, 32, 54, () => selectDie(d));
-    for (let k = 0; k < u.maxLight; k++)
-      disc(cx - (u.maxLight - 1) * 3 + k * 6, 128, 2, k < u.light ? '#ffe08a' : '#3a3020');
     hex(cx, 140, 8, d.page ? '#1e1418' : '#121016', sel ? '#ffd060' : '#5a4030');
     if (d.page) dieIcon(d.page.dice[0][0], cx - 2, 136);
     else txt('+', cx, 143, '#5a5060', 10, 'center');
@@ -740,17 +745,24 @@ function selectPanel(t) {
 
   const d = CB.sel;
   if (d) {
-    const u = d.unit, n = u.hand.length, cw = 37;
-    txt(`MAZO ${u.deck.length}  ·  DESCARTE ${u.discard.length}`, 90, 131, '#8a8070', 7);
-    // Hand fans out and overlaps when it holds more than 4 pages; the hovered page pops to the front.
-    const step = n <= 4 ? 39 : (158 - cw) / (n - 1);
-    const rects = u.hand.map((card, i) => ({ card, x: Math.round(90 + i * step), y: 134, w: cw, h: 44 }));
-    let hov = -1;
-    for (let i = n - 1; i >= 0; i--) if (hot(rects[i].x, rects[i].y, rects[i].w, rects[i].h)) { hov = i; break; }
-    const order = rects.map((_, i) => i).filter(i => i !== hov);
-    if (hov >= 0) order.push(hov);
-    for (const i of order) drawHandCard(rects[i], i === hov, d);
-    if (!n) txt('Sin páginas en la mano', 168, 158, '#6a6070', 8, 'center');
+    const u = d.unit;
+    // What is left in the rotation pool before it reshuffles
+    let bx = 90;
+    txt('BOLSA', bx, 131, '#8a8070', 7);
+    bx += 22;
+    for (const tier of [1, 2, 3]) {
+      const left = u.pool.filter(c => c.page.tier === tier).length;
+      const lw = TIER[tier].label.length * 4;
+      rrect(bx, 125, lw + 3, 8, left ? TIER[tier].col : '#3a3434', 2);
+      txt(TIER[tier].label, bx + 1.5 + lw / 2, 131, '#16121a', 7, 'center');
+      txt(String(left), bx + lw + 5, 131, left ? '#e8e4dc' : '#5a5050', 8);
+      bx += lw + 14;
+    }
+    skillOptions(u).forEach((card, i) => {
+      const x = 90 + i * 39 + (card === u.defCard || card === u.bonus ? 2 : 0);
+      const r = { card, x, y: 134, w: 37, h: 44 };
+      drawHandCard(r, hot(r.x, r.y, r.w, r.h), d);
+    });
   }
 
   rect(252, 127, 36, 9, '#2a1810');
@@ -763,8 +775,7 @@ function selectPanel(t) {
 }
 
 function drawHandCard(r, hv, d) {
-  const pg = r.card.page, on = d.card === r.card;
-  const afford = on || pg.cost <= d.unit.light + (d.card ? d.card.page.cost : 0);
+  const pg = r.card.page, on = d.card === r.card, tier = TIER[pg.tier];
   hitArea(r.x, r.y, r.w, r.h, () => toggleCard(r.card), { page: pg });
   const x = r.x, w = r.w, h = r.h, y = r.y - (hv ? 3 : 0) - (on ? 2 : 0);
   rrect(x, y, w, h, on ? '#ffd060' : hv ? '#8a6a50' : '#3a2a24', 2);
@@ -774,14 +785,14 @@ function drawHandCard(r, hv, d) {
     ctx.font = '8px VT323, monospace';
     txt(ln, x + 2, y + 10 + k * 7, '#e8e4dc', ctx.measureText(ln).width > w - 4 ? 7 : 8);
   });
-  disc(x + w - 6, y + h - 7, 4, afford ? '#ffe08a' : '#5a5040');
-  txt(String(pg.cost), x + w - 5.5, y + h - 4, '#2a1a00', 9, 'center');
+  const bw = tier.label.length * 4 + 4;
+  rrect(x + w - bw - 2, y + h - 10, bw, 8, tier.col, 2);
+  txt(tier.label, x + w - 2 - bw / 2, y + h - 4, '#16121a', 8, 'center');
   pg.dice.forEach(([ty, a, b], k) => {
     const ry = y + h - 8 - (pg.dice.length - 1 - k) * 7;
     dieIcon(ty, x + 3, ry - 3);
     txt(`${a}-${b}`, x + 10, ry + 2, '#d8d0c0', 8);
   });
-  if (!afford) { ctx.globalAlpha = 0.55; rect(x, y, w, h, '#000'); ctx.globalAlpha = 1; }
 }
 
 function pageCard(s, x, y, w, enemyTeam) {
@@ -835,7 +846,10 @@ function tooltip() {
   rect(x, y, bw, 1, '#8a6030');
   rect(x, y + bh - 1, bw, 1, '#3a2418');
   txt(pg.name, x + 4, y + 9, '#ffd060', 9);
-  if (pg.cost != null) txt(`Luz ${pg.cost}`, x + bw - 4, y + 9, '#ffe08a', 8, 'right');
+  if (pg.tier != null) {
+    const tl = { 0: 'Defensa', P: 'Extra' }[pg.tier] || `Habilidad ${TIER[pg.tier].label}`;
+    txt(tl, x + bw - 4, y + 9, TIER[pg.tier].col, 8, 'right');
+  }
   pg.dice.forEach(([ty, a, b], k) => {
     dieIcon(ty, x + 4, y + 12 + k * 9);
     txt(`${a}-${b}  ${DIE[ty].name}`, x + 12, y + 17 + k * 9, '#e8e4dc', 8);
