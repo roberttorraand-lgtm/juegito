@@ -230,6 +230,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (G.mode === 'combat') {
     if (e.key === 'Escape' && !CB.animating) endCombat();
+    if (e.key === 'Enter') combatExecute();
     return;
   }
   if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) advance(); }
@@ -255,7 +256,9 @@ function render(t) {
     drawHub(t);
   } else {
     (BG[G.s.bg] || BG.black)(G.s, t);
-    const order = ['corrupted', 'gonza', 'lobelto'];
+    const order = G.mode === 'combat'
+      ? Object.keys(G.actors).sort((a, b) => G.actors[a].y - G.actors[b].y)
+      : ['corrupted', 'gonza', 'lobelto'];
     for (const id of order) {
       const a = G.actors[id];
       if (!a) continue;
@@ -266,7 +269,7 @@ function render(t) {
     const r = G.s.rift;
     if (r) { r.w += (r.target - r.w) * 0.04; rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }
     postFX(G.s, t);
-    if (G.mode === 'combat') drawCombatBars();
+    if (G.mode === 'combat') drawCombatHUD(t);
   }
   if (G.flash) {
     const k = 1 - (now - G.flash.start) / G.flash.ms;
@@ -287,6 +290,7 @@ function render(t) {
         ctx.beginPath(); ctx.arc(a.x, a.y, rad, 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = 1; return true;
       }
+      ctx.textAlign = 'center';
       if (a.type === 'dmg') {
         const bounce = progress < 0.15 ? progress / 0.15 * -8 : -8 + (progress - 0.15) * 12;
         ctx.font = a.big ? '18px VT323, monospace' : '16px VT323, monospace';
@@ -294,27 +298,15 @@ function render(t) {
         ctx.fillText(a.text, (a.x + 1) | 0, (a.y + bounce + 1) | 0);
         ctx.fillStyle = a.color;
         ctx.fillText(a.text, a.x | 0, (a.y + bounce) | 0);
-      } else if (a.type === 'coin') {
-        ctx.font = '14px VT323, monospace';
-        if (a.color === '#ffd700' && progress < 0.2) {
-          ctx.globalAlpha = (0.2 - progress) / 0.2 * 0.6;
-          disc(a.x + 3, a.y - 4, 5, '#ffd700');
-          ctx.globalAlpha = Math.max(0, alpha);
-        }
-        ctx.fillStyle = a.color;
-        ctx.fillText(a.text, a.x | 0, (a.y - progress * 5) | 0);
       } else {
-        const sz = a.big ? '16px' : '11px';
-        ctx.font = `${sz} VT323, monospace`;
+        ctx.font = `${a.big ? 16 : 11}px VT323, monospace`;
+        const yOff = -progress * 6;
+        ctx.fillStyle = '#000';
+        ctx.fillText(a.text, (a.x + 1) | 0, (a.y + yOff + 1) | 0);
         ctx.fillStyle = a.color;
-        const yOff = a.type === 'total' ? -progress * 3 : -progress * 6;
-        if (a.big) {
-          ctx.fillStyle = '#000';
-          ctx.fillText(a.text, (a.x + 1) | 0, (a.y + yOff + 1) | 0);
-          ctx.fillStyle = a.color;
-        }
         ctx.fillText(a.text, a.x | 0, (a.y + yOff) | 0);
       }
+      ctx.textAlign = 'left';
       ctx.globalAlpha = 1;
       return true;
     });
