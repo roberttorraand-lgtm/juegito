@@ -28,9 +28,6 @@
       "artifactName": "La-Distorsion-Externa-${version}.exe"
     }
   },
-  "dependencies": {
-    "pixi.js": "^7.3.3"
-  },
   "devDependencies": {
     "@capacitor/android": "^7.2.0",
     "@capacitor/cli": "^7.2.0",

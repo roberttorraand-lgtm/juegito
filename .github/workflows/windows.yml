@@ -1,0 +1,50 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main, claude/modest-tesla-rdmz8g]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-exe
+  cancel-in-progress: true
+
+jobs:
+  exe:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build portable EXE
+        run: npx electron-builder --win portable --publish never
+
+      - run: cp dist/La-Distorsion-Externa-*.exe La-Distorsion-Externa.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: La-Distorsion-Externa-exe
+          path: La-Distorsion-Externa.exe
+
+      - name: Publish as a downloadable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete pc-latest --yes --cleanup-tag || true
+          gh release create pc-latest La-Distorsion-Externa.exe \
+            --title "PC (Windows) - La Distorsion Externa" \
+            --notes "Version de Windows generada automaticamente desde ${GITHUB_SHA::7}. Ejecutable portable: no necesita instalacion." \
+            --target "$GITHUB_SHA"
