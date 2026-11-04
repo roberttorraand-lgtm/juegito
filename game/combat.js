@@ -1016,12 +1016,37 @@ function smallBtn(x, y, w, h, label, fn) {
 }
 
 // Speed-die tokens: allies above the head (side by side when they have two),
-// enemies in a zig-zag column next to the enemy.
+// enemies in a single column, centred, to the left of the enemy.
+const TOKEN_R = 7;
 function tokenPos(d) {
   const u = d.unit;
-  if (u.team === 'enemy') return { x: 186 + (d.k % 2) * 20, y: 38 + d.k * 20 };
+  if (u.team === 'enemy') return { x: 194, y: 60 - (u.nDice - 1) * 10 + d.k * 20 };
   const s = u.scale * (u.hat === 'cap' ? 0.86 : 1);
-  return { x: u.bx + (d.k - (u.nDice - 1) / 2) * 22, y: Math.round(u.by - 40 * s - 11) };
+  return { x: u.bx + (d.k - (u.nDice - 1) / 2) * 30, y: Math.round(u.by - 40 * s - 12) };
+}
+
+// What the pointer is on: a single speed die ({die}) or a whole unit
+// ({unit}: its body or its plate).
+function focusUnit() {
+  const m = CB.mouse;
+  if (!m) return null;
+  const die = tokenAt(m);
+  if (die) return { die };
+  for (const u of CB.all) {
+    const a = G.actors[u.id];
+    if (!a || !alive(u)) continue;
+    const s = u.scale * (u.hat === 'cap' ? 0.86 : 1);
+    const h = (u.kind ? u.height : 42) * s, hw = u.kind ? 26 : 13;
+    if (m.x >= a.x - hw && m.x <= a.x + hw && m.y >= u.by - h - 4 && m.y <= u.by + 12) return { unit: u };
+    if (u.team === 'enemy' && m.x >= 200 && m.x < 304 && m.y >= 104 && m.y < 124) return { unit: u };
+  }
+  return null;
+}
+
+// Hovered token, for the targeting preview.
+function tokenAt(m) {
+  if (!m) return null;
+  return CB.dice.find(d => alive(d.unit) && !d.unit.staggered && (p => Math.abs(m.x - p.x) <= TOKEN_R + 2 && Math.abs(m.y - p.y) <= TOKEN_R + 2)(tokenPos(d))) || null;
 }
 
 function arrowHead([x, y], [qx, qy], col) {
@@ -1034,13 +1059,13 @@ function arrowHead([x, y], [qx, qy], col) {
 }
 
 function arc(x0, y0, x1, y1, col, t, both) {
-  const mx = (x0 + x1) / 2, my = Math.min(y0, y1) - 14 - Math.abs(x1 - x0) * 0.12;
+  const mx = (x0 + x1) / 2, my = Math.min(y0, y1) - 6 - Math.abs(x1 - x0) * 0.07;
   const P = (s) => [
     (1 - s) * (1 - s) * x0 + 2 * (1 - s) * s * mx + s * s * x1,
     (1 - s) * (1 - s) * y0 + 2 * (1 - s) * s * my + s * s * y1,
   ];
   const len = Math.hypot(x1 - x0, y1 - y0) + Math.abs(my - y0);
-  const s0 = Math.min(0.3, 12 / len), s1 = 1 - s0;
+  const s0 = Math.min(0.3, (TOKEN_R + 3) / len), s1 = 1 - s0;
   const n = Math.max(24, Math.round(len * 1.4));
   for (let i = 0; i <= n; i++) {
     const s = s0 + (s1 - s0) * (i / n);
@@ -1060,52 +1085,96 @@ function clashMark(x, y, t) {
   line(x + 3, y - 3, x - 3, y + 3, '#fff');
 }
 
-function drawArrows(t) {
+// Arrows are only drawn for the unit under the pointer: its own attacks and
+// the attacks aimed at it. Returns the dice involved so the rest can be dimmed.
+function drawArrows(t, focus) {
+  const lit = new Set();
+  if (!focus) return lit;
+  const show = focus.die ? (a, b) => a === focus.die || b === focus.die
+    : (a, b) => a.unit === focus.unit || b.unit === focus.unit;
+  const list = [];
   for (const e of enemyDice()) {
-    if (!e.page || !e.target || !canAct(e.unit)) continue;
+    if (!e.page || !e.target || !canAct(e.unit) || !show(e, e.target)) continue;
     if (e.target.target === e && e.target.page) continue;
-    const p0 = tokenPos(e), p1 = tokenPos(e.target);
-    arc(p0.x, p0.y, p1.x, p1.y, '#ff4050', t);
+    list.push({ a: e, b: e.target, col: '#ff4050' });
   }
   for (const d of allyDice()) {
-    if (!d.page || !d.target || !canAct(d.unit)) continue;
-    const p0 = tokenPos(d), p1 = tokenPos(d.target);
-    const m = arc(p0.x, p0.y, p1.x, p1.y, '#ffd060', t, d.target.target === d);
-    clashMark(m[0], m[1], t);
+    if (!d.page || !d.target || !canAct(d.unit) || !show(d, d.target)) continue;
+    list.push({ a: d, b: d.target, col: '#ffd060', both: d.target.target === d, clash: true });
   }
+  // several arrows on one token leave/arrive at spread-out points so they never overlap
+  const ends = new Map();
+  for (const r of list) for (const d of [r.a, r.b]) ends.set(d, (ends.get(d) || 0) + 1);
+  const used = new Map();
+  const point = (d) => {
+    const n = ends.get(d), k = used.get(d) || 0;
+    used.set(d, k + 1);
+    const p = tokenPos(d);
+    return { x: p.x, y: p.y + (k - (n - 1) / 2) * Math.min(5, 12 / Math.max(1, n - 1)) };
+  };
+  list.sort((r1, r2) => tokenPos(r1.b).y - tokenPos(r2.b).y);
+  for (const r of list) {
+    const p0 = point(r.a), p1 = point(r.b);
+    const m = arc(p0.x, p0.y, p1.x, p1.y, r.col, t, r.both);
+    if (r.clash) clashMark(m[0], m[1], t);
+    lit.add(r.a); lit.add(r.b);
+  }
+  for (const d of CB.dice) if (d === focus.die || d.unit === focus.unit) lit.add(d);
+  return lit;
 }
 
-function drawToken(d, t) {
+function drawToken(d, t, dim) {
   const u = d.unit;
   if (!alive(u)) return;
+  ctx.globalAlpha = dim ? 0.4 : 1;
+  drawTokenBody(d, t);
+  ctx.globalAlpha = 1;
+}
+
+function drawTokenBody(d, t) {
+  const u = d.unit;
   const { x, y } = tokenPos(d);
   const blink = Math.floor(t / 400) % 2;
   if (u.staggered) { if (d.k === 0) txt('ATURDIDO', x, y + 3, blink ? '#ff4a5a' : '#8a2030', 9, 'center'); return; }
   const enemy = u.team === 'enemy';
   const sel = CB.sel === d && CB.phase === 'select';
-  const hov = hitArea(x - 10, y - 10, 20, 20, () => (enemy ? targetDie(d) : selectDie(d)), { page: d.page });
+  const R = TOKEN_R;
+  const hov = hitArea(x - R - 2, y - R - 2, 2 * R + 4, 2 * R + 4, () => (enemy ? targetDie(d) : selectDie(d)), { page: d.page });
   if (sel || hov) {
-    ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t / 150);
-    hex(x, y, 12, sel ? '#ffd060' : '#ffffff');
-    ctx.globalAlpha = 1;
+    const a = ctx.globalAlpha;
+    ctx.globalAlpha = a * (0.5 + 0.3 * Math.sin(t / 150));
+    hex(x, y, R + 3, sel ? '#ffd060' : '#ffffff');
+    ctx.globalAlpha = a;
   }
-  hex(x, y, 9, d.page ? '#1e1418' : '#121016', enemy ? '#c0283a' : sel ? '#ffd060' : '#8a6030');
-  // range label: left of the token, or right of Lobelto's second one
-  const rightLabel = !enemy && d.k > 0;
-  const lx = rightLabel ? x + 12 : x - 12, al = rightLabel ? 'left' : 'right';
+  hex(x, y, R, d.page ? '#1e1418' : '#121016', enemy ? '#c0283a' : sel ? '#ffd060' : '#8a6030');
+  // range label: right of enemy tokens (arrows arrive from the left), left of
+  // an ally's first token and right of Lobelto's second one
+  const rightLabel = enemy || d.k > 0;
+  const lx = rightLabel ? x + R + 3 : x - R - 3, al = rightLabel ? 'left' : 'right';
   if (d.page) {
     dieIcon(d.page.dice[0][0], x - 2, y - 5);
     const n = d.page.dice.length;
-    d.page.dice.forEach(([ty], k) => rect(x - n + k * 2, y + 3, 1, 2, DIE[ty].col));
+    d.page.dice.forEach(([ty], k) => rect(x - n + k * 2, y + 2, 1, 2, DIE[ty].col));
     const [, a, b] = d.page.dice[0];
-    txt(`${a}-${b}`, lx, y + 3, '#ffd060', 9, al);
+    tag(`${a}-${b}`, lx, y + (enemy ? 5 : 3), '#ffd060', al);
   } else if (u.rebooting) {
     txt('...', x, y + 2, '#9ac0ff', 10, 'center');
-    txt('REINICIO', lx, y + 3, '#9ac0ff', 8, al);
+    tag('REINICIO', lx, y + 3, '#9ac0ff', al);
   } else {
     txt('?', x, y + 3, '#6a6070', 10, 'center');
   }
-  speedBadge(x + 9, y - 7, d.speed);
+  speedBadge(x + R + 1, y - R + 1, d.speed);
+}
+
+// Small label on a dark backing so arrows never make it unreadable.
+function tag(s, x, y, col, align) {
+  ctx.font = '8px VT323, monospace';
+  const w = Math.ceil(ctx.measureText(s).width) + 2;
+  const a = ctx.globalAlpha;
+  ctx.globalAlpha = a * 0.75;
+  rect(align === 'right' ? x - w + 1 : x - 1, y - 6, w, 8, '#08060c');
+  ctx.globalAlpha = a;
+  txt(s, x, y, col, 8, align);
 }
 
 function shieldBar(x, y, v) {
@@ -1301,7 +1370,7 @@ function topBar() {
   rect(3, 3, 46, 11, '#0a080e');
   rect(3, 3, 46, 1, '#8a6030');
   txt(`TURNO ${CB.turn}`, 26, 12, '#e8c060', 9, 'center');
-  if (CB.phase === 'select') txt('Elige páginas y a quién atacar · Retrato = página defensiva', 162, 12, '#a39c90', 8, 'center');
+  if (CB.phase === 'select') txt(`Retrato = defensa · ${IS_TOUCH ? 'Toca' : 'Pasa el ratón sobre'} alguien para ver sus ataques`, 172, 12, '#a39c90', 8, 'center');
 }
 
 function tooltip() {
@@ -1351,8 +1420,9 @@ function drawCombatHUD(t) {
   for (const u of CB.allies) if (alive(u)) allyPlate(u, t);
   for (const u of CB.enemies) if (alive(u)) enemyPlate(u, t);
   if (CB.phase === 'select') {
-    drawArrows(t);
-    for (const d of CB.dice) drawToken(d, t);
+    const focus = focusUnit();
+    const lit = drawArrows(t, focus);
+    for (const d of CB.dice) drawToken(d, t, focus && !lit.has(d));
   }
   topBar();
   if (CB.phase === 'select') selectPanel(t); else clashPanel();
