@@ -76,10 +76,6 @@ const PAL = {
 // ---- Lobelto & Gonza: black stickmen ----
 const FIG = { body: '#10101a', edge: '#4a4660', eye: '#f0ecdc' };
 
-const HAIR = {
-  lob: { c: '#2a1d16', h: '#4a3426' },
-  gon: { c: '#2e2018', h: '#4e3828' },
-};
 const GLASSES = '#a8a8c0';
 
 function figure(x, y, o, t) {
@@ -110,21 +106,10 @@ function figure(x, y, o, t) {
   const mpx = (dx, dy, c) => px(hx + dx * f, hy + dy, c);
   const mrect = (dx, dy, w, h, c) => rect(f > 0 ? hx + dx : hx - dx - w + 1, hy + dy, w, h, c);
   if (o.hat === 'headset') {
-    // fluffy, messy hair — volume to the back and top
-    const H = HAIR.lob;
-    for (const [dx, dy, r] of [[-3, -4, 3], [0, -5, 3], [3, -5, 2], [-5, -1, 3], [-4, 1, 2]]) disc(hx + dx * f, hy + dy, r, H.c);
-    for (const [dx, dy] of [[-6, -4], [-2, -9], [2, -8], [5, -6], [-5, -7], [-7, 0], [-6, 3], [4, -3]]) mpx(dx, dy, H.c);
-    for (const [dx, dy] of [[-2, -6], [1, -7], [-4, -3], [-5, 1]]) mpx(dx, dy, H.h);
     // rectangular glasses
     mrect(0, -2, 5, 1, GLASSES); mrect(0, 0, 5, 1, GLASSES);
     mpx(0, -1, GLASSES); mpx(2, -1, GLASSES); mpx(4, -1, GLASSES);
     mrect(-3, -1, 3, 1, GLASSES);
-  } else if (kid) {
-    // messy hair with a fringe falling to the eyes
-    const H = HAIR.gon;
-    for (const [dx, dy, r] of [[-2, -5, 3], [2, -5, 3], [-4, -2, 2], [0, -7, 2]]) disc(hx + dx * f, hy + dy, r, H.c);
-    for (const [dx, dy] of [[-3, -8], [1, -9], [4, -7], [-5, -5], [5, -4], [-6, -2], [0, -2], [2, -2], [4, -2]]) mpx(dx, dy, H.c);
-    for (const [dx, dy] of [[-1, -6], [2, -6], [-3, -3]]) mpx(dx, dy, H.h);
   }
 
   mpx(1, -1, FIG.eye); mpx(3, -1, FIG.eye);
@@ -144,22 +129,9 @@ function figure(x, y, o, t) {
 
 function avatarHead(cx, cy, hat, t, dim) {
   const lob = hat === 'headset';
-  const H = lob ? HAIR.lob : HAIR.gon;
-  const hc = dim ? '#1e1814' : H.c, hh = dim ? '#2a221c' : H.h;
   disc(cx, cy + 22, 16, dim ? '#1b1a22' : '#14131a');
   disc(cx, cy, 11, dim ? '#24222c' : '#3a3646');
   disc(cx, cy, 10, '#0b0a10');
-
-  if (lob) {
-    for (const [dx, dy, r] of [[-5, -8, 6], [2, -10, 6], [9, -9, 4], [-10, -2, 5], [-9, 4, 4], [11, -3, 3]]) disc(cx + dx, cy + dy, r, hc);
-    for (const [dx, dy] of [[-12, -9], [-7, -15], [-1, -17], [5, -17], [10, -14], [13, -9], [-14, -4], [-14, 3], [-12, 8], [14, -5]]) rect(cx + dx, cy + dy, 2, 2, hc);
-    for (const [dx, dy] of [[-4, -11], [1, -13], [6, -11], [-9, -5], [-8, 2]]) rect(cx + dx, cy + dy, 2, 1, hh);
-  } else {
-    for (const [dx, dy, r] of [[-4, -9, 6], [4, -9, 6], [-9, -4, 4], [0, -12, 4]]) disc(cx + dx, cy + dy, r, hc);
-    for (const [dx, dy] of [[-8, -14], [-2, -16], [4, -15], [9, -12], [-12, -8], [12, -7]]) rect(cx + dx, cy + dy, 2, 2, hc);
-    for (const fx of [-2, 1, 4, 8]) rect(cx + fx, cy - 5, 1, 2 + ((fx + 8) % 2), hc);
-    for (const [dx, dy] of [[-5, -11], [2, -12], [-8, -6]]) rect(cx + dx, cy + dy, 2, 1, hh);
-  }
 
   if (dim) {
     rect(cx + 1, cy - 1, 3, 1, '#4a4656'); rect(cx + 5, cy - 1, 3, 1, '#4a4656');
