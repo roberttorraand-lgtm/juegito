@@ -11,7 +11,7 @@
 }
 @font-face {
   font-family: "VT323";
-  src: url("https://fonts.gstatic.com/s/vt323/v17/pxiKyp0ihIEF2isfFJU.woff2") format("woff2");
+  src: url("fonts/vt323.woff2") format("woff2");
 }
 html, body {
   margin: 0; height: 100%;
