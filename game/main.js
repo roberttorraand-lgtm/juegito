@@ -310,11 +310,14 @@ function render(t) {
         base();
         ctx.restore();
       };
-      if (CFG.shadows && !a.lifted) drawActorShadow(a, () => { ctx.save(); ctx.translate(a.ox || 0, 0); base(); ctx.restore(); });
+      if (CFG.shadows && !a.lifted && !a.dying) drawActorShadow(a, () => { ctx.save(); ctx.translate(a.ox || 0, 0); base(); ctx.restore(); });
+      const fade = a.alpha == null ? 1 : a.alpha;
       for (const g of a.ghosts || []) {
-        ctx.save(); ctx.globalAlpha = g.a; ctx.translate(g.dx, 0); posed(); ctx.restore();
+        ctx.save(); ctx.globalAlpha = g.a * fade; ctx.translate(g.dx, 0); posed(); ctx.restore();
       }
+      ctx.globalAlpha = fade;
       posed();
+      ctx.globalAlpha = 1;
     }
     drawAlerts(t);
     const r = G.s.rift;

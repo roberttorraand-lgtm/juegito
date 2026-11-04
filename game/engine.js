@@ -85,6 +85,9 @@ const FIG_POSES = {
   slam:   { front: [3, -10], back: [-3, -10], legs: [[-4, 0], [4, 0]] },
   guard:  { front: [6, 0], back: [5, 4], legs: [[-5, 0], [5, 0]] },
   hurt:   { front: [-6, 5], back: [-8, 3], legs: [[-5, 0], [2, 0]] },
+  run:    { front: [5, 6], back: [-8, 4], legs: [[-8, -1], [7, 0]] },
+  brace:  { front: [7, 2], back: [-6, 6], legs: [[-8, 0], [7, 0]] },
+  follow: { front: [7, 10], back: [-7, 4], legs: [[-7, 0], [7, 0]] },
 };
 
 function figure(x, y, o, t) {

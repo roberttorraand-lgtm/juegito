@@ -52,7 +52,7 @@ const costOf = (page) => (TIER[page.tier] ? TIER[page.tier].cost : 0);
 const COMBAT_UNITS = {
   lobelto: {
     id: 'lobelto', name: 'LOBELTO', team: 'ally', maxHp: 60, maxSt: 14, speed: [2, 6], nDice: 2,
-    hat: 'headset', armless: true, bandaged: true, bx: 62, by: 96, scale: 1.3,
+    hat: 'headset', armless: true, bandaged: true, bx: 44, by: 102, scale: 0.85,
     pages: [
       { name: 'Puñetazo desesperado', tier: 1, dice: [['blunt', 3, 6], ['blunt', 2, 5]] },
       { name: 'Cabezazo táctico', tier: 2, dice: [['blunt', 5, 8], ['blunt', 3, 5]] },
@@ -62,7 +62,7 @@ const COMBAT_UNITS = {
   },
   gonza: {
     id: 'gonza', name: 'GONZA', team: 'ally', maxHp: 65, maxSt: 16, speed: [3, 7], nDice: 1,
-    hat: 'cap', bx: 104, by: 110, scale: 1.3,
+    hat: 'cap', bx: 92, by: 114, scale: 0.85,
     pages: [
       { name: 'Patada lateral', tier: 1, dice: [['blunt', 3, 6], ['blunt', 3, 5]] },
       { name: 'Combo callejero', tier: 2, dice: [['blunt', 3, 5], ['blunt', 3, 5], ['blunt', 3, 5]] },
@@ -73,7 +73,7 @@ const COMBAT_UNITS = {
   // Distortion boss: three pages a turn, no pattern at all
   corrupted: {
     id: 'corrupted', name: 'EMPLEADO', tag: 'DIST.', tagCol: '#8a2030', team: 'enemy', maxHp: 80, maxSt: 22, speed: [1, 5], nDice: 3,
-    kind: 'corrupted', bg: 'arena', height: 72, bx: 248, by: 106, scale: 0.88,
+    kind: 'corrupted', bg: 'arena', height: 72, bx: 258, by: 106, scale: 0.58,
     defeat: 'El empleado distorsionado ha caído.',
     pages: [
       { name: 'Tajo dentado', dice: [['slash', 4, 8], ['slash', 3, 7]] },
@@ -85,7 +85,7 @@ const COMBAT_UNITS = {
   // ZAYIN: two pages a turn on a fixed cycle; its conveyor sometimes hands out a "forgotten piece"
   machine: {
     id: 'machine', name: 'E.G.O EXTRACTION MACHINE', tag: 'ZAYIN', tagCol: '#2a7a3a', team: 'enemy', maxHp: 80, maxSt: 18, speed: [1, 4], nDice: 2,
-    kind: 'machine', bg: 'cell', height: 86, bx: 252, by: 106, scale: 0.88, givesPieces: 0.4,
+    kind: 'machine', bg: 'cell', height: 86, bx: 258, by: 106, scale: 0.58, givesPieces: 0.4,
     pattern: [[0, 1], [2, 3], [0, 2], [1, 3]],
     defeat: 'E.G.O Extraction Machine se apaga con un último chirrido.',
     pages: [
@@ -98,7 +98,7 @@ const COMBAT_UNITS = {
   // TETH: four pages a turn on a fixed cycle; every 3rd turn it reboots and does nothing
   operator: {
     id: 'operator', name: 'THE DISCONNECTED OPERATOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 110, maxSt: 26, speed: [3, 7], nDice: 4,
-    kind: 'operator', bg: 'cell', height: 84, bx: 250, by: 106, scale: 0.88, reboot: 3,
+    kind: 'operator', bg: 'cell', height: 84, bx: 258, by: 106, scale: 0.58, reboot: 3,
     pattern: [[0, 2, 0, 1], [3, 0, 2, 0], [1, 3, 0, 2]],
     defeat: 'La pantalla de The Disconnected Operator se apaga para siempre.',
     pages: [
@@ -451,7 +451,19 @@ function tween(obj, to, ms, ease = easeOut) {
 const wait = (ms) => (CB.instant ? Promise.resolve() : delay(ms));
 const actorOf = (u) => G.actors[u.id];
 const dirTo = (A, B) => (Math.sign((actorOf(B) || B).x - (actorOf(A) || A).x) || 1);
-function chest(u) { const p = headPos(u); return { x: p.x + ((actorOf(u) && actorOf(u).ox) || 0), y: p.y + (u.kind ? 26 : 12) }; }
+function chest(u) {
+  const a = actorOf(u) || { x: u.bx, y: u.by };
+  const s = u.scale * (u.hat === 'cap' ? 0.86 : 1);
+  return { x: a.x + (a.ox || 0), y: a.y + (a.oy || 0) - (u.kind ? u.height * 0.6 : 22) * s };
+}
+const feet = (u) => { const a = actorOf(u) || { x: u.bx, y: u.by }; return { x: a.x + (a.ox || 0), y: a.y }; };
+function dust(u, n = 6, dir = 0) {
+  const f = feet(u);
+  for (let i = 0; i < n * CFG.particles; i++) {
+    CB.parts.push({ x: f.x + (Math.random() - 0.5) * 8, y: f.y - 1, vx: (Math.random() - 0.5) * 0.8 - dir * 0.6, vy: -Math.random() * 0.5,
+      g: -0.005, life: 22, max: 22, col: i % 2 ? '#8a8070' : '#5a5048' });
+  }
+}
 
 function fx(type, x, y, ms, extra) { CB.fx.push({ type, x, y, start: performance.now(), ms, ...extra }); }
 function particles(x, y, n, cols, speed = 1.6, grav = 0.08, life = 26) {
@@ -475,7 +487,7 @@ function bark(u, kind, chance = 1) {
 const FX_DRAW = {
   // crescent swipe that sweeps in, then fades
   slash(f, k) {
-    const sweep = Math.min(1, k * 3.5), n = 26, R = f.r || 13;
+    const sweep = Math.min(1, k * 3.5), n = 26, R = f.r || 10;
     for (let i = 0; i <= n * sweep; i++) {
       const s = i / n, a = (-2.3 + s * 3.2) * f.dir, th = Math.sin(s * Math.PI) * 3 + 1;
       const x = f.x + Math.cos(a) * R * f.dir, y = f.y + Math.sin(a) * R;
@@ -519,9 +531,9 @@ const FX_DRAW = {
   hexShield(f, k) {
     const pulse = 1 + Math.sin(k * Math.PI * 6) * 0.06;
     ctx.globalAlpha = (k < 0.15 ? k / 0.15 : k > 0.75 ? (1 - k) / 0.25 : 1) * 0.5;
-    poly(hexPath(f.x, f.y, 11 * pulse), '#4a8ad8');
+    poly(hexPath(f.x, f.y, (f.r || 11) * pulse), '#4a8ad8');
     ctx.globalAlpha *= 1.8;
-    const pts = hexPath(f.x, f.y, 11 * pulse);
+    const pts = hexPath(f.x, f.y, (f.r || 11) * pulse);
     pts.forEach(([x, y], i) => { const [nx, ny] = pts[(i + 1) % 6]; line(x, y, nx, ny, '#c8e0ff'); });
     ctx.globalAlpha = 1;
   },
@@ -577,45 +589,89 @@ function drawFx() {
 // ---------------------------------------------------------------------
 //  Move animations
 // ---------------------------------------------------------------------
+// Run to x leaning forward with afterimages and dust; `back` = return to place.
+async function dashTo(u, x, ms, back) {
+  const a = actorOf(u);
+  if (!a || Math.abs(a.x - x) < 1) return;
+  const dir = Math.sign(x - a.x);
+  if (CB.instant) { a.x = x; return; }
+  a.pose = back ? null : 'run';
+  dust(u, 5, dir);
+  const lean = tween(a, { tilt: (back ? -0.06 : 0.14) * dir * (a.face || 1) * (a.face || 1) }, 90);
+  const trail = setInterval(() => {
+    a.ghosts = [{ dx: -dir * 7, a: 0.3 }, { dx: -dir * 14, a: 0.14 }];
+  }, 30);
+  await Promise.all([lean, animateSlide(u.id, x, ms)]);
+  clearInterval(trail);
+  a.ghosts = null;
+  dust(u, back ? 3 : 7, -dir);
+  if (!back) { a.pose = 'brace'; await tween(a, { tilt: -0.05 * dir, sq: 0.06 }, 70); }
+  await tween(a, { tilt: 0, sq: 0 }, 110);
+  a.pose = null;
+}
+
+const trail = (a, dir, n = 2) => { a.ghosts = Array.from({ length: n }, (_, i) => ({ dx: -dir * (6 + i * 6), a: 0.32 - i * 0.12 })); };
+
 // The attacker's swing for one die, ending at the moment of impact.
 async function strikeAnim(U, T, type) {
   const a = actorOf(U), dir = dirTo(U, T), c = chest(T);
   if (!a) return;
   a.atk = true;
   const k = kindOf(type) === 'counter' ? 'counter' : type;
+  const r = T.kind ? 12 : 9;
   if (k === 'counter') {
+    // parry stance, then a fast riposte
     const p = chest(U);
-    fx('parry', p.x, p.y - 18, 500);
+    a.pose = 'guard';
+    fx('parry', p.x, p.y - 14, 500);
     SFX.play('counter');
+    await tween(a, { ox: (a.ox || 0) - dir * 3, sq: 0.06 }, 90);
     a.pose = 'strike';
-    await tween(a, { ox: (a.ox || 0) + dir * 10 }, 70);
-    fx('slash', c.x, c.y, 280, { dir, col: DIE.counter.col });
+    trail(a, dir);
+    await tween(a, { ox: (a.ox || 0) + dir * 14, sq: 0, tilt: 0.1 * dir }, 60, easeIn);
+    a.ghosts = null;
+    fx('slash', c.x, c.y, 280, { dir, col: DIE.counter.col, r });
+    a.pose = 'follow';
   } else if (k === 'blunt') {
+    // crouch, leap forward, slam down
+    a.pose = 'windup';
+    await tween(a, { sq: 0.12, ox: (a.ox || 0) - dir * 2 }, 80);
     a.pose = 'slam';
-    await tween(a, { oy: -12, sq: -0.08 }, 120);
+    await tween(a, { oy: -16, sq: -0.1, ox: (a.ox || 0) + dir * 6, tilt: -0.08 * dir }, 140);
     a.pose = 'strike';
-    await tween(a, { oy: 0, sq: 0.12, ox: (a.ox || 0) + dir * 8 }, 70, easeIn);
-    fx('shock', c.x, (actorOf(T) || T).y || c.y + 20, 450, { col: DIE.blunt.col });
-    particles(c.x, c.y + 14, 8, ['#8a8090', '#5a5060', '#c8c0b0'], 1.2, 0.12);
+    trail(a, dir);
+    await tween(a, { oy: 0, sq: 0.14, ox: (a.ox || 0) + dir * 6, tilt: 0.12 * dir }, 70, easeIn);
+    a.ghosts = null;
+    fx('shock', c.x, feet(T).y, 450, { col: DIE.blunt.col });
+    particles(c.x, c.y + 6, 8, ['#8a8090', '#5a5060', '#c8c0b0'], 1.2, 0.12);
+    dust(U, 6);
     SFX.play('blunt');
     shake(220);
-    tween(a, { sq: 0 }, 120);
+    tween(a, { sq: 0 }, 140);
   } else if (k === 'pierce') {
+    // coil back low, then a long lunge with afterimages
     a.pose = 'windup';
-    await tween(a, { ox: (a.ox || 0) - dir * 4, tilt: -0.08 * dir }, 80);
+    await tween(a, { ox: (a.ox || 0) - dir * 6, tilt: -0.1 * dir, sq: 0.08 }, 110);
     a.pose = 'strike';
     const p = chest(U);
-    fx('dash', p.x, p.y + 8, 200, { dir });
-    await tween(a, { ox: (a.ox || 0) + dir * 16, tilt: 0.06 * dir }, 55, easeIn);
-    fx('pierce', 0, 0, 260, { x0: p.x + dir * 8, y0: p.y, x1: c.x + dir * 14, y1: c.y, col: DIE.pierce.col });
+    trail(a, dir, 3);
+    fx('dash', p.x, p.y + 4, 200, { dir });
+    await tween(a, { ox: (a.ox || 0) + dir * 22, tilt: 0.1 * dir, sq: -0.04 }, 60, easeIn);
+    a.ghosts = null;
+    fx('pierce', 0, 0, 260, { x0: p.x + dir * 6, y0: p.y, x1: c.x + dir * 12, y1: c.y, col: DIE.pierce.col });
     SFX.play('pierce');
+    dust(U, 4, dir);
   } else {
+    // slash: small hop and raise, fast diagonal swing, follow-through
     a.pose = 'windup';
-    await tween(a, { ox: (a.ox || 0) - dir * 4, tilt: -0.1 * dir }, 80);
+    await tween(a, { ox: (a.ox || 0) - dir * 4, oy: -3, tilt: -0.14 * dir }, 100);
     a.pose = 'strike';
-    await tween(a, { ox: (a.ox || 0) + dir * 10, tilt: 0.08 * dir }, 60, easeIn);
-    fx('slash', c.x, c.y, 280, { dir, col: DIE[type] ? DIE[type].col : '#ffffff' });
+    trail(a, dir);
+    await tween(a, { ox: (a.ox || 0) + dir * 14, oy: 0, tilt: 0.12 * dir }, 60, easeIn);
+    a.ghosts = null;
+    fx('slash', c.x, c.y, 280, { dir, col: DIE[type] ? DIE[type].col : '#ffffff', r });
     SFX.play('slash');
+    a.pose = 'follow';
   }
 }
 
@@ -625,16 +681,19 @@ function settle(u) {
   if (!a) return Promise.resolve();
   a.atk = false;
   a.pose = null;
-  return tween(a, { ox: 0, oy: 0, tilt: 0, sq: 0 }, 140);
+  a.ghosts = null;
+  return tween(a, { ox: 0, oy: 0, tilt: 0, sq: 0 }, 160);
 }
 
-async function recoilAnim(T, from) {
+async function recoilAnim(T, from, dmg = 0) {
   const a = actorOf(T);
   if (!a) return;
-  const dir = -dirTo(T, from);
+  const dir = -dirTo(T, from), heavy = dmg >= 8;
   a.pose = 'hurt';
-  await tween(a, { ox: dir * 6, tilt: -0.12 * dir }, 60);
-  await tween(a, { ox: 0, tilt: 0 }, 160);
+  await tween(a, { ox: dir * (heavy ? 12 : 7), oy: heavy ? -4 : -1, tilt: -(heavy ? 0.24 : 0.14) * dir }, 70);
+  await tween(a, { oy: 0 }, 70, easeIn);
+  if (heavy) dust(T, 5, -dir);
+  await tween(a, { ox: 0, tilt: 0 }, 200);
   a.pose = null;
 }
 
@@ -643,33 +702,53 @@ async function dodgeAnim(u, from) {
   if (!a) return;
   const dir = -dirTo(u, from);
   SFX.play('evade');
+  a.pose = 'run';
   a.ghosts = [{ dx: 0, a: 0.4 }];
-  await tween(a, { ox: dir * 14, tilt: 0.15 * dir }, 90);
+  await tween(a, { ox: dir * 16, oy: -5, tilt: 0.2 * dir }, 100);
   a.ghosts = [{ dx: -dir * 9, a: 0.35 }, { dx: -dir * 4, a: 0.2 }];
-  await wait(160);
+  await tween(a, { oy: 0 }, 80, easeIn);
+  dust(u, 4, dir);
+  await wait(100);
   a.ghosts = null;
-  await tween(a, { ox: 0, tilt: 0 }, 160);
+  a.pose = null;
+  await tween(a, { ox: 0, tilt: 0 }, 180);
 }
 
 async function guardAnim(u, from) {
   const a = actorOf(u), c = chest(u);
   if (!a) return;
   a.pose = 'guard';
-  fx('hexShield', c.x + dirTo(u, from) * 12, c.y, 900);
+  tween(a, { sq: 0.06, ox: (a.ox || 0) - dirTo(u, from) * 2 }, 80).then(() => tween(a, { sq: 0 }, 160));
+  fx('hexShield', c.x + dirTo(u, from) * 10, c.y, 900, { r: u.kind ? 11 : 8 });
   SFX.play('block');
 }
 
 async function clashCollide(A, E) {
   const a = actorOf(A), e = actorOf(E);
+  if (a) a.pose = 'strike';
   const pa = chest(A), pe = chest(E);
-  await Promise.all([tween(a, { ox: 6 }, 70, easeIn), tween(e, { ox: -6 }, 70, easeIn)]);
-  fx('clash', (pa.x + pe.x) / 2, Math.min(pa.y, pe.y) - 4, 380);
-  particles((pa.x + pe.x) / 2, Math.min(pa.y, pe.y) - 4, 12, ['#ffd060', '#ffffff', '#ffb040']);
+  await Promise.all([tween(a, { ox: 7, tilt: 0.08 }, 70, easeIn), tween(e, { ox: -7, tilt: -0.08 }, 70, easeIn)]);
+  const mx = (pa.x + pe.x) / 2, my = Math.min(pa.y, pe.y) - 2;
+  fx('clash', mx, my, 380);
+  particles(mx, my, 14, ['#ffd060', '#ffffff', '#ffb040'], 2);
   SFX.play('clash');
   shake(120);
   G.flash = { color: '#ffffff', start: performance.now(), ms: 70 };
-  await wait(80); // hit-stop
-  await Promise.all([tween(a, { ox: -4 }, 110), tween(e, { ox: 4 }, 110)]);
+  await wait(90); // hit-stop
+  await Promise.all([tween(a, { ox: -5, tilt: -0.06 }, 120), tween(e, { ox: 5, tilt: 0.06 }, 120)]);
+  dust(A, 3, 1); dust(E, 3, -1);
+}
+
+// A defeated unit topples over and fades out.
+async function koAnim(u, a) {
+  const dir = u.team === 'ally' ? -1 : 1;
+  a.pose = 'hurt';
+  await tween(a, { tilt: 0.5 * dir, ox: (a.ox || 0) + dir * 6, oy: -4 }, 160);
+  await tween(a, { tilt: 1.45 * dir, oy: 0 }, 260, easeIn);
+  dust(u, 8);
+  await wait(500);
+  await tween(a, { alpha: 0 }, 400);
+  delete G.actors[u.id];
 }
 
 // Applies HP damage with stagger at 25% of it (rounded up). Returns the HP damage dealt.
@@ -720,7 +799,7 @@ async function applyHit(T, dmg, stats, from, type) {
   if (!dealt && soaked) { spawnAnim('text', p.x, p.y - 4, 'BLOQUEADO', '#9ac0ff', 800); bark(T, 'block', 0.5); }
   if (stats) stats[from.team] += dealt;
   await wait(70);
-  await Promise.all([settle(from), dealt ? recoilAnim(T, from) : Promise.resolve()]);
+  await Promise.all([settle(from), dealt && alive(T) ? recoilAnim(T, from, dealt) : Promise.resolve()]);
 }
 
 function addShield(u, v, from) {
@@ -754,9 +833,7 @@ async function doClash(ad, ed) {
   const sa = side(ad), se = side(ed);
   const stats = { ally: 0, enemy: 0 };
   CB.view = { left: sa, right: se };
-  fx('dash', chest(A).x, chest(A).y + 6, 300, { dir: 1 });
-  fx('dash', chest(E).x, chest(E).y + 6, 300, { dir: -1 });
-  await Promise.all([animateSlide(A.id, 136, 260), animateSlide(E.id, 196, 260)]);
+  await Promise.all([dashTo(A, 150, 300), dashTo(E, 182, 300)]);
   spawnAnim('text', 166, 44, '¡CHOQUE!', '#ffd060', 800, { big: true });
   bark(A, 'attack', 0.6);
   bark(E, 'attack', 0.4);
@@ -808,20 +885,19 @@ async function doClash(ad, ed) {
   }
   A.shield = 0;
   E.shield = 0;
-  await Promise.all([animateSlide(A.id, A.bx, 250), animateSlide(E.id, E.bx, 250)]);
+  await Promise.all([dashTo(A, A.bx, 280, true), dashTo(E, E.bx, 280, true)]);
 }
 
 async function doOneSided(d, T) {
   const s = side(d);
   const def = { unit: T, page: null, i: 0, roll: null };
   CB.view = d.unit.team === 'ally' ? { left: s, right: def } : { left: def, right: s };
-  const tx = T.team === 'ally' ? T.bx + 40 : T.bx - 40;
-  fx('dash', chest(d.unit).x, chest(d.unit).y + 6, 300, { dir: Math.sign(tx - d.unit.bx) });
-  await animateSlide(d.unit.id, tx, 280);
+  const tx = T.team === 'ally' ? T.bx + (d.unit.kind ? 30 : 20) : T.bx - (T.kind ? 30 : 20);
+  await dashTo(d.unit, tx, 300);
   bark(d.unit, 'attack', 0.5);
   await wait(150);
   await leftovers(s, T, null);
-  await animateSlide(d.unit.id, d.unit.bx, 250);
+  await dashTo(d.unit, d.unit.bx, 280, true);
 }
 
 // Remaining attack and counter dice hit unopposed; block and evade leftovers are discarded.
@@ -1019,7 +1095,7 @@ function smallBtn(x, y, w, h, label, fn) {
 const TOKEN_R = 7;
 function tokenPos(d) {
   const u = d.unit;
-  if (u.team === 'enemy') return { x: u.bx + (d.k - (u.nDice - 1) / 2) * 30, y: Math.round(u.by - u.height * u.scale - 12) };
+  if (u.team === 'enemy') return { x: u.bx - 6 + (d.k - (u.nDice - 1) / 2) * 30, y: Math.round(u.by - u.height * u.scale - 19) };
   const s = u.scale * (u.hat === 'cap' ? 0.86 : 1);
   return { x: u.bx + (d.k - (u.nDice - 1) / 2) * 30, y: Math.round(u.by - 40 * s - 12) };
 }
@@ -1029,14 +1105,13 @@ function tokenPos(d) {
 function focusUnit() {
   const m = CB.mouse;
   if (!m) return null;
-  const die = tokenAt(m);
-  if (die) return { die };
   for (const u of CB.all) {
     const a = G.actors[u.id];
     if (!a || !alive(u)) continue;
     const s = u.scale * (u.hat === 'cap' ? 0.86 : 1);
-    const h = (u.kind ? u.height : 42) * s, hw = u.kind ? 26 : 13;
-    if (m.x >= a.x - hw && m.x <= a.x + hw && m.y >= u.by - h - 4 && m.y <= u.by + 12) return { unit: u };
+    const h = (u.kind ? u.height : 34) * s, hw = u.kind ? 24 : 9;
+    if (m.x >= a.x - hw && m.x <= a.x + hw && m.y >= u.by - h - 4 && m.y <= u.by + 2) return { unit: u };
+    if (u.team === 'ally' && m.x >= a.x - 16 && m.x < a.x + 16 && m.y >= u.by + 2 && m.y < u.by + 11) return { unit: u };
     if (u.team === 'enemy' && m.x >= 200 && m.x < 304 && m.y >= 104 && m.y < 124) return { unit: u };
   }
   return null;
@@ -1057,10 +1132,11 @@ function arrowHead([x, y], [qx, qy], col) {
   ], col);
 }
 
-// Quadratic arrow from (x0,y0) to (x1,y1); its lowest point is `depth` px
-// below the lower end, so arrows with different depths never share a path.
-function arc(x0, y0, x1, y1, col, t, both, depth = 20) {
-  const mx = (x0 + x1) / 2, my = 2 * (Math.max(y0, y1) + depth) - (y0 + y1) / 2;
+// Quadratic arrow from (x0,y0) to (x1,y1) whose highest point is at `top`,
+// so arrows given different tops never share a path.
+function arc(x0, y0, x1, y1, col, t, both, top) {
+  if (top == null) top = Math.min(y0, y1) - 14;
+  const mx = (x0 + x1) / 2, my = 2 * top - (y0 + y1) / 2;
   const P = (s) => [
     (1 - s) * (1 - s) * x0 + 2 * (1 - s) * s * mx + s * s * x1,
     (1 - s) * (1 - s) * y0 + 2 * (1 - s) * s * my + s * s * y1,
@@ -1102,8 +1178,7 @@ function clashMark(x, y, t) {
 function drawArrows(t, focus) {
   const lit = new Set();
   if (!focus) return lit;
-  const show = focus.die ? (a, b) => a === focus.die || b === focus.die
-    : (a, b) => a.unit === focus.unit || b.unit === focus.unit;
+  const show = (a, b) => a.unit === focus.unit || b.unit === focus.unit;
   const list = [];
   for (const e of enemyDice()) {
     if (!e.page || !e.target || !canAct(e.unit) || !show(e, e.target)) continue;
@@ -1114,9 +1189,9 @@ function drawArrows(t, focus) {
     if (!d.page || !d.target || !canAct(d.unit) || !show(d, d.target)) continue;
     list.push({ a: d, b: d.target, col: '#ffd060', both: d.target.target === d, clash: true });
   }
-  // Every arrow gets its own lane: shorter arrows dip less, longer ones dip
-  // deeper, so they nest instead of crossing. Arrows sharing a token leave
-  // from spread-out points along its bottom edge.
+  // Every arrow gets its own lane over the top: shorter arrows stay low,
+  // longer ones go higher, so they nest instead of crossing. Arrows sharing
+  // a token leave from spread-out points along its top edge.
   list.sort((r1, r2) => Math.abs(tokenPos(r1.a).x - tokenPos(r1.b).x) - Math.abs(tokenPos(r2.a).x - tokenPos(r2.b).x));
   const ends = new Map(), used = new Map();
   for (const r of list) for (const d of [r.a, r.b]) ends.set(d, (ends.get(d) || 0) + 1);
@@ -1124,18 +1199,17 @@ function drawArrows(t, focus) {
     const n = ends.get(d), k = used.get(d) || 0;
     used.set(d, k + 1);
     const p = tokenPos(d);
-    return { x: p.x + (k - (n - 1) / 2) * Math.min(5, 10 / Math.max(1, n - 1)), y: p.y + 4 };
+    return { x: p.x + (k - (n - 1) / 2) * Math.min(5, 10 / Math.max(1, n - 1)), y: p.y - 4 };
   };
-  // lane i bottoms out at its own height, the same for every arrow pair
-  const base = Math.max(0, ...list.map(r => Math.max(tokenPos(r.a).y, tokenPos(r.b).y))) + 12;
-  const gap = Math.max(5, Math.min(10, (100 - base) / Math.max(1, list.length - 1)));
+  const roof = Math.min(...list.map(r => Math.min(tokenPos(r.a).y, tokenPos(r.b).y))) - 12;
+  const gap = Math.max(4, Math.min(9, (roof - 5) / Math.max(1, list.length - 1)));
   list.forEach((r, i) => {
     const p0 = point(r.a), p1 = point(r.b);
-    const m = arc(p0.x, p0.y, p1.x, p1.y, r.col, t, r.both, base + i * gap - Math.max(p0.y, p1.y));
+    const m = arc(p0.x, p0.y, p1.x, p1.y, r.col, t, r.both, Math.max(4, roof - i * gap));
     if (r.clash) clashMark(m[0], m[1], t);
     lit.add(r.a); lit.add(r.b);
   });
-  for (const d of CB.dice) if (d === focus.die || d.unit === focus.unit) lit.add(d);
+  for (const d of CB.dice) if (d.unit === focus.unit) lit.add(d);
   return lit;
 }
 
@@ -1167,7 +1241,7 @@ function drawTokenBody(d, t) {
   // an ally's first token and right of Lobelto's second one
   const rightLabel = !enemy && d.k > 0;
   const lx = enemy ? x : rightLabel ? x + R + 3 : x - R - 3, al = enemy ? 'center' : rightLabel ? 'left' : 'right';
-  const ly = enemy ? y - R - 3 : y + 3;
+  const ly = enemy ? y + R + 8 : y + 3;
   if (d.page) {
     dieIcon(d.page.dice[0][0], x - 2, y - 5);
     const n = d.page.dice.length;
@@ -1387,7 +1461,6 @@ function topBar() {
   rect(3, 3, 46, 11, '#0a080e');
   rect(3, 3, 46, 1, '#8a6030');
   txt(`TURNO ${CB.turn}`, 26, 12, '#e8c060', 9, 'center');
-  if (CB.phase === 'select') txt(`${IS_TOUCH ? 'Toca' : 'Ratón encima'}: ver ataques · Retrato: defensa`, 54, 12, '#a39c90', 8);
 }
 
 function tooltip() {
@@ -1420,7 +1493,7 @@ function refreshActors() {
   for (const u of CB.all) {
     const a = G.actors[u.id];
     if (!a) continue;
-    if (!alive(u)) { delete G.actors[u.id]; continue; }
+    if (!alive(u)) { if (!a.dying) { a.dying = true; a.alpha = 1; koAnim(u, a); } continue; }
     a.shake = u.staggered || (u._hurt || 0) > now;
     a.pain = u.staggered;
     a.blind = u.staggered;
