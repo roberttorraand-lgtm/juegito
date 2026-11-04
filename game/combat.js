@@ -73,7 +73,7 @@ const COMBAT_UNITS = {
   // Distortion boss: three pages a turn, no pattern at all
   corrupted: {
     id: 'corrupted', name: 'EMPLEADO', tag: 'DIST.', tagCol: '#8a2030', team: 'enemy', maxHp: 80, maxSt: 22, speed: [1, 5], nDice: 3,
-    kind: 'corrupted', bg: 'arena', height: 72, bx: 248, by: 106, scale: 1,
+    kind: 'corrupted', bg: 'arena', height: 72, bx: 248, by: 106, scale: 0.88,
     defeat: 'El empleado distorsionado ha caído.',
     pages: [
       { name: 'Tajo dentado', dice: [['slash', 4, 8], ['slash', 3, 7]] },
@@ -85,7 +85,7 @@ const COMBAT_UNITS = {
   // ZAYIN: two pages a turn on a fixed cycle; its conveyor sometimes hands out a "forgotten piece"
   machine: {
     id: 'machine', name: 'E.G.O EXTRACTION MACHINE', tag: 'ZAYIN', tagCol: '#2a7a3a', team: 'enemy', maxHp: 80, maxSt: 18, speed: [1, 4], nDice: 2,
-    kind: 'machine', bg: 'cell', height: 86, bx: 252, by: 106, scale: 1, givesPieces: 0.4,
+    kind: 'machine', bg: 'cell', height: 86, bx: 252, by: 106, scale: 0.88, givesPieces: 0.4,
     pattern: [[0, 1], [2, 3], [0, 2], [1, 3]],
     defeat: 'E.G.O Extraction Machine se apaga con un último chirrido.',
     pages: [
@@ -98,7 +98,7 @@ const COMBAT_UNITS = {
   // TETH: four pages a turn on a fixed cycle; every 3rd turn it reboots and does nothing
   operator: {
     id: 'operator', name: 'THE DISCONNECTED OPERATOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 110, maxSt: 26, speed: [3, 7], nDice: 4,
-    kind: 'operator', bg: 'cell', height: 84, bx: 250, by: 106, scale: 1, reboot: 3,
+    kind: 'operator', bg: 'cell', height: 84, bx: 250, by: 106, scale: 0.88, reboot: 3,
     pattern: [[0, 2, 0, 1], [3, 0, 2, 0], [1, 3, 0, 2]],
     defeat: 'La pantalla de The Disconnected Operator se apaga para siempre.',
     pages: [
@@ -1015,12 +1015,11 @@ function smallBtn(x, y, w, h, label, fn) {
   txt(label, x + w / 2, y + h - 3, hv ? '#fff' : '#e8d0c0', 8, 'center');
 }
 
-// Speed-die tokens: allies above the head (side by side when they have two),
-// enemies in a single column, centred, to the left of the enemy.
+// Speed-die tokens sit in a row above each unit's head.
 const TOKEN_R = 7;
 function tokenPos(d) {
   const u = d.unit;
-  if (u.team === 'enemy') return { x: 194, y: 60 - (u.nDice - 1) * 10 + d.k * 20 };
+  if (u.team === 'enemy') return { x: u.bx + (d.k - (u.nDice - 1) / 2) * 30, y: Math.round(u.by - u.height * u.scale - 12) };
   const s = u.scale * (u.hat === 'cap' ? 0.86 : 1);
   return { x: u.bx + (d.k - (u.nDice - 1) / 2) * 30, y: Math.round(u.by - 40 * s - 12) };
 }
@@ -1058,14 +1057,27 @@ function arrowHead([x, y], [qx, qy], col) {
   ], col);
 }
 
-function arc(x0, y0, x1, y1, col, t, both) {
-  const mx = (x0 + x1) / 2, my = Math.min(y0, y1) - 6 - Math.abs(x1 - x0) * 0.07;
+// Quadratic arrow from (x0,y0) to (x1,y1); its lowest point is `depth` px
+// below the lower end, so arrows with different depths never share a path.
+function arc(x0, y0, x1, y1, col, t, both, depth = 20) {
+  const mx = (x0 + x1) / 2, my = 2 * (Math.max(y0, y1) + depth) - (y0 + y1) / 2;
   const P = (s) => [
     (1 - s) * (1 - s) * x0 + 2 * (1 - s) * s * mx + s * s * x1,
     (1 - s) * (1 - s) * y0 + 2 * (1 - s) * s * my + s * s * y1,
   ];
   const len = Math.hypot(x1 - x0, y1 - y0) + Math.abs(my - y0);
-  const s0 = Math.min(0.3, (TOKEN_R + 3) / len), s1 = 1 - s0;
+  // trim by real distance so the arrow touches the token edge at both ends
+  const gapAt = (from, dir) => {
+    const [ax, ay] = P(from);
+    let s = from;
+    while (Math.abs(s - from) < 0.4) {
+      s += dir * 0.004;
+      const [bx, by] = P(s);
+      if (Math.hypot(bx - ax, by - ay) >= TOKEN_R - 1) break;
+    }
+    return s;
+  };
+  const s0 = gapAt(0, 1), s1 = gapAt(1, -1);
   const n = Math.max(24, Math.round(len * 1.4));
   for (let i = 0; i <= n; i++) {
     const s = s0 + (s1 - s0) * (i / n);
@@ -1102,23 +1114,27 @@ function drawArrows(t, focus) {
     if (!d.page || !d.target || !canAct(d.unit) || !show(d, d.target)) continue;
     list.push({ a: d, b: d.target, col: '#ffd060', both: d.target.target === d, clash: true });
   }
-  // several arrows on one token leave/arrive at spread-out points so they never overlap
-  const ends = new Map();
+  // Every arrow gets its own lane: shorter arrows dip less, longer ones dip
+  // deeper, so they nest instead of crossing. Arrows sharing a token leave
+  // from spread-out points along its bottom edge.
+  list.sort((r1, r2) => Math.abs(tokenPos(r1.a).x - tokenPos(r1.b).x) - Math.abs(tokenPos(r2.a).x - tokenPos(r2.b).x));
+  const ends = new Map(), used = new Map();
   for (const r of list) for (const d of [r.a, r.b]) ends.set(d, (ends.get(d) || 0) + 1);
-  const used = new Map();
   const point = (d) => {
     const n = ends.get(d), k = used.get(d) || 0;
     used.set(d, k + 1);
     const p = tokenPos(d);
-    return { x: p.x, y: p.y + (k - (n - 1) / 2) * Math.min(5, 12 / Math.max(1, n - 1)) };
+    return { x: p.x + (k - (n - 1) / 2) * Math.min(5, 10 / Math.max(1, n - 1)), y: p.y + 4 };
   };
-  list.sort((r1, r2) => tokenPos(r1.b).y - tokenPos(r2.b).y);
-  for (const r of list) {
+  // lane i bottoms out at its own height, the same for every arrow pair
+  const base = Math.max(0, ...list.map(r => Math.max(tokenPos(r.a).y, tokenPos(r.b).y))) + 12;
+  const gap = Math.max(5, Math.min(10, (100 - base) / Math.max(1, list.length - 1)));
+  list.forEach((r, i) => {
     const p0 = point(r.a), p1 = point(r.b);
-    const m = arc(p0.x, p0.y, p1.x, p1.y, r.col, t, r.both);
+    const m = arc(p0.x, p0.y, p1.x, p1.y, r.col, t, r.both, base + i * gap - Math.max(p0.y, p1.y));
     if (r.clash) clashMark(m[0], m[1], t);
     lit.add(r.a); lit.add(r.b);
-  }
+  });
   for (const d of CB.dice) if (d === focus.die || d.unit === focus.unit) lit.add(d);
   return lit;
 }
@@ -1149,17 +1165,18 @@ function drawTokenBody(d, t) {
   hex(x, y, R, d.page ? '#1e1418' : '#121016', enemy ? '#c0283a' : sel ? '#ffd060' : '#8a6030');
   // range label: right of enemy tokens (arrows arrive from the left), left of
   // an ally's first token and right of Lobelto's second one
-  const rightLabel = enemy || d.k > 0;
-  const lx = rightLabel ? x + R + 3 : x - R - 3, al = rightLabel ? 'left' : 'right';
+  const rightLabel = !enemy && d.k > 0;
+  const lx = enemy ? x : rightLabel ? x + R + 3 : x - R - 3, al = enemy ? 'center' : rightLabel ? 'left' : 'right';
+  const ly = enemy ? y - R - 3 : y + 3;
   if (d.page) {
     dieIcon(d.page.dice[0][0], x - 2, y - 5);
     const n = d.page.dice.length;
     d.page.dice.forEach(([ty], k) => rect(x - n + k * 2, y + 2, 1, 2, DIE[ty].col));
     const [, a, b] = d.page.dice[0];
-    tag(`${a}-${b}`, lx, y + (enemy ? 5 : 3), '#ffd060', al);
+    tag(`${a}-${b}`, lx, ly, '#ffd060', al);
   } else if (u.rebooting) {
     txt('...', x, y + 2, '#9ac0ff', 10, 'center');
-    tag('REINICIO', lx, y + 3, '#9ac0ff', al);
+    tag('REINICIO', lx, ly, '#9ac0ff', al);
   } else {
     txt('?', x, y + 3, '#6a6070', 10, 'center');
   }
@@ -1172,7 +1189,7 @@ function tag(s, x, y, col, align) {
   const w = Math.ceil(ctx.measureText(s).width) + 2;
   const a = ctx.globalAlpha;
   ctx.globalAlpha = a * 0.75;
-  rect(align === 'right' ? x - w + 1 : x - 1, y - 6, w, 8, '#08060c');
+  rect(align === 'right' ? x - w + 1 : align === 'center' ? x - w / 2 : x - 1, y - 6, w, 8, '#08060c');
   ctx.globalAlpha = a;
   txt(s, x, y, col, 8, align);
 }
@@ -1370,7 +1387,7 @@ function topBar() {
   rect(3, 3, 46, 11, '#0a080e');
   rect(3, 3, 46, 1, '#8a6030');
   txt(`TURNO ${CB.turn}`, 26, 12, '#e8c060', 9, 'center');
-  if (CB.phase === 'select') txt(`Retrato = defensa · ${IS_TOUCH ? 'Toca' : 'Pasa el ratón sobre'} alguien para ver sus ataques`, 172, 12, '#a39c90', 8, 'center');
+  if (CB.phase === 'select') txt(`${IS_TOUCH ? 'Toca' : 'Ratón encima'}: ver ataques · Retrato: defensa`, 54, 12, '#a39c90', 8);
 }
 
 function tooltip() {
