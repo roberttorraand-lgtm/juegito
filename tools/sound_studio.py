@@ -400,6 +400,21 @@ def instrument(kind, m, d, vol):
         x = fft_filter(sum(osc('saw', f * r, d) for r in (1, 1.004, 0.996)), 'lp', 1400) * adsr(d, min(0.4, d / 3), 0.2, 0.8, min(0.4, d / 3)) * 0.35
     elif kind == 'drone':
         x = fft_filter(osc('saw', f, d) + osc('saw', f * 1.5, d) * 0.5, 'lp', 600) * adsr(d, 0.8, 0.1, 0.9, 0.8)
+    elif kind == 'strings':
+        fv = f * (1 + 0.004 * np.sin(2 * np.pi * 5.2 * tvec(d)))
+        x = sum(osc('saw', fv * r, d) for r in (1, 1.003, 0.997, 2.001))
+        x = fft_filter(x, 'lp', 2200) * adsr(d, min(0.25, d / 3), 0.2, 0.85, min(0.3, d / 3)) * 0.3
+    elif kind == 'cello':
+        x = fft_filter(osc('saw', f, d) + osc('saw', f * 1.004, d), 'lp', 1100) * 0.5 + 0.3 * osc('sine', f, d)
+        x = x * adsr(d, 0.012, 0.08, 0.6, min(0.05, d / 3))
+    elif kind == 'brass':
+        x = fft_filter(osc('saw', f, d) + osc('saw', f * 1.005, d), 'lp', 1300)
+        x = np.tanh(1.5 * x) * adsr(d, 0.06, 0.15, 0.75, min(0.15, d / 3)) * 0.5
+    elif kind == 'choir':
+        fv = f * (1 + 0.006 * np.sin(2 * np.pi * 4.8 * tvec(d) + RNG.uniform(0, 6)))
+        src = osc('saw', fv, d) + osc('saw', fv * 1.003, d)
+        x = (fft_filter(src, 'band', 700, 3) + 0.6 * fft_filter(src, 'band', 1150, 4) + 0.3 * fft_filter(src, 'band', 2600, 6))
+        x = x * adsr(d, min(0.35, d / 3), 0.2, 0.9, min(0.35, d / 3)) * 0.8
     else:
         raise ValueError(kind)
     return x * vol
@@ -420,6 +435,24 @@ def drum(kind, vol):
         return fft_filter(noise(1.0), 'hp', 4500) * env_ad(1.0, 0.002, 3) * vol
     if kind == 'g':  # glitch burst
         return swept(noise(0.06), 'band', 4000, 800, 4) * env_ad(0.06, 0.001, 3) * vol
+    if kind == 'm':  # machine press clank
+        return (metal(210, 0.45) * 0.6 + fft_filter(noise(0.45), 'band', 1500, 1.5) * env_ad(0.45, 0.001, 12)) * vol
+    if kind == 'p':  # steam / piston hiss
+        return fft_filter(noise(0.35), 'hp', 2500) * env_ad(0.35, 0.04, 3) * vol
+    if kind == 'z':  # electric zap
+        steps = RNG.choice([900, 1400, 2200, 3100], 16)
+        f = np.repeat(steps, n_of(0.08) // 16 + 1)[:n_of(0.08)]
+        return fft_filter(osc('square', f, 0.08, 0.3), 'band', 2000, 0.7) * env_ad(0.08, 0.001, 4) * vol
+    if kind == 'r':  # clock tick
+        return fft_filter(noise(0.02), 'band', 6000, 2) * env_ad(0.02, 0.0005, 6) * vol
+    if kind == 't':  # low tom
+        return (osc('sine', sweep(140, 72, 0.35), 0.35) * env_ad(0.35, 0.002, 4)
+                + fft_filter(noise(0.35), 'band', 300, 1) * env_ad(0.35, 0.001, 20) * 0.4) * vol
+    if kind == 'T':  # taiko
+        return (np.tanh(2 * osc('sine', sweep(95, 46, 0.8), 0.8)) * env_ad(0.8, 0.002, 4.5)
+                + fft_filter(noise(0.8), 'band', 180, 1) * env_ad(0.8, 0.001, 14) * 0.5) * vol
+    if kind == 'l':  # funeral bell toll
+        return metal(98, 3.5, (0.5, 1, 1.19, 1.5, 2, 2.52, 3, 4.2)) * vol
     if kind == 'b':  # heartbeat
         return osc('sine', sweep(70, 40, 0.25), 0.25) * env_ad(0.25, 0.01, 4) * vol
     return np.zeros(1)
@@ -499,6 +532,27 @@ def render_song(spec):
             for b in range(0, bars, 2):
                 root, _ = chord(prog[b])
                 put(b * 4, instrument('drone', layer['oct'] + root, 8 * beat + 0.4, layer['vol']))
+        elif kind == 'notes':  # hand-written phrase, repeated every `every` bars
+            every = layer.get('every', bars)
+            for rep in range(0, bars, every):
+                for st, ln, m in layer['notes']:
+                    put(rep * 4 + st, instrument(layer['inst'], m + layer.get('shift', 0), ln * beat * 0.97, layer['vol']))
+        elif kind == 'hum':  # mains buzz with flicker and dropouts
+            n = n_of(total)
+            t = np.arange(n) / SR
+            x = sum(osc('sine', 50 * k, total) / k * (1.4 if k % 2 else 0.6) for k in range(1, 14))
+            x = fft_filter(x, 'lp', 900)
+            cyc = max(1, round(total * 0.25))
+            amp = 0.7 + 0.3 * np.sin(2 * np.pi * cyc * t / total)
+            for _ in range(int(total / 4)):
+                s0 = RNG.integers(0, n - n_of(0.4))
+                amp[s0:s0 + n_of(RNG.uniform(0.05, 0.3))] *= 0.1
+            out[:n] += x * amp * layer['vol']
+        elif kind == 'wind':
+            n = n_of(total)
+            t = np.arange(n) / SR
+            cyc = max(1, round(total / 9))
+            out[:n] += fft_filter(noise(total), 'lp', 450) * (0.55 + 0.45 * np.sin(2 * np.pi * cyc * t / total)) * layer['vol']
         elif kind == 'rain':
             n = n_of(total)
             out[:n] += fft_filter(noise(total), 'band', 2500, 0.6) * layer['vol']
@@ -573,47 +627,82 @@ SONGS = {
             {'type': 'drums', 'vols': {'k': 0.3, 'h': 0.06}, 'from': 8, 'bars': ['k.......k.......']},
         ],
     },
-    # first battle (ZAYIN machine): driving and bouncy
+    # ZAYIN — E.G.O Extraction Machine, inside a containment cell of the
+    # abandoned L.Corp branch: slow mechanical pulse, press clanks and steam,
+    # a cold music box and a lament on strings. Survival, not adventure.
     'battle_zayin': {
-        'bpm': 138, 'seed': 31, 'scale': scale_of('D', MIN), 'verb': 0.8, 'mix': 0.18,
-        'prog': ['Dm', 'Bb', 'C', 'A', 'Dm', 'Bb', 'C', 'A', 'Gm', 'Bb', 'C', 'A', 'Dm', 'Bb', 'Gm', 'A'],
+        'bpm': 92, 'seed': 31, 'scale': scale_of('D', MIN), 'verb': 2.0, 'mix': 0.35,
+        'prog': ['Dm', 'Dm', 'Bb', 'Bb', 'Gm', 'Gm', 'A', 'A', 'Dm', 'Dm', 'Bb', 'Bb', 'Eb', 'Eb', 'A7b9', 'A7b9'],
         'layers': [
-            {'type': 'bass', 'inst': 'bass', 'oct': 38, 'vol': 0.32,
-             'pattern': [(0, 0.5, 0), (0.5, 0.5, 12), (1, 0.5, 0), (1.5, 0.5, 12), (2, 0.5, 0), (2.5, 0.5, 12), (3, 0.5, 7), (3.5, 0.5, 12)]},
-            {'type': 'arp', 'inst': 'sq12', 'oct': 62, 'step': 0.25, 'vol': 0.05, 'order': [0, 1, 2, 3]},
-            {'type': 'melody', 'inst': 'sq', 'low': 69, 'high': 86, 'vol': 0.1, 'from': 4, 'rest': 0.15,
-             'rhythm': [(0, 0.5), (0.5, 0.5), (1, 1), (2, 0.5), (2.5, 0.5), (3, 1), (4, 1.5), (5.5, 0.5), (6, 1), (7, 1)]},
-            {'type': 'drums', 'vols': {'k': 0.6, 's': 0.4, 'h': 0.12, 'c': 0.25},
-             'bars': ['c...s...k.k.s...', 'k...s...k.k.s.ss', 'k...s...k.k.s...', 'k...s.k.k.k.s.hh']},
+            {'type': 'drone', 'oct': 26, 'vol': 0.12},
+            {'type': 'hum', 'vol': 0.025},
+            {'type': 'bass', 'inst': 'cello', 'oct': 38, 'vol': 0.26,
+             'pattern': [(k * 0.5, 0.45, o) for k, o in enumerate([0, 12, 0, 7, 0, 12, 0, 10])]},
+            {'type': 'chords', 'inst': 'strings', 'oct': 50, 'vol': 0.12, 'hits': [(0, 4)]},
+            {'type': 'drums', 'vols': {'k': 0.45, 'm': 0.3, 'r': 0.09, 'p': 0.08},
+             'bars': ['k.r.m.r.k.r.m.r.', 'k.r.m.r.k.r.m.rp', 'k.r.m.r.k.r.m.r.', 'k.r.m.r.k.rkm.mp']},
+            {'type': 'notes', 'inst': 'bell', 'vol': 0.08, 'every': 2,
+             'notes': [(0, 1, 86), (1.5, 0.5, 81), (3, 1, 82), (5, 2, 81)]},
+            {'type': 'notes', 'inst': 'strings', 'vol': 0.28, 'notes': [
+                (32, 2, 69), (34, 1, 70), (35, 1, 69), (36, 3, 65), (39, 1, 64),
+                (40, 2, 62), (42, 2, 65), (44, 4, 70),
+                (48, 2, 70), (50, 1, 67), (51, 1, 70), (52, 3, 67), (55, 1, 70),
+                (56, 2, 69), (58, 2, 70), (60, 4, 73)]},
         ],
     },
-    # second battle (TETH operator): syncopated, glitchy
+    # TETH — The Disconnected Operator, deeper in the branch among dead
+    # monitors and cables: mains hum, nervous syncopated pulses, zaps,
+    # tritone harmony and a short "reboot" beep motif.
     'battle_teth': {
-        'bpm': 148, 'seed': 47, 'scale': scale_of('F#', MIN), 'verb': 0.9, 'mix': 0.2,
-        'prog': ['F#m', 'D', 'E', 'C#7', 'F#m', 'D', 'E', 'C#7', 'Bm', 'D', 'E', 'C#7', 'F#m', 'D', 'Bm', 'C#7'],
+        'bpm': 100, 'seed': 47, 'scale': scale_of('F#', MIN), 'verb': 1.8, 'mix': 0.3,
+        'prog': ['F#m', 'F#m', 'G', 'G', 'F#m', 'F#m', 'C', 'C', 'Bm', 'Bm', 'G', 'G', 'D', 'D', 'C#7b9', 'C#7b9'],
         'layers': [
-            {'type': 'bass', 'inst': 'bass', 'oct': 30, 'vol': 0.36,
-             'pattern': [(0, 0.75, 0), (0.75, 0.5, 0), (1.5, 0.5, 12), (2, 0.75, 0), (2.75, 0.5, 7), (3.5, 0.5, 10)]},
-            {'type': 'chords', 'inst': 'sq25', 'oct': 57, 'vol': 0.04, 'hits': [(0, 0.25), (0.75, 0.25), (2, 0.25), (2.75, 0.25)]},
-            {'type': 'melody', 'inst': 'saw', 'low': 66, 'high': 85, 'vol': 0.12, 'from': 4, 'rest': 0.2,
-             'rhythm': [(0, 0.75), (0.75, 0.75), (1.5, 1), (2.5, 0.5), (3, 1), (4, 0.75), (4.75, 0.75), (5.5, 0.5), (6, 2)]},
-            {'type': 'drums', 'vols': {'k': 0.6, 's': 0.42, 'h': 0.12, 'g': 0.25, 'c': 0.25},
-             'bars': ['c..k..k.s...k.g.', 'k..k..k.s..g..s.', 'k..k..k.s...k.g.', 'k..k..k.s.g.s.ss']},
+            {'type': 'hum', 'vol': 0.045},
+            {'type': 'drone', 'oct': 30, 'vol': 0.1},
+            {'type': 'bass', 'inst': 'cello', 'oct': 30, 'vol': 0.3,
+             'pattern': [(0, 0.7, 0), (0.75, 0.7, 0), (1.5, 0.45, 0), (2, 0.7, 0), (2.75, 0.7, 0), (3.5, 0.45, 1)]},
+            {'type': 'chords', 'inst': 'strings', 'oct': 54, 'vol': 0.1, 'hits': [(0, 4)]},
+            {'type': 'arp', 'inst': 'sq12', 'oct': 73, 'step': 0.25, 'vol': 0.018, 'order': [0, 3, 1, 2, 0, 2, 3, 1]},
+            {'type': 'drums', 'vols': {'k': 0.5, 't': 0.35, 'r': 0.1, 'z': 0.12},
+             'bars': ['k..t..k.r.z.t...', 'k..t..k.r...t.z.', 'k..t..k.r.z.t...', 'k..t..k.t.t.tzz.']},
+            {'type': 'notes', 'inst': 'sq25', 'vol': 0.06, 'every': 4,
+             'notes': [(14, 0.25, 90), (14.5, 0.25, 90), (15, 0.75, 85)]},
+            {'type': 'notes', 'inst': 'strings', 'vol': 0.28, 'notes': [
+                (32, 3, 71), (35, 1, 74), (36, 4, 73),
+                (40, 2, 74), (42, 2, 71), (44, 4, 67),
+                (48, 2, 69), (50, 2, 66), (52, 4, 69),
+                (56, 2, 68), (58, 2, 74), (60, 4, 73)]},
         ],
     },
-    # Distortion boss: heavy, fast, distorted
+    # Distortion — the consumed employee, in the rainy alleys of District D:
+    # a funeral bell, taiko, a driving cello ostinato, a choir and a brass
+    # lament. The heaviest track: losing here means dying.
     'boss_distortion': {
-        'bpm': 162, 'seed': 66, 'scale': scale_of('C', HARM), 'verb': 1.0, 'mix': 0.2,
-        'prog': ['Cm', 'Ab', 'Bb', 'G', 'Cm', 'Ab', 'Bb', 'G', 'Fm', 'Db', 'Ab', 'G', 'Cm', 'Db', 'Fm', 'G7b9'],
+        'bpm': 84, 'seed': 66, 'scale': scale_of('C', HARM), 'verb': 2.6, 'mix': 0.35,
+        'prog': ['Cm', 'Cm', 'Ab', 'Ab', 'Fm', 'Fm', 'G7b9', 'G7b9', 'Cm', 'Cm', 'Db', 'Db', 'Ab', 'Fm', 'G', 'G7b9'],
         'layers': [
-            {'type': 'bass', 'inst': 'dist', 'oct': 36, 'vol': 0.3,
-             'pattern': [(0, 0.25, 0), (0.25, 0.25, 0), (0.5, 0.25, 12), (0.75, 0.25, 0), (1, 0.25, 0), (1.25, 0.25, 0), (1.5, 0.5, 7),
-                         (2, 0.25, 0), (2.25, 0.25, 0), (2.5, 0.25, 12), (2.75, 0.25, 0), (3, 0.5, 6), (3.5, 0.5, 7)]},
-            {'type': 'arp', 'inst': 'sq12', 'oct': 72, 'step': 0.25, 'vol': 0.04, 'order': [0, 2, 1, 3]},
-            {'type': 'melody', 'inst': 'saw', 'low': 67, 'high': 88, 'vol': 0.14, 'from': 2, 'rest': 0.1,
-             'rhythm': [(0, 1), (1, 0.5), (1.5, 0.5), (2, 1), (3, 1), (4, 0.5), (4.5, 0.5), (5, 1), (6, 1.5), (7.5, 0.5)]},
-            {'type': 'drums', 'vols': {'K': 0.55, 's': 0.45, 'h': 0.12, 'c': 0.3, 'o': 0.12},
-             'bars': ['c.KKs.K.KKs.K.s.', 'K.KKs.K.KKs.KsKs', 'K.KKs.K.KKs.K.s.', 'K.KKs.KoKKs.ssss']},
+            {'type': 'rain', 'vol': 0.035},
+            {'type': 'wind', 'vol': 0.2},
+            {'type': 'drone', 'oct': 24, 'vol': 0.14},
+            {'type': 'chords', 'inst': 'strings', 'oct': 48, 'vol': 0.14, 'hits': [(0, 4)]},
+            {'type': 'bass', 'inst': 'cello', 'oct': 36, 'vol': 0.26,
+             'pattern': [(k * 0.5, 0.45, o) for k, o in enumerate([0, 0, 12, 0, 0, 0, 12, 7])]},
+            {'type': 'drums', 'vols': {'T': 0.45, 't': 0.3, 'h': 0.05},
+             'bars': ['T.....T.t...t.t.', 'T.....T.t.t.T...', 'T.....T.t...t.t.', 'T..T..T.t.t.tttt']},
+            {'type': 'drums', 'vols': {'l': 0.22}, 'bars': ['l...............', '................', '................', '................']},
+            {'type': 'notes', 'inst': 'choir', 'vol': 0.09, 'notes': [
+                (32 + b * 4, 4, 60 + chord(c)[0] + i) for b, c in enumerate(['Cm', 'Cm', 'Db', 'Db', 'Ab', 'Fm', 'G', 'G7b9'])
+                for i in chord(c)[1][:3]]},
+            {'type': 'notes', 'inst': 'brass', 'vol': 0.24, 'notes': [
+                (32, 2, 67), (34, 1, 68), (35, 1, 67), (36, 2, 63), (38, 2, 60),
+                (40, 3, 65), (43, 1, 68), (44, 4, 68),
+                (48, 2, 72), (50, 2, 70), (52, 2, 68), (54, 2, 65),
+                (56, 3, 67), (59, 1, 68), (60, 4, 71)]},
+            {'type': 'notes', 'inst': 'strings', 'vol': 0.1, 'shift': 12, 'notes': [
+                (32, 2, 67), (34, 1, 68), (35, 1, 67), (36, 2, 63), (38, 2, 60),
+                (40, 3, 65), (43, 1, 68), (44, 4, 68),
+                (48, 2, 72), (50, 2, 70), (52, 2, 68), (54, 2, 65),
+                (56, 3, 67), (59, 1, 68), (60, 4, 71)]},
         ],
     },
 }
