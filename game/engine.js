@@ -307,6 +307,75 @@ function corrupted(x, y, o, t) {
   if (sc !== 1) ctx.restore();
 }
 
+// ---- Sweeper (Night in the Backstreets): coat, brimmed hat, gas mask, needle arm ----
+function sweeper(x, y, o, t) {
+  const sc = o.scale || 1;
+  if (sc !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.translate(-x, -y); }
+  if (o.shake) x += Math.round(Math.sin(t / 25) * 1.5);
+  const OL = '#05050a', RIM = '#4a4660';
+  const coat = '#18171f', coatH = '#2a2834', coatS = '#0e0d13';
+  const lens = o.blind ? '#4a4a20' : '#d8e050';
+  const sway = Math.round(Math.sin(t / 520));
+  const top = y - 58 + Math.round(Math.sin(t / 700));
+
+  ctx.globalAlpha = 0.3; disc(x, y + 2, 10, '#000'); ctx.globalAlpha = 1;
+
+  for (const [hipX, footX] of [[x - 3, x - 7], [x + 3, x + 6]]) {
+    line(hipX, y - 20, footX, y, RIM, 4);
+    line(hipX, y - 20, footX, y, coatS, 2);
+    rect(footX - 2, y - 1, 5, 2, OL);
+  }
+
+  const coatPts = [[x - 9, top], [x + 8, top], [x + 12, y - 10], [x + 7, y - 6], [x + 2, y - 12],
+    [x - 3, y - 6], [x - 9, y - 11], [x - 14, y - 7]];
+  poly(coatPts.map(([a, b]) => [a + (a < x ? -1 : 1), b - 1]), RIM);
+  poly(coatPts, coat);
+  line(x - 7, top + 2, x - 11, y - 9, coatH);
+  line(x - 1, top + 8, x - 2, y - 13, coatS);
+  line(x + 5, top + 4, x + 9, y - 9, coatS);
+  rect(x - 8, y - 32, 17, 2, OL);
+  rect(x - 1, y - 33, 3, 4, '#5a5a64');
+  for (let k = 0; k < 3; k++) px(x, top + 8 + k * 6, '#3a3a44');
+  poly([[x - 11, top + 2], [x + 10, top + 2], [x + 6, top - 4], [x - 7, top - 4]], coat);
+  rect(x - 7, top - 4, 14, 1, coatH);
+
+  // claw reaching toward the left
+  const hand = [x - 20, y - 36 + sway];
+  line(x - 8, top + 4, hand[0], hand[1], RIM, 4);
+  line(x - 8, top + 4, hand[0], hand[1], coat, 2);
+  for (let k = 0; k < 3; k++) line(hand[0], hand[1], hand[0] - 4, hand[1] - 3 + k * 3, '#8a8a98');
+
+  // needle arm lowered to the floor, dripping
+  const rh = [x + 11, y - 34];
+  line(x + 8, top + 4, rh[0], rh[1], RIM, 4);
+  line(x + 8, top + 4, rh[0], rh[1], coat, 2);
+  poly([[rh[0] - 1, rh[1] - 2], [rh[0] + 2, rh[1]], [x - 30, y - 4]], '#6a6a78');
+  line(rh[0] + 1, rh[1] - 1, x - 30, y - 4, '#b8b8c8');
+  rect(x - 30, y - 4, 1, 2, '#7a1018');
+  const drip = (t / 40) % 14;
+  if (drip < 10) px(x - 30, y - 2 + drip, '#5a0810');
+
+  // head: gas mask under a wide-brimmed hat
+  const hx = x - 1 + sway, hy = top - 9;
+  disc(hx, hy, 6, RIM);
+  disc(hx, hy, 5, '#2a2a32');
+  rect(hx - 11, hy - 5, 22, 2, OL);
+  rect(hx - 10, hy - 5, 20, 1, coatH);
+  rect(hx - 6, hy - 12, 12, 7, OL);
+  rect(hx - 5, hy - 11, 10, 6, coat);
+  rect(hx - 5, hy - 7, 10, 1, '#5a1a24');
+  for (const lx of [hx - 3, hx + 2]) {
+    disc(lx, hy, 2, '#0a0a10');
+    rect(lx - 1, hy, 2, 1, lens);
+    if (!o.blind) light(lx, hy, 5, 5, lens, 0.3 + 0.15 * Math.sin(t / 180), 3);
+  }
+  rect(hx - 3, hy + 3, 5, 4, '#5a5a64');
+  rect(hx - 3, hy + 3, 5, 1, '#8a8a98');
+  line(hx + 2, hy + 6, x + 8, top + 6, '#2a2a30', 2);
+
+  if (sc !== 1) ctx.restore();
+}
+
 // ---- Dimensional rift ----
 function rift(cx, cy, w, h, t) {
   if (w <= 0) return;

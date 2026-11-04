@@ -18,30 +18,34 @@ const DIE_ICON = {
   evade:  ['..#.#', '.#.#.', '#.#..', '.#.#.', '..#.#'],
 };
 
+// Allies build a 9-page deck from `copies`; pages cost Light to play.
 const COMBAT_UNITS = {
   lobelto: {
     id: 'lobelto', name: 'LOBELTO', team: 'ally', maxHp: 60, maxSt: 32, speed: [2, 6], nDice: 1,
-    hat: 'headset', armless: true, bandaged: true, bx: 62, by: 96, scale: 1.3,
+    maxLight: 3, hat: 'headset', armless: true, bandaged: true, bx: 62, by: 96, scale: 1.3,
     pages: [
-      { name: 'Puñetazo desesperado', dice: [['blunt', 4, 7], ['blunt', 3, 6]] },
-      { name: 'Cabezazo táctico', dice: [['blunt', 5, 9]] },
-      { name: 'Esquivar y gritar', dice: [['evade', 3, 6], ['blunt', 2, 4]] },
-      { name: 'Cubrirse', dice: [['block', 4, 7], ['block', 3, 5]] },
+      { name: 'Puñetazo desesperado', cost: 1, copies: 2, dice: [['blunt', 4, 7], ['blunt', 3, 6]] },
+      { name: 'Cabezazo táctico', cost: 1, copies: 2, dice: [['blunt', 5, 9]] },
+      { name: 'Esquivar y gritar', cost: 0, copies: 2, dice: [['evade', 3, 6], ['blunt', 2, 4]] },
+      { name: 'Cubrirse', cost: 0, copies: 2, dice: [['block', 4, 7], ['block', 3, 5]] },
+      { name: 'Ataque a ciegas', cost: 3, copies: 1, dice: [['blunt', 6, 10], ['blunt', 5, 8]] },
     ],
   },
   gonza: {
     id: 'gonza', name: 'GONZA', team: 'ally', maxHp: 65, maxSt: 34, speed: [3, 7], nDice: 1,
-    hat: 'cap', bx: 104, by: 110, scale: 1.3,
+    maxLight: 3, hat: 'cap', bx: 104, by: 110, scale: 1.3,
     pages: [
-      { name: 'Patada lateral', dice: [['blunt', 4, 7], ['blunt', 3, 6]] },
-      { name: 'Golpe con tubo', dice: [['blunt', 6, 10]] },
-      { name: 'Combo callejero', dice: [['blunt', 3, 5], ['blunt', 3, 5], ['blunt', 3, 6]] },
-      { name: 'Guardia firme', dice: [['block', 5, 8], ['blunt', 3, 5]] },
+      { name: 'Patada lateral', cost: 1, copies: 2, dice: [['blunt', 4, 7], ['blunt', 3, 6]] },
+      { name: 'Golpe con tubo', cost: 2, copies: 2, dice: [['blunt', 6, 10]] },
+      { name: 'Combo callejero', cost: 2, copies: 2, dice: [['blunt', 3, 5], ['blunt', 3, 5], ['blunt', 3, 6]] },
+      { name: 'Guardia firme', cost: 0, copies: 2, dice: [['block', 5, 8], ['blunt', 3, 5]] },
+      { name: 'Furia callejera', cost: 3, copies: 1, dice: [['blunt', 7, 11], ['blunt', 4, 7]] },
     ],
   },
   corrupted: {
-    id: 'corrupted', name: 'EMPLEADO', team: 'enemy', maxHp: 55, maxSt: 28, speed: [1, 5], nDice: 2,
+    id: 'corrupted', name: 'EMPLEADO', tag: 'E.G.O.', team: 'enemy', maxHp: 55, maxSt: 28, speed: [1, 5], nDice: 2,
     kind: 'corrupted', bx: 248, by: 106, scale: 1,
+    defeat: 'El empleado distorsionado ha caído.',
     pages: [
       { name: 'Tajo dentado', dice: [['slash', 4, 8], ['slash', 3, 7]] },
       { name: 'Embestida ciega', dice: [['blunt', 7, 11]] },
@@ -49,7 +53,19 @@ const COMBAT_UNITS = {
       { name: 'Coraza E.G.O.', dice: [['block', 5, 9], ['slash', 4, 7]] },
     ],
   },
+  sweeper: {
+    id: 'sweeper', name: 'BARRENDERO', tag: 'NOCHE', team: 'enemy', maxHp: 66, maxSt: 32, speed: [3, 7], nDice: 2,
+    kind: 'sweeper', bx: 250, by: 106, scale: 1,
+    defeat: 'El barrendero se disuelve en la niebla de las 3 AM.',
+    pages: [
+      { name: 'Barrido', dice: [['slash', 4, 7], ['slash', 4, 7]] },
+      { name: 'Perforar', dice: [['pierce', 6, 10]] },
+      { name: 'Recolección', dice: [['pierce', 3, 6], ['pierce', 3, 6], ['slash', 3, 5]] },
+      { name: 'Paso en la niebla', dice: [['evade', 5, 9], ['pierce', 5, 8]] },
+    ],
+  },
 };
+const HAND_START = 4, HAND_MAX = 8;
 
 const CB = {
   active: false, turn: 0, phase: 'select',
@@ -65,19 +81,47 @@ const allyDice = () => CB.dice.filter(d => d.unit.team === 'ally');
 const enemyDice = () => CB.dice.filter(d => d.unit.team === 'enemy');
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-function makeUnit(t) { return { ...t, hp: t.maxHp, st: t.maxSt, staggered: false, staggerTurns: 0 }; }
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = rnd(0, i); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+function makeUnit(t) {
+  const u = { ...t, hp: t.maxHp, st: t.maxSt, staggered: false, staggerTurns: 0 };
+  if (t.team === 'ally') {
+    u.light = t.maxLight;
+    u.deck = shuffle(t.pages.flatMap(p => Array.from({ length: p.copies }, () => ({ page: p }))));
+    u.hand = [];
+    u.discard = [];
+    drawCards(u, HAND_START);
+  }
+  return u;
+}
+
+// When the deck runs out, the discard pile is shuffled back in.
+function drawCards(u, n) {
+  let drawn = 0;
+  for (let k = 0; k < n && u.hand.length < HAND_MAX; k++) {
+    if (!u.deck.length) { u.deck = shuffle(u.discard); u.discard = []; }
+    if (!u.deck.length) break;
+    u.hand.push(u.deck.pop());
+    drawn++;
+  }
+  return drawn;
+}
 
 // ---------------------------------------------------------------------
 //  Turn flow
 // ---------------------------------------------------------------------
-function startCombatTest() {
+function startCombatTest(enemyId = 'corrupted') {
   G.mode = 'combat';
   ui.hub.classList.add('hidden');
   hideAllOverlays();
   G.s = { bg: 'arena' }; G.actors = {}; G.fade = 0;
   CB.active = true; CB.turn = 0; CB.anims = []; CB.view = null; CB.animating = false;
+  CB.enemyId = enemyId;
   CB.allies = [makeUnit(COMBAT_UNITS.lobelto), makeUnit(COMBAT_UNITS.gonza)];
-  CB.enemies = [makeUnit(COMBAT_UNITS.corrupted)];
+  CB.enemies = [makeUnit(COMBAT_UNITS[enemyId])];
   CB.all = [...CB.allies, ...CB.enemies];
   for (const u of CB.all) {
     G.actors[u.id] = {
@@ -95,6 +139,16 @@ function newTurn() {
   CB.turn++;
   CB.phase = 'select';
   CB.dice = [];
+  if (CB.turn > 1) {
+    for (const u of CB.allies) {
+      if (!alive(u)) continue;
+      u.light = Math.min(u.maxLight, u.light + 1);
+      if (drawCards(u, 1)) {
+        const p = headPos(u);
+        spawnAnim('text', p.x, p.y - 14, '+1 página', '#ffe08a', 1100);
+      }
+    }
+  }
   for (const u of CB.all) {
     if (!alive(u)) continue;
     for (let k = 0; k < u.nDice; k++)
@@ -116,10 +170,24 @@ function selectDie(d) {
   SFX.play('select');
 }
 
-function assignPage(page) {
+function unassign(d) {
+  if (!d.card) return;
+  d.unit.light += d.card.page.cost;
+  d.card = null;
+  d.page = null;
+}
+
+// Clicking the card already on the die takes it back and refunds its Light.
+function toggleCard(card) {
   const d = CB.sel;
   if (!d) return;
-  d.page = page;
+  if (d.card === card) { unassign(d); SFX.play('select'); return; }
+  const budget = d.unit.light + (d.card ? d.card.page.cost : 0);
+  if (card.page.cost > budget) return;
+  unassign(d);
+  d.unit.light -= card.page.cost;
+  d.card = card;
+  d.page = card.page;
   if (!d.target) {
     const foes = enemyDice().filter(e => canAct(e.unit));
     d.target = foes.find(e => e.target === d)
@@ -147,6 +215,12 @@ async function combatExecute() {
   CB.animating = true;
   CB.phase = 'resolve';
   SFX.play('select');
+
+  for (const d of allyDice()) {
+    if (!d.card) continue;
+    d.unit.hand = d.unit.hand.filter(c => c !== d.card);
+    d.unit.discard.push(d.card);
+  }
 
   const acts = CB.dice
     .filter(d => d.page && canAct(d.unit))
@@ -372,14 +446,20 @@ function autoAssign(mode) {
   const foes = enemyDice().filter(e => canAct(e.unit) && e.page);
   for (const d of allyDice()) {
     if (!canAct(d.unit) || !foes.length) continue;
+    unassign(d);
     let best = null, bestScore = -Infinity;
-    for (const pg of d.unit.pages) for (const e of foes) {
-      let score = mode === 'win' ? winRate(pg, e.page) : expDamage(pg);
-      if (used.has(e)) score -= mode === 'win' ? 0.5 : 20;
-      if (e.target === d) score += mode === 'win' ? 0.05 : 0.5;
-      if (score > bestScore) { bestScore = score; best = [pg, e]; }
+    for (const card of d.unit.hand) {
+      if (card.page.cost > d.unit.light) continue;
+      for (const e of foes) {
+        let score = mode === 'win' ? winRate(card.page, e.page) : expDamage(card.page);
+        if (used.has(e)) score -= mode === 'win' ? 0.5 : 20;
+        if (e.target === d) score += mode === 'win' ? 0.05 : 0.5;
+        if (score > bestScore) { bestScore = score; best = [card, e]; }
+      }
     }
-    d.page = best[0]; d.target = best[1];
+    if (!best) continue;
+    d.unit.light -= best[0].page.cost;
+    d.card = best[0]; d.page = best[0].page; d.target = best[1];
     used.add(best[1]);
   }
   SFX.play('select');
@@ -549,7 +629,7 @@ function enemyPlate(u, t) {
   rect(x0, y0, w, 14, '#0a080e');
   rect(x0, y0, w, 1, '#5a1a24');
   rect(x0 + 2, y0 + 2, 22, 5, '#8a2030');
-  txt('E.G.O.', x0 + 13, y0 + 7, '#ffe0e0', 7, 'center');
+  txt(u.tag, x0 + 13, y0 + 7, '#ffe0e0', 7, 'center');
   txt(u.name, x0 + 27, y0 + 7, '#d8d0c0', 7);
   const hp = u.hp / u.maxHp;
   rect(x0 + 2, y0 + 9, w - 24, 2, '#2a1418');
@@ -597,9 +677,11 @@ function selectPanel(t) {
     const cx = 22 + i * 38, u = d.unit, ok = canAct(u), sel = CB.sel === d;
     const pcy = 162, pr = 14;
     if (ok) hitArea(cx - 16, 126, 32, 54, () => selectDie(d));
-    hex(cx, 138, 9, d.page ? '#1e1418' : '#121016', sel ? '#ffd060' : '#5a4030');
-    if (d.page) dieIcon(d.page.dice[0][0], cx - 2, 134);
-    else txt('+', cx, 141, '#5a5060', 10, 'center');
+    for (let k = 0; k < u.maxLight; k++)
+      disc(cx - (u.maxLight - 1) * 3 + k * 6, 128, 2, k < u.light ? '#ffe08a' : '#3a3020');
+    hex(cx, 140, 8, d.page ? '#1e1418' : '#121016', sel ? '#ffd060' : '#5a4030');
+    if (d.page) dieIcon(d.page.dice[0][0], cx - 2, 136);
+    else txt('+', cx, 143, '#5a5060', 10, 'center');
     if (sel) {
       ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t / 150);
       hex(cx, pcy, pr + 2, '#ffd060');
@@ -620,24 +702,17 @@ function selectPanel(t) {
 
   const d = CB.sel;
   if (d) {
-    d.unit.pages.forEach((pg, i) => {
-      const x = 90 + i * 39, w = 37, h = 50;
-      const hv = hitArea(x, 127, w, h, () => assignPage(pg), { page: pg });
-      const y = 127 - (hv ? 2 : 0);
-      rrect(x, y, w, h, d.page === pg ? '#ffd060' : hv ? '#8a6a50' : '#3a2a24', 2);
-      rect(x + 1, y + 1, w - 2, h - 2, '#16121a');
-      rect(x + 1, y + 1, w - 2, 2, DIE[pg.dice[0][0]].col);
-      wrap(pg.name, w - 4, 8).slice(0, 3).forEach((ln, k) => {
-        ctx.font = '8px VT323, monospace';
-        const size = ctx.measureText(ln).width > w - 4 ? 7 : 8;
-        txt(ln, x + 2, y + 10 + k * 7, '#e8e4dc', size);
-      });
-      pg.dice.forEach(([ty, a, b], k) => {
-        const ry = y + h - 9 - (pg.dice.length - 1 - k) * 7;
-        dieIcon(ty, x + 3, ry - 3);
-        txt(`${a}-${b}`, x + 10, ry + 2, '#d8d0c0', 8);
-      });
-    });
+    const u = d.unit, n = u.hand.length, cw = 37;
+    txt(`MAZO ${u.deck.length}  ·  DESCARTE ${u.discard.length}`, 90, 131, '#8a8070', 7);
+    // Hand fans out and overlaps when it holds more than 4 pages; the hovered page pops to the front.
+    const step = n <= 4 ? 39 : (158 - cw) / (n - 1);
+    const rects = u.hand.map((card, i) => ({ card, x: Math.round(90 + i * step), y: 134, w: cw, h: 44 }));
+    let hov = -1;
+    for (let i = n - 1; i >= 0; i--) if (hot(rects[i].x, rects[i].y, rects[i].w, rects[i].h)) { hov = i; break; }
+    const order = rects.map((_, i) => i).filter(i => i !== hov);
+    if (hov >= 0) order.push(hov);
+    for (const i of order) drawHandCard(rects[i], i === hov, d);
+    if (!n) txt('Sin páginas en la mano', 168, 158, '#6a6070', 8, 'center');
   }
 
   rect(252, 127, 36, 9, '#2a1810');
@@ -647,6 +722,28 @@ function selectPanel(t) {
   gear(270, 156, 13, t, gh);
   smallBtn(290, 140, 28, 11, 'Ganar', () => autoAssign('win'));
   smallBtn(290, 156, 28, 11, 'Daño', () => autoAssign('dmg'));
+}
+
+function drawHandCard(r, hv, d) {
+  const pg = r.card.page, on = d.card === r.card;
+  const afford = on || pg.cost <= d.unit.light + (d.card ? d.card.page.cost : 0);
+  hitArea(r.x, r.y, r.w, r.h, () => toggleCard(r.card), { page: pg });
+  const x = r.x, w = r.w, h = r.h, y = r.y - (hv ? 3 : 0) - (on ? 2 : 0);
+  rrect(x, y, w, h, on ? '#ffd060' : hv ? '#8a6a50' : '#3a2a24', 2);
+  rect(x + 1, y + 1, w - 2, h - 2, '#16121a');
+  rect(x + 1, y + 1, w - 2, 2, DIE[pg.dice[0][0]].col);
+  wrap(pg.name, w - 4, 8).slice(0, 2).forEach((ln, k) => {
+    ctx.font = '8px VT323, monospace';
+    txt(ln, x + 2, y + 10 + k * 7, '#e8e4dc', ctx.measureText(ln).width > w - 4 ? 7 : 8);
+  });
+  disc(x + w - 6, y + h - 7, 4, afford ? '#ffe08a' : '#5a5040');
+  txt(String(pg.cost), x + w - 5.5, y + h - 4, '#2a1a00', 9, 'center');
+  pg.dice.forEach(([ty, a, b], k) => {
+    const ry = y + h - 8 - (pg.dice.length - 1 - k) * 7;
+    dieIcon(ty, x + 3, ry - 3);
+    txt(`${a}-${b}`, x + 10, ry + 2, '#d8d0c0', 8);
+  });
+  if (!afford) { ctx.globalAlpha = 0.55; rect(x, y, w, h, '#000'); ctx.globalAlpha = 1; }
 }
 
 function pageCard(s, x, y, w, enemyTeam) {
@@ -686,7 +783,8 @@ function topBar() {
 }
 
 function tooltip() {
-  const h = CB.hits.find(r => r.hot && r.data && r.data.page);
+  let h = null;
+  for (let i = CB.hits.length - 1; i >= 0 && !h; i--) if (CB.hits[i].hot && CB.hits[i].data && CB.hits[i].data.page) h = CB.hits[i];
   if (!h) return;
   const pg = h.data.page;
   const bw = 108, bh = 14 + pg.dice.length * 9;
@@ -699,6 +797,7 @@ function tooltip() {
   rect(x, y, bw, 1, '#8a6030');
   rect(x, y + bh - 1, bw, 1, '#3a2418');
   txt(pg.name, x + 4, y + 9, '#ffd060', 9);
+  if (pg.cost != null) txt(`Luz ${pg.cost}`, x + bw - 4, y + 9, '#ffe08a', 8, 'right');
   pg.dice.forEach(([ty, a, b], k) => {
     dieIcon(ty, x + 4, y + 12 + k * 9);
     txt(`${a}-${b}  ${DIE[ty].name}`, x + 12, y + 17 + k * 9, '#e8e4dc', 8);
@@ -757,14 +856,14 @@ function renderCombatUI() {
   const won = CB.enemies.every(u => !alive(u));
   ui.combatUI.innerHTML = `<div class="cb-result" style="border-color:${won ? 'var(--gold)' : '#ff3b4a'}">
     <div class="cb-result-title ${won ? 'win' : 'lose'}">${won ? 'VICTORIA' : 'DERROTA'}</div>
-    <div class="cb-result-sub">${won ? 'El empleado distorsionado ha caído.' : 'Tu equipo ha sido derrotado...'}</div>
+    <div class="cb-result-sub">${won ? CB.enemies[0].defeat : 'Tu equipo ha sido derrotado...'}</div>
     <div class="cb-result-stats">Turnos: ${CB.turn}</div>
     <div class="cb-result-stats">${CB.allies.map(u => `${u.name}: ${u.hp}/${u.maxHp} HP`).join(' · ')}</div>
     <button class="cb-result-btn" data-act="combat-exit">Volver al Hub</button>
     <button class="cb-result-btn" data-act="combat-retry">Reintentar</button>
   </div>`;
   ui.combatUI.querySelector('[data-act="combat-exit"]').addEventListener('click', (e) => { e.stopPropagation(); endCombat(); });
-  ui.combatUI.querySelector('[data-act="combat-retry"]').addEventListener('click', (e) => { e.stopPropagation(); startCombatTest(); });
+  ui.combatUI.querySelector('[data-act="combat-retry"]').addEventListener('click', (e) => { e.stopPropagation(); startCombatTest(CB.enemyId); });
 }
 
 function spawnAnim(type, x, y, text, color, ms, extra) {

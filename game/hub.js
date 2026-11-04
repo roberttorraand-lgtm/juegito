@@ -599,7 +599,8 @@ const CITY_CONNECTIONS = [
 
 const MAP_MODES = [
   { id: 'historia', label: 'Historia', icon: '▶', enabled: true },
-  { id: 'combate', label: 'Test Combate', icon: '⚔', enabled: true },
+  { id: 'combate', label: 'vs Empleado', icon: '⚔', enabled: true, enemy: 'corrupted' },
+  { id: 'combate2', label: 'vs Barrendero', icon: '⚔', enabled: true, enemy: 'sweeper' },
 ];
 
 function drawMap(t) {
@@ -752,7 +753,7 @@ cv.addEventListener('click', (e) => {
       if (hitTest(x, y, 12, my, 56, 24)) {
         G.mapModeSel = i;
         SFX.play('select');
-        if (mode.id === 'combate') startCombatTest();
+        if (mode.enemy) startCombatTest(mode.enemy);
       }
     });
 
