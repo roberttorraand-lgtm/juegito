@@ -20,15 +20,19 @@ const DIE_ICON = {
 
 // Limbus Company skill rotation: each ally has Skill I/II/III, drawn from a
 // pool holding them 3/2/1 times, plus a Defense skill that is always offered.
+// Combat starts with a single skill offered; one more arrives each turn, up to 2.
+// Skills cost Light (Library of Ruina): 3 max, +1 per turn.
 const SKILL_POOL = { 1: 3, 2: 2, 3: 1 };
-const SKILL_OFFER = 2;
+const SKILL_START = 1, SKILL_OFFER = 2;
+const MAX_LIGHT = 3;
 const TIER = {
-  0: { label: 'DEF', col: '#4a8ad8' },
-  1: { label: 'I', col: '#d8b040' },
-  2: { label: 'II', col: '#e87a30' },
-  3: { label: 'III', col: '#e03040' },
-  P: { label: '+', col: '#ffb040' },
+  0: { label: 'DEF', col: '#4a8ad8', cost: 0 },
+  1: { label: 'I', col: '#d8b040', cost: 1 },
+  2: { label: 'II', col: '#e87a30', cost: 2 },
+  3: { label: 'III', col: '#e03040', cost: 3 },
+  P: { label: '+', col: '#ffb040', cost: 0 },
 };
+const costOf = (page) => (TIER[page.tier] ? TIER[page.tier].cost : 0);
 
 const COMBAT_UNITS = {
   lobelto: {
@@ -76,7 +80,7 @@ const COMBAT_UNITS = {
   },
   // TETH: whips and shocks, but every few turns it reboots and is left defenceless
   operator: {
-    id: 'operator', name: 'OPERADOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 95, maxSt: 38, speed: [3, 7], nDice: 2,
+    id: 'operator', name: 'OPERADOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 78, maxSt: 34, speed: [3, 7], nDice: 2,
     kind: 'operator', bg: 'cell', height: 84, bx: 250, by: 106, scale: 1, reboot: 3,
     defeat: 'La pantalla de El Operador Desconectado se apaga para siempre.',
     pages: [
@@ -115,7 +119,9 @@ function makeUnit(t) {
     u.offer = [];
     u.defCard = { page: t.defense };
     u.bonus = null;
-    refillOffer(u);
+    u.light = MAX_LIGHT;
+    u.maxLight = MAX_LIGHT;
+    refillOffer(u, SKILL_START);
   }
   return u;
 }
@@ -124,11 +130,11 @@ function skillPool(u) {
   return shuffle(u.pages.flatMap(p => Array.from({ length: SKILL_POOL[p.tier] }, () => ({ page: p }))));
 }
 
-// The skill not used stays offered; empty slots are refilled from the pool,
-// which is rebuilt and reshuffled once it runs out.
-function refillOffer(u) {
+// The skill not used stays offered; up to `n` new skills are drawn from the
+// pool, which is rebuilt and reshuffled once it runs out.
+function refillOffer(u, n) {
   let added = 0;
-  while (u.offer.length < SKILL_OFFER) {
+  while (added < n && u.offer.length < SKILL_OFFER) {
     if (!u.pool.length) u.pool = skillPool(u);
     u.offer.push(u.pool.pop());
     added++;
@@ -136,8 +142,16 @@ function refillOffer(u) {
   return added;
 }
 
+// Skills shown as cards; the Defense skill lives on the portrait instead.
 function skillOptions(u) {
-  return [...u.offer, u.defCard, u.bonus].filter(Boolean);
+  return [...u.offer, u.bonus].filter(Boolean);
+}
+
+// Clicking a portrait selects that character and toggles its Defense skill.
+function toggleDefense(d) {
+  if (CB.phase !== 'select' || !canAct(d.unit)) return;
+  CB.sel = d;
+  toggleCard(d.unit.defCard);
 }
 
 // ---------------------------------------------------------------------
@@ -172,7 +186,8 @@ function newTurn() {
   if (CB.turn > 1) {
     for (const u of CB.allies) {
       if (!alive(u)) continue;
-      if (refillOffer(u)) {
+      u.light = Math.min(u.maxLight, u.light + 1);
+      if (refillOffer(u, 1)) {
         const p = headPos(u);
         spawnAnim('text', p.x, p.y - 14, 'Nueva habilidad', '#ffe08a', 1100);
       }
@@ -207,15 +222,23 @@ function selectDie(d) {
 }
 
 function unassign(d) {
+  if (d.card) d.unit.light += costOf(d.card.page);
   d.card = null;
   d.page = null;
 }
 
-// Clicking the skill already on the die takes it back.
+function canAfford(d, card) {
+  return costOf(card.page) <= d.unit.light + (d.card ? costOf(d.card.page) : 0);
+}
+
+// Clicking the skill already on the die takes it back and refunds its Light.
 function toggleCard(card) {
   const d = CB.sel;
   if (!d) return;
   if (d.card === card) { unassign(d); SFX.play('select'); return; }
+  if (!canAfford(d, card)) { SFX.play('disconnect'); return; }
+  unassign(d);
+  d.unit.light -= costOf(card.page);
   d.card = card;
   d.page = card.page;
   if (!d.target) {
@@ -490,7 +513,8 @@ function autoAssign(mode) {
     if (!canAct(d.unit) || !foes.length) continue;
     unassign(d);
     let best = null, bestScore = -Infinity;
-    for (const card of skillOptions(d.unit)) {
+    for (const card of [...skillOptions(d.unit), d.unit.defCard]) {
+      if (costOf(card.page) > d.unit.light) continue;
       for (const e of foes) {
         // a die with no page (rebooting enemy) takes a free hit: just maximise damage
         let score = mode === 'win' && e.page ? winRate(card.page, e.page) + expDamage(card.page) / 25 : expDamage(card.page) / (mode === 'win' ? 20 : 1);
@@ -500,6 +524,7 @@ function autoAssign(mode) {
       }
     }
     if (!best) continue;
+    d.unit.light -= costOf(best[0].page);
     d.card = best[0]; d.page = best[0].page; d.target = best[1];
     used.add(best[1]);
   }
@@ -720,8 +745,13 @@ function selectPanel(t) {
 
   allyDice().forEach((d, i) => {
     const cx = 22 + i * 38, u = d.unit, ok = canAct(u), sel = CB.sel === d;
-    const pcy = 162, pr = 14;
-    if (ok) hitArea(cx - 16, 126, 32, 54, () => selectDie(d));
+    const pcy = 162, pr = 14, def = d.card === u.defCard;
+    if (ok) {
+      hitArea(cx - 16, 124, 32, 23, () => selectDie(d));
+      hitArea(cx - 15, 147, 30, 32, () => toggleDefense(d), { page: u.defense });
+    }
+    for (let k = 0; k < u.maxLight; k++)
+      disc(cx - (u.maxLight - 1) * 3 + k * 6, 128, 2, k < u.light ? '#ffe08a' : '#3a3020');
     hex(cx, 140, 8, d.page ? '#1e1418' : '#121016', sel ? '#ffd060' : '#5a4030');
     if (d.page) dieIcon(d.page.dice[0][0], cx - 2, 136);
     else txt('+', cx, 143, '#5a5060', 10, 'center');
@@ -730,7 +760,7 @@ function selectPanel(t) {
       hex(cx, pcy, pr + 2, '#ffd060');
       ctx.globalAlpha = 1;
     }
-    hex(cx, pcy, pr, '#1a1622', sel ? '#ffd060' : ok ? '#8a6030' : '#3a3030');
+    hex(cx, pcy, pr, def ? '#14203a' : '#1a1622', def ? '#4a8ad8' : sel ? '#ffd060' : ok ? '#8a6030' : '#3a3030');
     ctx.save();
     ctx.beginPath();
     hexPath(cx, pcy, pr).forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
@@ -739,6 +769,14 @@ function selectPanel(t) {
     ctx.translate(cx, pcy + 2); ctx.scale(0.6, 0.6); ctx.translate(-cx, -(pcy + 2));
     avatarHead(cx, pcy + 2, u.hat, t, !ok);
     ctx.restore();
+    if (def) {
+      light(cx, pcy, pr + 4, pr + 4, '#4a8ad8', 0.3 + 0.1 * Math.sin(t / 200), 3);
+      disc(cx - 10, pcy - 9, 5, '#4a8ad8');
+      dieIcon(u.defense.dice[0][0], cx - 12, pcy - 11, '#ffffff');
+    } else if (ok) {
+      rrect(cx - 15, pcy - 13, 15, 7, '#2a4a7a', 2);
+      txt('DEF', cx - 7.5, pcy - 7.5, '#c8dcff', 7, 'center');
+    }
     txt(String(u.hp), cx - 9, 179, '#ff8a3a', 9, 'center');
     speedBadge(cx + 11, 173, d.speed);
   });
@@ -759,8 +797,8 @@ function selectPanel(t) {
       bx += lw + 14;
     }
     skillOptions(u).forEach((card, i) => {
-      const x = 90 + i * 39 + (card === u.defCard || card === u.bonus ? 2 : 0);
-      const r = { card, x, y: 134, w: 37, h: 44 };
+      const x = 90 + i * 39 + (card === u.bonus ? 2 : 0);
+      const r = { card, x, y: 137, w: 37, h: 41 };
       drawHandCard(r, hot(r.x, r.y, r.w, r.h), d);
     });
   }
@@ -783,16 +821,20 @@ function drawHandCard(r, hv, d) {
   rect(x + 1, y + 1, w - 2, 2, DIE[pg.dice[0][0]].col);
   wrap(pg.name, w - 4, 8).slice(0, 2).forEach((ln, k) => {
     ctx.font = '8px VT323, monospace';
-    txt(ln, x + 2, y + 10 + k * 7, '#e8e4dc', ctx.measureText(ln).width > w - 4 ? 7 : 8);
+    txt(ln, x + 2, y + 9 + k * 6, '#e8e4dc', ctx.measureText(ln).width > w - 4 ? 7 : 8);
   });
+  const afford = on || canAfford(d, r.card);
   const bw = tier.label.length * 4 + 4;
-  rrect(x + w - bw - 2, y + h - 10, bw, 8, tier.col, 2);
-  txt(tier.label, x + w - 2 - bw / 2, y + h - 4, '#16121a', 8, 'center');
+  rrect(x + w - bw - 2, y - 4, bw, 8, tier.col, 2);
+  txt(tier.label, x + w - 2 - bw / 2, y + 2, '#16121a', 8, 'center');
+  disc(x + w - 6, y + h - 6, 4, afford ? '#ffe08a' : '#5a5040');
+  txt(String(costOf(pg)), x + w - 5.5, y + h - 3, '#2a1a00', 9, 'center');
   pg.dice.forEach(([ty, a, b], k) => {
     const ry = y + h - 8 - (pg.dice.length - 1 - k) * 7;
     dieIcon(ty, x + 3, ry - 3);
     txt(`${a}-${b}`, x + 10, ry + 2, '#d8d0c0', 8);
   });
+  if (!afford) { ctx.globalAlpha = 0.55; rect(x, y, w, h, '#000'); ctx.globalAlpha = 1; }
 }
 
 function pageCard(s, x, y, w, enemyTeam) {
@@ -828,7 +870,7 @@ function topBar() {
   rect(3, 3, 46, 11, '#0a080e');
   rect(3, 3, 46, 1, '#8a6030');
   txt(`TURNO ${CB.turn}`, 26, 12, '#e8c060', 9, 'center');
-  if (CB.phase === 'select') txt('Elige una página y luego a quién atacar', 160, 12, '#a39c90', 8, 'center');
+  if (CB.phase === 'select') txt('Elige una habilidad y a quién atacar · Retrato = defensa', 160, 12, '#a39c90', 8, 'center');
 }
 
 function tooltip() {
@@ -847,8 +889,8 @@ function tooltip() {
   rect(x, y + bh - 1, bw, 1, '#3a2418');
   txt(pg.name, x + 4, y + 9, '#ffd060', 9);
   if (pg.tier != null) {
-    const tl = { 0: 'Defensa', P: 'Extra' }[pg.tier] || `Habilidad ${TIER[pg.tier].label}`;
-    txt(tl, x + bw - 4, y + 9, TIER[pg.tier].col, 8, 'right');
+    const tl = { 0: 'Defensa', P: 'Extra' }[pg.tier] || `Hab. ${TIER[pg.tier].label}`;
+    txt(`${tl} · Luz ${costOf(pg)}`, x + bw - 4, y + 9, TIER[pg.tier].col, 8, 'right');
   }
   pg.dice.forEach(([ty, a, b], k) => {
     dieIcon(ty, x + 4, y + 12 + k * 9);
