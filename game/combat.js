@@ -1,30 +1,43 @@
 // =====================================================================
-//  COMBAT — Library of Ruina dice rules with a Limbus Company layout.
-//  Every die on a page is its own move: it rolls within its range and
-//  is compared one by one against the opposing page's dice.
+//  COMBAT — Library of Ruina dice with a Limbus Company layout.
+//
+//  Pages: each ally draws pages from a Limbus-style rotation bag (Skill
+//  I/II/III held 3/2/1 times). The hand starts with 2 pages; 1 page is
+//  drawn per turn, 2 from turn 4 and 3 from turn 8. Pages cost Light.
+//  Light: starts at 3, capacity +1 every 2 turns (up to 6). +1 Light for
+//  the side that deals more damage in a page clash.
+//  Dice: each die rolls within its range and is compared one by one.
+//    attack vs attack → higher roll hits for its value
+//    block            → a shield equal to the roll that soaks damage
+//                       until the clash ends
+//    evade            → if it ties or beats the attack, no damage at all
+//    counter          → takes the hit, then strikes back unopposed
+//  Stagger damage is 25% of the HP damage dealt, rounded up.
 // =====================================================================
 const DIE = {
-  slash:  { col: '#e85a3a', off: true,  name: 'Corte' },
-  pierce: { col: '#e8a03a', off: true,  name: 'Perforación' },
-  blunt:  { col: '#d8506e', off: true,  name: 'Contundente' },
-  block:  { col: '#4a8ad8', off: false, name: 'Bloqueo' },
-  evade:  { col: '#4ac08a', off: false, name: 'Esquiva' },
+  slash:   { col: '#e85a3a', off: true,  name: 'Corte' },
+  pierce:  { col: '#e8a03a', off: true,  name: 'Perforación' },
+  blunt:   { col: '#d8506e', off: true,  name: 'Contundente' },
+  block:   { col: '#4a8ad8', off: false, name: 'Bloqueo' },
+  evade:   { col: '#4ac08a', off: false, name: 'Esquiva' },
+  counter: { col: '#c060e0', off: true,  name: 'Contraataque' },
 };
 const DIE_ICON = {
-  slash:  ['....#', '...#.', '..#..', '.#...', '#....'],
-  pierce: ['..#..', '...#.', '#####', '...#.', '..#..'],
-  blunt:  ['####.', '####.', '..#..', '..#..', '..#..'],
-  block:  ['#####', '#####', '#####', '.###.', '..#..'],
-  evade:  ['..#.#', '.#.#.', '#.#..', '.#.#.', '..#.#'],
+  slash:   ['....#', '...#.', '..#..', '.#...', '#....'],
+  pierce:  ['..#..', '...#.', '#####', '...#.', '..#..'],
+  blunt:   ['####.', '####.', '..#..', '..#..', '..#..'],
+  block:   ['#####', '#####', '#####', '.###.', '..#..'],
+  evade:   ['..#.#', '.#.#.', '#.#..', '.#.#.', '..#.#'],
+  counter: ['..#..', '.##..', '#####', '.##.#', '..#.#'],
 };
+const kindOf = (t) => (t === 'block' || t === 'evade' || t === 'counter' ? t : 'off');
 
-// Limbus Company skill rotation: each ally has Skill I/II/III, drawn from a
-// pool holding them 3/2/1 times, plus a Defense skill that is always offered.
-// Combat starts with a single skill offered; one more arrives each turn, up to 2.
-// Skills cost Light (Library of Ruina): 3 max, +1 per turn.
 const SKILL_POOL = { 1: 3, 2: 2, 3: 1 };
-const SKILL_START = 1, SKILL_OFFER = 2;
-const MAX_LIGHT = 3;
+const HAND_START = 2, HAND_MAX = 8;
+const LIGHT_START = 3, LIGHT_CAP = 6;
+const ST_RATIO = 0.25;
+const drawsForTurn = (turn) => 1 + Math.min(2, Math.floor(turn / 4));
+const lightCapForTurn = (turn) => Math.min(LIGHT_CAP, LIGHT_START + Math.floor((turn - 1) / 2));
 const TIER = {
   0: { label: 'DEF', col: '#4a8ad8', cost: 0 },
   1: { label: 'I', col: '#d8b040', cost: 1 },
@@ -34,60 +47,65 @@ const TIER = {
 };
 const costOf = (page) => (TIER[page.tier] ? TIER[page.tier].cost : 0);
 
+// Enemies with `pattern` play those page indexes in order, one row per turn;
+// enemies without it pick their pages at random.
 const COMBAT_UNITS = {
   lobelto: {
-    id: 'lobelto', name: 'LOBELTO', team: 'ally', maxHp: 60, maxSt: 32, speed: [2, 6], nDice: 1,
+    id: 'lobelto', name: 'LOBELTO', team: 'ally', maxHp: 60, maxSt: 14, speed: [2, 6], nDice: 2,
     hat: 'headset', armless: true, bandaged: true, bx: 62, by: 96, scale: 1.3,
     pages: [
       { name: 'Puñetazo desesperado', tier: 1, dice: [['blunt', 3, 6], ['blunt', 2, 5]] },
       { name: 'Cabezazo táctico', tier: 2, dice: [['blunt', 5, 8], ['blunt', 3, 5]] },
       { name: 'Ataque a ciegas', tier: 3, dice: [['blunt', 6, 9], ['blunt', 4, 7]] },
     ],
-    defense: { name: 'Esquivar y gritar', tier: 0, dice: [['evade', 3, 7]] },
+    defense: { name: 'Esquivar y gritar', tier: 0, dice: [['evade', 3, 7], ['counter', 2, 5]] },
   },
   gonza: {
-    id: 'gonza', name: 'GONZA', team: 'ally', maxHp: 65, maxSt: 34, speed: [3, 7], nDice: 1,
+    id: 'gonza', name: 'GONZA', team: 'ally', maxHp: 65, maxSt: 16, speed: [3, 7], nDice: 1,
     hat: 'cap', bx: 104, by: 110, scale: 1.3,
     pages: [
-      { name: 'Patada lateral', tier: 1, dice: [['blunt', 3, 6], ['blunt', 2, 5]] },
-      { name: 'Combo callejero', tier: 2, dice: [['blunt', 2, 5], ['blunt', 2, 5], ['blunt', 2, 5]] },
-      { name: 'Furia callejera', tier: 3, dice: [['blunt', 6, 10], ['blunt', 4, 7]] },
+      { name: 'Patada lateral', tier: 1, dice: [['blunt', 3, 6], ['blunt', 3, 5]] },
+      { name: 'Combo callejero', tier: 2, dice: [['blunt', 3, 5], ['blunt', 3, 5], ['blunt', 3, 5]] },
+      { name: 'Furia callejera', tier: 3, dice: [['blunt', 6, 10], ['blunt', 5, 8]] },
     ],
-    defense: { name: 'Guardia firme', tier: 0, dice: [['block', 4, 8]] },
+    defense: { name: 'Guardia firme', tier: 0, dice: [['block', 4, 8], ['counter', 3, 5]] },
   },
+  // Distortion boss: three pages a turn, no pattern at all
   corrupted: {
-    id: 'corrupted', name: 'EMPLEADO', tag: 'E.G.O.', tagCol: '#8a2030', team: 'enemy', maxHp: 55, maxSt: 28, speed: [1, 5], nDice: 2,
+    id: 'corrupted', name: 'EMPLEADO', tag: 'DIST.', tagCol: '#8a2030', team: 'enemy', maxHp: 80, maxSt: 22, speed: [1, 5], nDice: 3,
     kind: 'corrupted', bg: 'arena', height: 72, bx: 248, by: 106, scale: 1,
     defeat: 'El empleado distorsionado ha caído.',
     pages: [
       { name: 'Tajo dentado', dice: [['slash', 4, 8], ['slash', 3, 7]] },
       { name: 'Embestida ciega', dice: [['blunt', 7, 11]] },
       { name: 'Grito distorsionado', dice: [['pierce', 2, 5], ['pierce', 2, 5], ['pierce', 2, 5]] },
-      { name: 'Coraza E.G.O.', dice: [['block', 5, 9], ['slash', 4, 7]] },
+      { name: 'Coraza E.G.O.', dice: [['block', 5, 9], ['counter', 4, 7]] },
     ],
   },
-  // ZAYIN: weak, and its conveyor sometimes hands the team a "forgotten piece"
+  // ZAYIN: two pages a turn on a fixed cycle; its conveyor sometimes hands out a "forgotten piece"
   machine: {
-    id: 'machine', name: 'MÁQUINA E.G.O.', tag: 'ZAYIN', tagCol: '#2a7a3a', team: 'enemy', maxHp: 50, maxSt: 28, speed: [1, 4], nDice: 2,
+    id: 'machine', name: 'MÁQUINA E.G.O.', tag: 'ZAYIN', tagCol: '#2a7a3a', team: 'enemy', maxHp: 80, maxSt: 18, speed: [1, 4], nDice: 2,
     kind: 'machine', bg: 'cell', height: 86, bx: 252, by: 106, scale: 1, givesPieces: 0.4,
+    pattern: [[0, 1], [2, 3], [0, 2], [1, 3]],
     defeat: 'La Máquina de Extracción E.G.O. se apaga con un último chirrido.',
     pages: [
       { name: 'Prensa hidráulica', dice: [['blunt', 5, 9]] },
       { name: 'Cinta transportadora', dice: [['blunt', 2, 4], ['blunt', 2, 4], ['blunt', 2, 4]] },
       { name: 'Expulsar componente', dice: [['pierce', 3, 6], ['pierce', 2, 5]] },
-      { name: 'Carcasa reforzada', dice: [['block', 5, 8], ['blunt', 3, 5]] },
+      { name: 'Carcasa reforzada', dice: [['block', 5, 8], ['counter', 3, 5]] },
     ],
   },
-  // TETH: whips and shocks, but every few turns it reboots and is left defenceless
+  // TETH: four pages a turn on a fixed cycle; every 3rd turn it reboots and does nothing
   operator: {
-    id: 'operator', name: 'OPERADOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 78, maxSt: 34, speed: [3, 7], nDice: 2,
+    id: 'operator', name: 'OPERADOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 110, maxSt: 26, speed: [3, 7], nDice: 4,
     kind: 'operator', bg: 'cell', height: 84, bx: 250, by: 106, scale: 1, reboot: 3,
+    pattern: [[0, 2, 0, 1], [3, 0, 2, 0], [1, 3, 0, 2]],
     defeat: 'La pantalla de El Operador Desconectado se apaga para siempre.',
     pages: [
-      { name: 'Latigazo de cable', dice: [['slash', 5, 8], ['slash', 4, 7]] },
-      { name: 'Descarga', dice: [['pierce', 7, 11]] },
-      { name: 'Enredo', dice: [['slash', 4, 6], ['slash', 4, 6], ['slash', 4, 6]] },
-      { name: 'Sobrecarga', dice: [['pierce', 6, 10], ['slash', 5, 8]] },
+      { name: 'Latigazo de cable', dice: [['slash', 4, 7], ['slash', 3, 6]] },
+      { name: 'Descarga', dice: [['pierce', 6, 10]] },
+      { name: 'Enredo', dice: [['slash', 3, 5], ['slash', 3, 5], ['slash', 3, 5]] },
+      { name: 'Sobrecarga', dice: [['pierce', 5, 9], ['counter', 4, 7]] },
     ],
   },
 };
@@ -105,6 +123,7 @@ const alive = (u) => u.hp > 0;
 const canAct = (u) => u.hp > 0 && !u.staggered;
 const allyDice = () => CB.dice.filter(d => d.unit.team === 'ally');
 const enemyDice = () => CB.dice.filter(d => d.unit.team === 'enemy');
+const diceOf = (u) => CB.dice.filter(d => d.unit === u);
 function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function shuffle(a) {
@@ -113,45 +132,27 @@ function shuffle(a) {
 }
 
 function makeUnit(t) {
-  const u = { ...t, hp: t.maxHp, st: t.maxSt, staggered: false, staggerTurns: 0 };
+  const u = { ...t, hp: t.maxHp, st: t.maxSt, staggered: false, staggerTurns: 0, shield: 0 };
   if (t.team === 'ally') {
     u.pool = [];
-    u.offer = [];
-    u.defCard = { page: t.defense };
-    u.bonus = null;
-    u.light = MAX_LIGHT;
-    u.maxLight = MAX_LIGHT;
-    refillOffer(u, SKILL_START);
+    u.hand = [];
+    u.light = LIGHT_START;
+    u.maxLight = LIGHT_START;
+    u.defTurn = 0;
+    drawPages(u, HAND_START);
   }
   return u;
 }
 
-function skillPool(u) {
-  return shuffle(u.pages.flatMap(p => Array.from({ length: SKILL_POOL[p.tier] }, () => ({ page: p }))));
-}
-
-// The skill not used stays offered; up to `n` new skills are drawn from the
-// pool, which is rebuilt and reshuffled once it runs out.
-function refillOffer(u, n) {
-  let added = 0;
-  while (added < n && u.offer.length < SKILL_OFFER) {
-    if (!u.pool.length) u.pool = skillPool(u);
-    u.offer.push(u.pool.pop());
-    added++;
+// Rotation bag: Skill I/II/III held 3/2/1 times, rebuilt and reshuffled when empty.
+function drawPages(u, n) {
+  let drawn = 0;
+  while (drawn < n && u.hand.length < HAND_MAX) {
+    if (!u.pool.length) u.pool = shuffle(u.pages.flatMap(p => Array.from({ length: SKILL_POOL[p.tier] }, () => ({ page: p }))));
+    u.hand.push(u.pool.pop());
+    drawn++;
   }
-  return added;
-}
-
-// Skills shown as cards; the Defense skill lives on the portrait instead.
-function skillOptions(u) {
-  return [...u.offer, u.bonus].filter(Boolean);
-}
-
-// Clicking a portrait selects that character and toggles its Defense skill.
-function toggleDefense(d) {
-  if (CB.phase !== 'select' || !canAct(d.unit)) return;
-  CB.sel = d;
-  toggleCard(d.unit.defCard);
+  return drawn;
 }
 
 // ---------------------------------------------------------------------
@@ -186,17 +187,21 @@ function newTurn() {
   if (CB.turn > 1) {
     for (const u of CB.allies) {
       if (!alive(u)) continue;
-      u.light = Math.min(u.maxLight, u.light + 1);
-      if (refillOffer(u, 1)) {
-        const p = headPos(u);
-        spawnAnim('text', p.x, p.y - 14, 'Nueva habilidad', '#ffe08a', 1100);
+      const p = headPos(u);
+      const cap = lightCapForTurn(CB.turn);
+      if (cap > u.maxLight) {
+        u.maxLight = cap;
+        u.light = Math.min(u.maxLight, u.light + 1);
+        spawnAnim('text', p.x, p.y - 24, 'Luz máx. +1', '#ffe08a', 1400);
       }
+      const n = drawPages(u, drawsForTurn(CB.turn));
+      if (n) spawnAnim('text', p.x, p.y - 14, `+${n} página${n > 1 ? 's' : ''}`, '#e8d8b0', 1200);
     }
   }
   for (const u of CB.all) {
     if (!alive(u)) continue;
     for (let k = 0; k < u.nDice; k++)
-      CB.dice.push({ unit: u, k, speed: u.staggered ? 0 : rnd(...u.speed), page: null, target: null, used: false });
+      CB.dice.push({ unit: u, k, speed: u.staggered ? 0 : rnd(...u.speed), page: null, card: null, target: null, used: false });
   }
   for (const u of CB.enemies) {
     u.rebooting = !!(u.reboot && canAct(u) && CB.turn % u.reboot === 0);
@@ -207,8 +212,10 @@ function newTurn() {
   }
   const targets = allyDice().filter(d => alive(d.unit));
   for (const d of enemyDice()) {
-    if (!canAct(d.unit) || d.unit.rebooting) continue;
-    d.page = d.unit.pages[rnd(0, d.unit.pages.length - 1)];
+    const u = d.unit;
+    if (!canAct(u) || u.rebooting) continue;
+    const row = u.pattern && u.pattern[(CB.turn - 1) % u.pattern.length];
+    d.page = u.pages[row ? row[d.k % row.length] : rnd(0, u.pages.length - 1)];
     d.target = targets[rnd(0, targets.length - 1)] || null;
   }
   CB.sel = allyDice().find(d => canAct(d.unit)) || null;
@@ -231,24 +238,53 @@ function canAfford(d, card) {
   return costOf(card.page) <= d.unit.light + (d.card ? costOf(d.card.page) : 0);
 }
 
-// Clicking the skill already on the die takes it back and refunds its Light.
+function autoTarget(d) {
+  if (d.target) return;
+  const foes = enemyDice().filter(e => canAct(e.unit));
+  d.target = foes.find(e => e.target === d)
+    || foes.find(e => !allyDice().some(a => a.target === e))
+    || foes[0] || null;
+}
+
+function assignCard(d, card) {
+  const other = diceOf(d.unit).find(x => x !== d && x.card === card);
+  if (other) unassign(other);
+  unassign(d);
+  d.unit.light -= costOf(card.page);
+  d.card = card;
+  d.page = card.page;
+  autoTarget(d);
+}
+
+// Clicking the page already on the selected die takes it back and refunds its Light.
 function toggleCard(card) {
   const d = CB.sel;
   if (!d) return;
   if (d.card === card) { unassign(d); SFX.play('select'); return; }
   if (!canAfford(d, card)) { SFX.play('disconnect'); return; }
-  unassign(d);
-  d.unit.light -= costOf(card.page);
-  d.card = card;
-  d.page = card.page;
-  if (!d.target) {
-    const foes = enemyDice().filter(e => canAct(e.unit));
-    d.target = foes.find(e => e.target === d)
-      || foes.find(e => !allyDice().some(a => a.target === e))
-      || foes[0] || null;
-  }
+  assignCard(d, card);
   const next = allyDice().find(a => canAct(a.unit) && !a.page);
   if (next) CB.sel = next;
+  SFX.play('select');
+}
+
+// The portrait's defense button: once per turn it adds a free defensive page
+// to the hand and puts it on a free die; pressing again takes it back off.
+function defenseButton(u) {
+  if (CB.phase !== 'select' || !canAct(u)) return;
+  const onDie = diceOf(u).find(x => x.card && x.card.page === u.defense);
+  if (onDie) { unassign(onDie); SFX.play('select'); return; }
+  let card = u.hand.find(c => c.page === u.defense);
+  if (!card) {
+    if (u.defTurn === CB.turn || u.hand.length >= HAND_MAX) { SFX.play('disconnect'); return; }
+    card = { page: u.defense };
+    u.hand.push(card);
+    u.defTurn = CB.turn;
+    const p = headPos(u);
+    spawnAnim('text', p.x, p.y - 14, '+ página defensiva', '#9ac0ff', 1200);
+  }
+  const d = (CB.sel && CB.sel.unit === u && !CB.sel.card) ? CB.sel : diceOf(u).find(x => !x.card) || null;
+  if (d) { CB.sel = d; assignCard(d, card); }
   SFX.play('select');
 }
 
@@ -270,9 +306,7 @@ async function combatExecute() {
   SFX.play('select');
 
   for (const d of allyDice()) {
-    if (!d.card) continue;
-    d.unit.offer = d.unit.offer.filter(c => c !== d.card);
-    if (d.card === d.unit.bonus) d.unit.bonus = null;
+    if (d.card) d.unit.hand = d.unit.hand.filter(c => c !== d.card);
   }
 
   const acts = CB.dice
@@ -307,6 +341,7 @@ async function combatExecute() {
 
 function endTurn() {
   for (const u of CB.all) {
+    u.shield = 0;
     if (!u.staggered || !alive(u)) continue;
     if (--u.staggerTurns <= 0) {
       u.staggered = false;
@@ -318,10 +353,10 @@ function endTurn() {
   for (const e of CB.enemies) {
     e.rebooting = false;
     if (!e.givesPieces || !alive(e) || Math.random() >= e.givesPieces) continue;
-    const takers = CB.allies.filter(u => alive(u) && !u.bonus);
+    const takers = CB.allies.filter(u => alive(u) && u.hand.length < HAND_MAX);
     if (!takers.length) continue;
     const u = takers[rnd(0, takers.length - 1)];
-    u.bonus = { page: FORGOTTEN_PIECE };
+    u.hand.push({ page: FORGOTTEN_PIECE });
     const pe = headPos(e), pu = headPos(u);
     spawnAnim('text', pe.x, pe.y - 4, '*clac*', '#ffb040', 1200);
     spawnAnim('text', pu.x, pu.y - 22, '+ Pieza olvidada', '#ffb040', 1600);
@@ -348,36 +383,36 @@ function endCombat() {
 // ---------------------------------------------------------------------
 //  Dice resolution
 // ---------------------------------------------------------------------
-// 1 = A wins, -1 = B wins, 0 = draw. An evade that ties an attack wins.
-function diceWinner(ta, ra, tb, rb) {
-  if (ra > rb) return 1;
-  if (rb > ra) return -1;
-  if (ta === 'evade' && DIE[tb].off) return 1;
-  if (tb === 'evade' && DIE[ta].off) return -1;
-  return 0;
-}
-
-function resolveDice(A, ta, ra, B, tb, rb) {
-  const stay = { a: false, b: false };
-  const w = diceWinner(ta, ra, tb, rb);
-  if (w === 0) {
-    const pa = headPos(A), pb = headPos(B);
-    spawnAnim('text', (pa.x + pb.x) / 2, Math.min(pa.y, pb.y) - 12, 'EMPATE', '#a39c90', 700);
-    SFX.play('hit');
-    return stay;
+// Pure rules for one die against another. Returns the shields each side
+// raises, the hits in order ({ to: 'a'|'b', dmg }), which side evaded and
+// which die stays for the next comparison (a successful evade is reused).
+function pairEffects(ta, ra, tb, rb) {
+  const ka = kindOf(ta), kb = kindOf(tb);
+  const fx = { shieldA: ka === 'block' ? ra : 0, shieldB: kb === 'block' ? rb : 0, hits: [], evade: null, stayA: false, stayB: false, tie: false };
+  const attacks = (k) => k === 'off' || k === 'counter';
+  if (ka === 'off' && kb === 'off') {
+    if (ra > rb) fx.hits.push({ to: 'b', dmg: ra });
+    else if (rb > ra) fx.hits.push({ to: 'a', dmg: rb });
+    else fx.tie = true;
+    return fx;
   }
-  const [Wn, L, tw, tl, rw, rl] = w > 0 ? [A, B, ta, tb, ra, rb] : [B, A, tb, ta, rb, ra];
-  const diff = rw - rl;
-  if (DIE[tw].off) {
-    const dmg = tl === 'block' ? diff : rw;
-    dealDamage(L, dmg, dmg);
-  } else if (tw === 'block') {
-    dealDamage(L, 0, diff);
-  } else {
-    recoverSt(Wn, rw);
-    if (w > 0) stay.a = true; else stay.b = true;
+  // evade against anything that attacks
+  if (ka === 'evade' && attacks(kb)) {
+    if (ra >= rb) { fx.evade = 'a'; fx.stayA = true; } else fx.hits.push({ to: 'a', dmg: rb });
+    return fx;
   }
-  return stay;
+  if (kb === 'evade' && attacks(ka)) {
+    if (rb >= ra) { fx.evade = 'b'; fx.stayB = true; } else fx.hits.push({ to: 'b', dmg: ra });
+    return fx;
+  }
+  // a counter takes the incoming blow first, then strikes back unopposed
+  if (ka === 'counter' && kb === 'counter') { fx.hits.push({ to: 'a', dmg: rb }, { to: 'b', dmg: ra }); return fx; }
+  if (ka === 'counter') { if (kb === 'off') fx.hits.push({ to: 'a', dmg: rb }); fx.hits.push({ to: 'b', dmg: ra }); return fx; }
+  if (kb === 'counter') { if (ka === 'off') fx.hits.push({ to: 'b', dmg: ra }); fx.hits.push({ to: 'a', dmg: rb }); return fx; }
+  // attack into a block: the shield soaks it
+  if (ka === 'off') fx.hits.push({ to: 'b', dmg: ra });
+  if (kb === 'off') fx.hits.push({ to: 'a', dmg: rb });
+  return fx;
 }
 
 function headPos(u) {
@@ -386,35 +421,62 @@ function headPos(u) {
   return { x: a.x, y: a.y - (u.kind ? u.height : 42) * s };
 }
 
-function dealDamage(u, hpD, stD) {
-  if (!alive(u)) return;
+// Applies HP damage with stagger at 25% of it (rounded up). Returns the HP damage dealt.
+function dealDamage(u, hpD) {
+  if (!alive(u) || hpD <= 0) return 0;
   if (u.staggered) hpD *= 2;
   if (u.rebooting) hpD = Math.ceil(hpD * 1.5);
-  u.hp = Math.max(0, u.hp - hpD);
-  if (!u.staggered && stD > 0) u.st = Math.max(0, u.st - stD);
+  hpD = Math.min(hpD, u.hp);
+  u.hp -= hpD;
+  const stD = u.staggered ? 0 : Math.ceil(hpD * ST_RATIO);
+  if (stD) u.st = Math.max(0, u.st - stD);
   const p = headPos(u);
-  if (hpD > 0) spawnAnim('dmg', p.x, p.y, `-${hpD}`, '#ff4a5a', 1100, { big: hpD >= 10 });
-  if (stD > 0 && !u.staggered) spawnAnim('text', p.x + 10, p.y + 10, `-${stD}`, '#ffd060', 900);
-  spawnAnim('impact', p.x, p.y + 16, '', hpD > 0 ? '#ffffff' : '#ffd060', 350);
-  SFX.play(hpD > 0 ? 'slash' : 'hit');
+  spawnAnim('dmg', p.x, p.y, `-${hpD}`, '#ff4a5a', 1100, { big: hpD >= 10 });
+  if (stD) spawnAnim('text', p.x + 12, p.y + 10, `-${stD}`, '#ffd060', 900);
+  spawnAnim('impact', p.x, p.y + 16, '', '#ffffff', 350);
+  SFX.play('slash');
   u._hurt = performance.now() + 300;
-  if (hpD > 0) G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 160 };
+  G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 160 };
   if (u.hp <= 0) {
     spawnAnim('text', p.x, p.y - 10, 'K.O.', '#ff4a5a', 1400, { big: true });
   } else if (!u.staggered && u.st <= 0) {
     u.staggered = true;
     u.staggerTurns = 2;
-    spawnAnim('text', p.x, p.y - 10, 'STAGGER', '#ff4a5a', 1400, { big: true });
+    spawnAnim('text', p.x, p.y - 10, 'ATURDIDO', '#ff4a5a', 1400, { big: true });
     SFX.play('scream');
     G.shakeUntil = performance.now() + 400;
   }
+  return hpD;
 }
 
-function recoverSt(u, v) {
+// A hit is soaked by the target's shield first; what is left reaches HP.
+function applyHit(T, dmg, stats, from) {
+  if (!alive(T)) return;
+  const p = headPos(T);
+  const soaked = Math.min(T.shield, dmg);
+  if (soaked) {
+    T.shield -= soaked;
+    spawnAnim('text', p.x + 14, p.y + 10, `-${soaked}`, '#9ac0ff', 900);
+    SFX.play('hit');
+  }
+  const dealt = dealDamage(T, dmg - soaked);
+  if (!dealt && soaked) spawnAnim('text', p.x, p.y - 4, 'BLOQUEADO', '#9ac0ff', 800);
+  if (stats) stats[from.team] += dealt;
+}
+
+function addShield(u, v) {
+  u.shield += v;
+  const p = headPos(u);
+  spawnAnim('text', p.x, p.y - 26, `ESCUDO +${v}`, '#9ac0ff', 1100);
+  SFX.tone(420, 0.08, 'triangle', 0.04);
+}
+
+function evadeFx(u, roll) {
+  const v = Math.ceil(roll * ST_RATIO);
   u.st = Math.min(u.maxSt, u.st + v);
   const p = headPos(u);
   spawnAnim('text', p.x, p.y - 4, 'ESQUIVA', '#4ac08a', 800);
-  spawnAnim('text', p.x + 10, p.y + 8, `+${v}`, '#4ac08a', 800);
+  spawnAnim('text', p.x + 12, p.y + 8, `+${v}`, '#4ac08a', 800);
   SFX.tone(880, 0.08, 'triangle', 0.04);
 }
 
@@ -429,6 +491,7 @@ function side(d) { return { unit: d.unit, page: d.page, i: 0, roll: null }; }
 async function doClash(ad, ed) {
   const A = ad.unit, E = ed.unit;
   const sa = side(ad), se = side(ed);
+  const stats = { ally: 0, enemy: 0 };
   CB.view = { left: sa, right: se };
   await Promise.all([animateSlide(A.id, 136, 280), animateSlide(E.id, 196, 280)]);
   spawnAnim('text', 166, 44, '¡CHOQUE!', '#ffd060', 800, { big: true });
@@ -441,14 +504,40 @@ async function doClash(ad, ed) {
     sa.roll = rnd(a1, a2); se.roll = rnd(e1, e2);
     rollFx(A, ta, sa.roll); rollFx(E, te, se.roll);
     await delay(500);
-    const stay = resolveDice(A, ta, sa.roll, E, te, se.roll);
+    const fx = pairEffects(ta, sa.roll, te, se.roll);
+    if (fx.shieldA) addShield(A, fx.shieldA);
+    if (fx.shieldB) addShield(E, fx.shieldB);
+    if ((fx.shieldA || fx.shieldB) && fx.hits.length) await delay(450);
+    if (fx.tie) {
+      const pa = headPos(A), pb = headPos(E);
+      spawnAnim('text', (pa.x + pb.x) / 2, Math.min(pa.y, pb.y) - 12, 'EMPATE', '#a39c90', 700);
+      SFX.play('hit');
+    }
+    if (fx.evade === 'a') evadeFx(A, sa.roll);
+    if (fx.evade === 'b') evadeFx(E, se.roll);
+    for (const h of fx.hits) {
+      const [T, from, die] = h.to === 'a' ? [A, E, te] : [E, A, ta];
+      if (kindOf(die) === 'counter') spawnAnim('text', headPos(from).x, headPos(from).y - 22, 'CONTRAATAQUE', DIE.counter.col, 900);
+      applyHit(T, h.dmg, stats, from);
+      if (fx.hits.length > 1) await delay(300);
+    }
     await delay(500);
-    if (!stay.a) sa.i++;
-    if (!stay.b) se.i++;
+    if (!fx.stayA) sa.i++;
+    if (!fx.stayB) se.i++;
     sa.roll = null; se.roll = null;
   }
-  await leftovers(sa, E);
-  await leftovers(se, A);
+  await leftovers(sa, E, stats);
+  await leftovers(se, A, stats);
+
+  // Light goes to the ally if their side dealt more damage in this clash
+  if (alive(A) && stats.ally > stats.enemy && A.light < A.maxLight) {
+    A.light++;
+    const p = headPos(A);
+    spawnAnim('text', p.x, p.y - 26, '+1 LUZ', '#ffe08a', 1200, { big: true });
+    SFX.tone(990, 0.1, 'triangle', 0.05);
+  }
+  A.shield = 0;
+  E.shield = 0;
   await Promise.all([animateSlide(A.id, A.bx, 250), animateSlide(E.id, E.bx, 250)]);
 }
 
@@ -459,12 +548,12 @@ async function doOneSided(d, T) {
   const tx = T.team === 'ally' ? T.bx + 40 : T.bx - 40;
   await animateSlide(d.unit.id, tx, 300);
   await delay(250);
-  await leftovers(s, T);
+  await leftovers(s, T, null);
   await animateSlide(d.unit.id, d.unit.bx, 250);
 }
 
-// Remaining offensive dice hit unopposed; defensive leftovers are discarded.
-async function leftovers(s, T) {
+// Remaining attack and counter dice hit unopposed; block and evade leftovers are discarded.
+async function leftovers(s, T, stats) {
   const U = s.unit;
   while (s.i < s.page.dice.length && canAct(U) && alive(T)) {
     const [ty, a, b] = s.page.dice[s.i];
@@ -472,7 +561,7 @@ async function leftovers(s, T) {
       s.roll = rnd(a, b);
       rollFx(U, ty, s.roll);
       await delay(400);
-      dealDamage(T, s.roll, s.roll);
+      applyHit(T, s.roll, stats, U);
       await delay(450);
     }
     s.roll = null;
@@ -483,22 +572,34 @@ async function leftovers(s, T) {
 // ---------------------------------------------------------------------
 //  Auto assignment (the "Ganar" / "Daño" buttons)
 // ---------------------------------------------------------------------
-function winRate(pa, pb, n = 200) {
-  let wins = 0;
-  for (let k = 0; k < n; k++) {
-    let ia = 0, ib = 0, sa = 0, sb = 0;
-    while (ia < pa.dice.length && ib < pb.dice.length) {
-      const [ta, a1, a2] = pa.dice[ia], [tb, b1, b2] = pb.dice[ib];
-      const w = diceWinner(ta, rnd(a1, a2), tb, rnd(b1, b2));
-      if (w > 0) { sa++; if (ta === 'evade') { ib++; continue; } }
-      if (w < 0) { sb++; if (tb === 'evade') { ia++; continue; } }
-      ia++; ib++;
-    }
-    sa += pa.dice.slice(ia).filter(([t]) => DIE[t].off).length;
-    sb += pb.dice.slice(ib).filter(([t]) => DIE[t].off).length;
-    if (sa > sb) wins++;
+// Rough simulation of one page clash with the same rules: returns damage dealt by each side.
+function simClash(pa, pb) {
+  let ia = 0, ib = 0, shA = 0, shB = 0, dA = 0, dB = 0;
+  const hit = (to, dmg) => {
+    if (to === 'a') { const s = Math.min(shA, dmg); shA -= s; dB += dmg - s; }
+    else { const s = Math.min(shB, dmg); shB -= s; dA += dmg - s; }
+  };
+  while (ia < pa.dice.length && ib < pb.dice.length) {
+    const [ta, a1, a2] = pa.dice[ia], [tb, b1, b2] = pb.dice[ib];
+    const fx = pairEffects(ta, rnd(a1, a2), tb, rnd(b1, b2));
+    shA += fx.shieldA; shB += fx.shieldB;
+    for (const h of fx.hits) hit(h.to, h.dmg);
+    if (!fx.stayA) ia++;
+    if (!fx.stayB) ib++;
   }
-  return wins / n;
+  for (; ia < pa.dice.length; ia++) { const [t, x, y] = pa.dice[ia]; if (DIE[t].off) hit('b', rnd(x, y)); }
+  for (; ib < pb.dice.length; ib++) { const [t, x, y] = pb.dice[ib]; if (DIE[t].off) hit('a', rnd(x, y)); }
+  return [dA, dB];
+}
+
+function clashScore(pa, pb, n = 120) {
+  let win = 0, net = 0;
+  for (let k = 0; k < n; k++) {
+    const [a, b] = simClash(pa, pb);
+    if (a > b) win++;
+    net += a - b;
+  }
+  return { win: win / n, net: net / n };
 }
 
 function expDamage(pg) {
@@ -509,24 +610,36 @@ function autoAssign(mode) {
   if (CB.phase !== 'select') return;
   const used = new Set();
   const foes = enemyDice().filter(e => canAct(e.unit));
+  for (const d of allyDice()) unassign(d);
   for (const d of allyDice()) {
-    if (!canAct(d.unit) || !foes.length) continue;
-    unassign(d);
+    const u = d.unit;
+    if (!canAct(u) || !foes.length) continue;
+    const taken = diceOf(u).filter(x => x.card).map(x => x.card);
+    const options = u.hand.filter(c => !taken.includes(c));
+    const defFree = u.defTurn !== CB.turn && !u.hand.some(c => c.page === u.defense) && u.hand.length < HAND_MAX;
+    if (defFree) options.push({ page: u.defense, virtual: true });
     let best = null, bestScore = -Infinity;
-    for (const card of [...skillOptions(d.unit), d.unit.defCard]) {
-      if (costOf(card.page) > d.unit.light) continue;
+    for (const card of options) {
+      if (costOf(card.page) > u.light) continue;
       for (const e of foes) {
-        // a die with no page (rebooting enemy) takes a free hit: just maximise damage
-        let score = mode === 'win' && e.page ? winRate(card.page, e.page) + expDamage(card.page) / 25 : expDamage(card.page) / (mode === 'win' ? 20 : 1);
-        if (used.has(e)) score -= mode === 'win' ? 0.5 : 20;
-        if (e.target === d) score += mode === 'win' ? 0.05 : 0.5;
+        let score;
+        if (!e.page) score = expDamage(card.page) / 10;
+        else {
+          const r = clashScore(card.page, e.page);
+          score = mode === 'win' ? r.win + r.net / 30 : r.net / 4 + expDamage(card.page) / 10;
+        }
+        score -= costOf(card.page) * 0.08;
+        if (used.has(e)) score -= mode === 'win' ? 0.5 : 3;
+        if (e.target === d) score += 0.05;
         if (score > bestScore) { bestScore = score; best = [card, e]; }
       }
     }
     if (!best) continue;
-    d.unit.light -= costOf(best[0].page);
-    d.card = best[0]; d.page = best[0].page; d.target = best[1];
-    used.add(best[1]);
+    let [card, e] = best;
+    if (card.virtual) { card = { page: u.defense }; u.hand.push(card); u.defTurn = CB.turn; }
+    assignCard(d, card);
+    d.target = e;
+    used.add(e);
   }
   SFX.play('select');
 }
@@ -591,11 +704,40 @@ function wrap(s, maxW, size) {
   return lines;
 }
 
+function gear(cx, cy, r, t, hov) {
+  const teeth = 10, rot = t / 3000;
+  const col = hov ? '#ffa04a' : '#e8702a';
+  for (let k = 0; k < teeth; k++) {
+    const a = rot + (k / teeth) * Math.PI * 2, da = 0.13;
+    poly([
+      [cx + Math.cos(a - da) * (r - 2), cy + Math.sin(a - da) * (r - 2)],
+      [cx + Math.cos(a - da) * (r + 3), cy + Math.sin(a - da) * (r + 3)],
+      [cx + Math.cos(a + da) * (r + 3), cy + Math.sin(a + da) * (r + 3)],
+      [cx + Math.cos(a + da) * (r - 2), cy + Math.sin(a + da) * (r - 2)],
+    ], col);
+  }
+  disc(cx, cy, r, col);
+  disc(cx, cy, r - 4, '#3a1810');
+  disc(cx, cy, r - 6, col);
+  disc(cx, cy, 4, '#3a1810');
+  if (hov) light(cx, cy, r + 6, r + 6, '#ff8a3a', 0.3, 3);
+}
+
+function smallBtn(x, y, w, h, label, fn) {
+  const hv = hitArea(x, y, w, h, fn);
+  rect(x, y, w, h, hv ? '#5a1a24' : '#2a1018');
+  rect(x, y, w, 1, '#c0283a');
+  rect(x, y + h - 1, w, 1, '#1a0810');
+  txt(label, x + w / 2, y + h - 3, hv ? '#fff' : '#e8d0c0', 8, 'center');
+}
+
+// Speed-die tokens: allies above the head (side by side when they have two),
+// enemies in a zig-zag column next to the enemy.
 function tokenPos(d) {
   const u = d.unit;
-  if (u.team === 'enemy') return { x: 192, y: 44 + d.k * 26 };
+  if (u.team === 'enemy') return { x: 186 + (d.k % 2) * 20, y: 38 + d.k * 20 };
   const s = u.scale * (u.hat === 'cap' ? 0.86 : 1);
-  return { x: u.bx, y: Math.round(u.by - 40 * s - 11) };
+  return { x: u.bx + (d.k - (u.nDice - 1) / 2) * 22, y: Math.round(u.by - 40 * s - 11) };
 }
 
 function arrowHead([x, y], [qx, qy], col) {
@@ -654,113 +796,108 @@ function drawToken(d, t) {
   if (!alive(u)) return;
   const { x, y } = tokenPos(d);
   const blink = Math.floor(t / 400) % 2;
-  if (u.staggered) { txt('STAGGER', x, y + 3, blink ? '#ff4a5a' : '#8a2030', 9, 'center'); return; }
+  if (u.staggered) { if (d.k === 0) txt('ATURDIDO', x, y + 3, blink ? '#ff4a5a' : '#8a2030', 9, 'center'); return; }
   const enemy = u.team === 'enemy';
   const sel = CB.sel === d && CB.phase === 'select';
-  let hov = false;
-  if (CB.phase === 'select') hov = hitArea(x - 10, y - 10, 20, 20, () => enemy ? targetDie(d) : selectDie(d), { page: d.page });
+  const hov = hitArea(x - 10, y - 10, 20, 20, () => (enemy ? targetDie(d) : selectDie(d)), { page: d.page });
   if (sel || hov) {
     ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t / 150);
     hex(x, y, 12, sel ? '#ffd060' : '#ffffff');
     ctx.globalAlpha = 1;
   }
   hex(x, y, 9, d.page ? '#1e1418' : '#121016', enemy ? '#c0283a' : sel ? '#ffd060' : '#8a6030');
+  // range label: left of the token, or right of Lobelto's second one
+  const rightLabel = !enemy && d.k > 0;
+  const lx = rightLabel ? x + 12 : x - 12, al = rightLabel ? 'left' : 'right';
   if (d.page) {
     dieIcon(d.page.dice[0][0], x - 2, y - 5);
     const n = d.page.dice.length;
     d.page.dice.forEach(([ty], k) => rect(x - n + k * 2, y + 3, 1, 2, DIE[ty].col));
     const [, a, b] = d.page.dice[0];
-    txt(`${a}-${b}`, x - 12, y + 3, '#ffd060', 9, 'right');
+    txt(`${a}-${b}`, lx, y + 3, '#ffd060', 9, al);
   } else if (u.rebooting) {
     txt('...', x, y + 2, '#9ac0ff', 10, 'center');
-    txt('REINICIO', x - 12, y + 3, '#9ac0ff', 8, 'right');
+    txt('REINICIO', lx, y + 3, '#9ac0ff', 8, al);
   } else {
     txt('?', x, y + 3, '#6a6070', 10, 'center');
   }
   speedBadge(x + 9, y - 7, d.speed);
 }
 
-function allyPlate(u) {
+function shieldBar(x, y, v) {
+  if (!v) return;
+  const w = Math.min(30, v * 3);
+  rect(x - 1, y - 1, w + 2, 4, '#0a1020');
+  rect(x, y, w, 2, '#4a8ad8');
+  rect(x, y, w, 1, '#9ac0ff');
+  txt(String(v), x + w + 3, y + 3, '#9ac0ff', 8);
+}
+
+function allyPlate(u, t) {
   const a = G.actors[u.id];
   if (!a) return;
   const x = Math.round(a.x), y = u.by;
-  rect(x - 16, y + 3, 32, 6, '#0a080e');
+  rect(x - 16, y + 3, 32, 7, '#0a080e');
   const hp = u.hp / u.maxHp;
   rect(x - 15, y + 4, 30, 2, '#2a1418');
   rect(x - 15, y + 4, Math.round(30 * hp), 2, hp < 0.3 ? '#e03040' : '#3fbf6a');
-  rect(x - 15, y + 7, 30, 1, '#2a2410');
-  rect(x - 15, y + 7, Math.round(30 * u.st / u.maxSt), 1, '#e8c040');
+  rect(x - 15, y + 7, 30, 2, '#2a2410');
+  rect(x - 15, y + 7, Math.round(30 * u.st / u.maxSt), 2, '#e8c040');
   txt(String(u.hp), x - 18, y + 10, '#ff8a3a', 10, 'right');
+  if (u.staggered) txt(`ATURD. ${u.staggerTurns - 1}T`, x + 18, y + 10, Math.floor(t / 400) % 2 ? '#ff4a5a' : '#8a2030', 8);
+  else txt(`${u.st}/${u.maxSt}`, x + 18, y + 10, '#e8c040', 8);
+  shieldBar(x - 15, y - 1, u.shield);
 }
 
 function enemyPlate(u, t) {
-  const x0 = 210, y0 = 108, w = 86;
-  rect(x0, y0, w, 14, '#0a080e');
+  const x0 = 200, y0 = 108, w = 104, bw = 62;
+  rect(x0, y0, w, 15, '#0a080e');
   rect(x0, y0, w, 1, '#5a1a24');
   rect(x0 + 2, y0 + 2, 22, 5, u.tagCol);
   txt(u.tag, x0 + 13, y0 + 7, '#ffe0e0', 7, 'center');
   txt(u.name, x0 + 27, y0 + 7, '#d8d0c0', 7);
   const hp = u.hp / u.maxHp;
-  rect(x0 + 2, y0 + 9, w - 24, 2, '#2a1418');
-  rect(x0 + 2, y0 + 9, Math.round((w - 24) * hp), 2, '#e03040');
-  rect(x0 + 2, y0 + 12, w - 24, 1, '#2a2410');
-  rect(x0 + 2, y0 + 12, Math.round((w - 24) * u.st / u.maxSt), 1, '#e8c040');
-  txt(String(u.hp), x0 + w - 2, y0 + 13, '#ff8a3a', 10, 'right');
-  if (u.staggered && Math.floor(t / 400) % 2) txt('STAGGER', x0 + w / 2, y0 - 3, '#ff4a5a', 9, 'center');
+  rect(x0 + 2, y0 + 9, bw, 2, '#2a1418');
+  rect(x0 + 2, y0 + 9, Math.round(bw * hp), 2, '#e03040');
+  rect(x0 + 2, y0 + 12, bw, 2, '#2a2410');
+  rect(x0 + 2, y0 + 12, Math.round(bw * u.st / u.maxSt), 2, '#e8c040');
+  txt(u.staggered ? `${u.staggerTurns - 1}T` : `${u.st}/${u.maxSt}`, x0 + bw + 5, y0 + 15, u.staggered ? '#ff4a5a' : '#e8c040', 8);
+  txt(String(u.hp), x0 + w - 2, y0 + 14, '#ff8a3a', 10, 'right');
+  if (u.staggered && Math.floor(t / 400) % 2) txt('ATURDIDO', x0 + w / 2, y0 - 3, '#ff4a5a', 9, 'center');
   else if (u.rebooting && Math.floor(t / 400) % 2) txt('REINICIANDO · DAÑO x1.5', x0 + w / 2, y0 - 3, '#9ac0ff', 8, 'center');
+  shieldBar(x0 + 2, y0 - 5, u.shield);
 }
 
-function gear(cx, cy, r, t, hov) {
-  const teeth = 10, rot = t / 3000;
-  const col = hov ? '#ffa04a' : '#e8702a';
-  for (let k = 0; k < teeth; k++) {
-    const a = rot + (k / teeth) * Math.PI * 2, da = 0.13;
-    poly([
-      [cx + Math.cos(a - da) * (r - 2), cy + Math.sin(a - da) * (r - 2)],
-      [cx + Math.cos(a - da) * (r + 3), cy + Math.sin(a - da) * (r + 3)],
-      [cx + Math.cos(a + da) * (r + 3), cy + Math.sin(a + da) * (r + 3)],
-      [cx + Math.cos(a + da) * (r - 2), cy + Math.sin(a + da) * (r - 2)],
-    ], col);
-  }
-  disc(cx, cy, r, col);
-  disc(cx, cy, r - 4, '#3a1810');
-  disc(cx, cy, r - 6, col);
-  disc(cx, cy, 4, '#3a1810');
-  if (hov) light(cx, cy, r + 6, r + 6, '#ff8a3a', 0.3, 3);
-}
-
-function smallBtn(x, y, w, h, label, fn) {
-  const hv = hitArea(x, y, w, h, fn);
-  rect(x, y, w, h, hv ? '#5a1a24' : '#2a1018');
-  rect(x, y, w, 1, '#c0283a');
-  rect(x, y + h - 1, w, 1, '#1a0810');
-  txt(label, x + w / 2, y + h - 3, hv ? '#fff' : '#e8d0c0', 8, 'center');
-}
-
+// Bottom panel: one column per ally (Light, page slots for each die, portrait),
+// the hand of the selected ally, and the start / auto-assign buttons.
 function selectPanel(t) {
   const py = 124;
   rect(-OX, py, VW, H - py, '#0c0a10');
   rect(-OX, py, VW, 1, '#8a6030');
   rect(-OX, py + 1, VW, 1, '#3a2418');
 
-  allyDice().forEach((d, i) => {
-    const cx = 22 + i * 38, u = d.unit, ok = canAct(u), sel = CB.sel === d;
-    const pcy = 162, pr = 14, def = d.card === u.defCard;
-    if (ok) {
-      hitArea(cx - 16, 124, 32, 23, () => selectDie(d));
-      hitArea(cx - 15, 147, 30, 32, () => toggleDefense(d), { page: u.defense });
-    }
+  CB.allies.forEach((u, i) => {
+    if (!alive(u)) return;
+    const cx = 22 + i * 38, ok = canAct(u), dice = diceOf(u);
+    const sel = CB.sel && CB.sel.unit === u;
+    const pcy = 162, pr = 14;
+    const defOn = dice.some(x => x.card && x.card.page === u.defense);
     for (let k = 0; k < u.maxLight; k++)
       disc(cx - (u.maxLight - 1) * 3 + k * 6, 128, 2, k < u.light ? '#ffe08a' : '#3a3020');
-    hex(cx, 140, 8, d.page ? '#1e1418' : '#121016', sel ? '#ffd060' : '#5a4030');
-    if (d.page) dieIcon(d.page.dice[0][0], cx - 2, 136);
-    else txt('+', cx, 143, '#5a5060', 10, 'center');
+    dice.forEach((d, k) => {
+      const sx = cx + (k - (dice.length - 1) / 2) * 17, here = CB.sel === d;
+      if (ok) hitArea(sx - 8, 132, 16, 15, () => selectDie(d), d.page ? { page: d.page } : null);
+      hex(sx, 140, 7, d.page ? '#1e1418' : '#121016', here ? '#ffd060' : '#5a4030');
+      if (d.page) dieIcon(d.page.dice[0][0], sx - 2, 136);
+      else txt('+', sx, 143, '#5a5060', 9, 'center');
+    });
+    if (ok) hitArea(cx - 15, 148, 30, 31, () => defenseButton(u), { page: u.defense });
     if (sel) {
       ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t / 150);
       hex(cx, pcy, pr + 2, '#ffd060');
       ctx.globalAlpha = 1;
     }
-    hex(cx, pcy, pr, def ? '#14203a' : '#1a1622', def ? '#4a8ad8' : sel ? '#ffd060' : ok ? '#8a6030' : '#3a3030');
+    hex(cx, pcy, pr, defOn ? '#14203a' : '#1a1622', defOn ? '#4a8ad8' : sel ? '#ffd060' : ok ? '#8a6030' : '#3a3030');
     ctx.save();
     ctx.beginPath();
     hexPath(cx, pcy, pr).forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
@@ -769,22 +906,22 @@ function selectPanel(t) {
     ctx.translate(cx, pcy + 2); ctx.scale(0.6, 0.6); ctx.translate(-cx, -(pcy + 2));
     avatarHead(cx, pcy + 2, u.hat, t, !ok);
     ctx.restore();
-    if (def) {
+    if (defOn) {
       light(cx, pcy, pr + 4, pr + 4, '#4a8ad8', 0.3 + 0.1 * Math.sin(t / 200), 3);
       disc(cx - 10, pcy - 9, 5, '#4a8ad8');
       dieIcon(u.defense.dice[0][0], cx - 12, pcy - 11, '#ffffff');
     } else if (ok) {
-      rrect(cx - 15, pcy - 13, 15, 7, '#2a4a7a', 2);
-      txt('DEF', cx - 7.5, pcy - 7.5, '#c8dcff', 7, 'center');
+      const spent = u.defTurn === CB.turn && !u.hand.some(c => c.page === u.defense);
+      rrect(cx - 15, pcy - 13, 15, 7, spent ? '#2a2a34' : '#2a4a7a', 2);
+      txt('DEF', cx - 7.5, pcy - 7.5, spent ? '#5a5a6a' : '#c8dcff', 7, 'center');
     }
     txt(String(u.hp), cx - 9, 179, '#ff8a3a', 9, 'center');
-    speedBadge(cx + 11, 173, d.speed);
+    if (dice[0]) speedBadge(cx + 11, 173, dice[0].speed);
   });
 
   const d = CB.sel;
   if (d) {
     const u = d.unit;
-    // What is left in the rotation pool before it reshuffles
     let bx = 90;
     txt('BOLSA', bx, 131, '#8a8070', 7);
     bx += 22;
@@ -796,11 +933,17 @@ function selectPanel(t) {
       txt(String(left), bx + lw + 5, 131, left ? '#e8e4dc' : '#5a5050', 8);
       bx += lw + 14;
     }
-    skillOptions(u).forEach((card, i) => {
-      const x = 90 + i * 39 + (card === u.bonus ? 2 : 0);
-      const r = { card, x, y: 137, w: 37, h: 41 };
-      drawHandCard(r, hot(r.x, r.y, r.w, r.h), d);
-    });
+    txt(`ROBA ${drawsForTurn(CB.turn + 1)}/T`, 248, 131, '#8a8070', 7, 'right');
+    // the hand fans out when it holds more than 4 pages; the hovered page comes to the front
+    const n = u.hand.length, cw = 37;
+    const step = n <= 4 ? 39 : (158 - cw) / (n - 1);
+    const rects = u.hand.map((card, i) => ({ card, x: Math.round(90 + i * step), y: 137, w: cw, h: 41 }));
+    let hov = -1;
+    for (let i = n - 1; i >= 0; i--) if (hot(rects[i].x, rects[i].y, rects[i].w, rects[i].h)) { hov = i; break; }
+    const order = rects.map((_, i) => i).filter(i => i !== hov);
+    if (hov >= 0) order.push(hov);
+    for (const i of order) drawHandCard(rects[i], i === hov, d);
+    if (!n) txt('Mano vacía · pulsa el retrato para defender', 168, 158, '#6a6070', 8, 'center');
   }
 
   rect(252, 127, 36, 9, '#2a1810');
@@ -813,17 +956,19 @@ function selectPanel(t) {
 }
 
 function drawHandCard(r, hv, d) {
-  const pg = r.card.page, on = d.card === r.card, tier = TIER[pg.tier];
+  const pg = r.card.page, tier = TIER[pg.tier];
+  const holder = diceOf(d.unit).find(x => x.card === r.card);
+  const on = holder === d, elsewhere = holder && holder !== d;
   hitArea(r.x, r.y, r.w, r.h, () => toggleCard(r.card), { page: pg });
-  const x = r.x, w = r.w, h = r.h, y = r.y - (hv ? 3 : 0) - (on ? 2 : 0);
-  rrect(x, y, w, h, on ? '#ffd060' : hv ? '#8a6a50' : '#3a2a24', 2);
+  const x = r.x, w = r.w, h = r.h, y = r.y - (hv ? 3 : 0) - (on || elsewhere ? 2 : 0);
+  rrect(x, y, w, h, on ? '#ffd060' : elsewhere ? '#a08040' : hv ? '#8a6a50' : '#3a2a24', 2);
   rect(x + 1, y + 1, w - 2, h - 2, '#16121a');
   rect(x + 1, y + 1, w - 2, 2, DIE[pg.dice[0][0]].col);
   wrap(pg.name, w - 4, 8).slice(0, 2).forEach((ln, k) => {
     ctx.font = '8px VT323, monospace';
     txt(ln, x + 2, y + 9 + k * 6, '#e8e4dc', ctx.measureText(ln).width > w - 4 ? 7 : 8);
   });
-  const afford = on || canAfford(d, r.card);
+  const afford = holder || canAfford(d, r.card);
   const bw = tier.label.length * 4 + 4;
   rrect(x + w - bw - 2, y - 4, bw, 8, tier.col, 2);
   txt(tier.label, x + w - 2 - bw / 2, y + 2, '#16121a', 8, 'center');
@@ -834,7 +979,8 @@ function drawHandCard(r, hv, d) {
     dieIcon(ty, x + 3, ry - 3);
     txt(`${a}-${b}`, x + 10, ry + 2, '#d8d0c0', 8);
   });
-  if (!afford) { ctx.globalAlpha = 0.55; rect(x, y, w, h, '#000'); ctx.globalAlpha = 1; }
+  if (!afford || elsewhere) { ctx.globalAlpha = 0.55; rect(x, y, w, h, '#000'); ctx.globalAlpha = 1; }
+  if (elsewhere) { rrect(x + 3, y + h / 2 - 5, w - 6, 9, '#2a2010', 2); txt('EN USO', x + w / 2, y + h / 2 + 2, '#ffd060', 8, 'center'); }
 }
 
 function pageCard(s, x, y, w, enemyTeam) {
@@ -842,6 +988,7 @@ function pageCard(s, x, y, w, enemyTeam) {
   rect(x, y, w, 50, '#16121a');
   rect(x, y, w, 1, tc);
   txt(s.unit.name, x + 4, y + 9, tc, 8);
+  if (s.unit.shield) txt(`ESCUDO ${s.unit.shield}`, x + w - 4, y + 9, '#9ac0ff', 8, 'right');
   if (!s.page) { txt('Sin defensa', x + 4, y + 20, '#8a8090', 9); return; }
   txt(s.page.name, x + 4, y + 17, '#e8e4dc', 8);
   s.page.dice.forEach(([ty, a, b], k) => {
@@ -870,7 +1017,7 @@ function topBar() {
   rect(3, 3, 46, 11, '#0a080e');
   rect(3, 3, 46, 1, '#8a6030');
   txt(`TURNO ${CB.turn}`, 26, 12, '#e8c060', 9, 'center');
-  if (CB.phase === 'select') txt('Elige una habilidad y a quién atacar · Retrato = defensa', 160, 12, '#a39c90', 8, 'center');
+  if (CB.phase === 'select') txt('Elige páginas y a quién atacar · Retrato = página defensiva', 162, 12, '#a39c90', 8, 'center');
 }
 
 function tooltip() {
@@ -878,7 +1025,7 @@ function tooltip() {
   for (let i = CB.hits.length - 1; i >= 0 && !h; i--) if (CB.hits[i].hot && CB.hits[i].data && CB.hits[i].data.page) h = CB.hits[i];
   if (!h) return;
   const pg = h.data.page;
-  const bw = 108, bh = 14 + pg.dice.length * 9;
+  const bw = 116, bh = 14 + pg.dice.length * 9;
   const m = CB.mouse;
   const x = Math.round(Math.max(2 - OX, Math.min(W + OX - bw - 2, m.x + 8)));
   let y = Math.round(m.y - bh - 6);
@@ -916,7 +1063,7 @@ function drawCombatHUD(t) {
   if (!CB.active) return;
   refreshActors();
   CB.hits = [];
-  for (const u of CB.allies) if (alive(u)) allyPlate(u);
+  for (const u of CB.allies) if (alive(u)) allyPlate(u, t);
   for (const u of CB.enemies) if (alive(u)) enemyPlate(u, t);
   if (CB.phase === 'select') {
     drawArrows(t);
