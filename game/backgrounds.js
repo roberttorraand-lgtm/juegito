@@ -908,12 +908,34 @@ BG.cell = (s, t) => {
 };
 
 // =====================================================================
+//  WIDE SCREENS — when the view is wider than 320 (fill mode), scenery
+//  repeats into the side margins; UI-style screens get a flat colour.
+// =====================================================================
+const BG_EDGE = { call: '#121218', share: '#121218' };
+function drawWide(fn, key) {
+  if (OX > 0) {
+    if (BG_EDGE[key]) rect(-OX, 0, VW, H, BG_EDGE[key]);
+    else for (const off of [-W, W]) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(off < 0 ? -OX : W, 0, OX, H);
+      ctx.clip();
+      ctx.translate(off, 0);
+      fn();
+      ctx.restore();
+    }
+  }
+  fn();
+}
+
+// =====================================================================
 //  POST — drawn over actors
 // =====================================================================
+const blitVignette = () => ctx.drawImage(vignette(), -OX, 0, VW, H);
 const POST = {
-  arena: () => blit(vignette()),
-  cell: () => blit(vignette()),
-  room: () => blit(vignette()),
-  branch: (s, t) => { rain(t, 24, 0, 0, W, H, '#d8d8f8', 0.45, 0.75, 6, 9); blit(vignette()); },
+  arena: blitVignette,
+  cell: blitVignette,
+  room: blitVignette,
+  branch: (s, t) => { rain(t, 24, -OX, 0, VW, H, '#d8d8f8', 0.45, 0.75, 6, 9); blitVignette(); },
 };
 function postFX(s, t) { const f = POST[s.bg]; if (f) f(s, t); }

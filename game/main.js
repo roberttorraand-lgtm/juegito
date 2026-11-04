@@ -250,12 +250,13 @@ function render(t) {
   if (hintOn !== G._hintOn) { G._hintOn = hintOn; hintEl.classList.toggle('hidden', !hintOn); }
   ctx.save();
   ctx.scale(SCALE, SCALE);
+  ctx.translate(OX, 0);
   if (now < G.shakeUntil) ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
 
   if (G.mode === 'hub') {
     drawHub(t);
   } else {
-    (BG[G.s.bg] || BG.black)(G.s, t);
+    drawWide(() => (BG[G.s.bg] || BG.black)(G.s, t), G.s.bg);
     const order = G.mode === 'combat'
       ? Object.keys(G.actors).sort((a, b) => G.actors[a].y - G.actors[b].y)
       : ['corrupted', 'gonza', 'lobelto'];
@@ -276,7 +277,7 @@ function render(t) {
   if (G.flash) {
     const k = 1 - (now - G.flash.start) / G.flash.ms;
     if (k <= 0) G.flash = null;
-    else { ctx.globalAlpha = Math.min(1, k * 1.2); rect(0, 0, W, H, G.flash.color); ctx.globalAlpha = 1; }
+    else { ctx.globalAlpha = Math.min(1, k * 1.2); rect(-OX, 0, VW, H, G.flash.color); ctx.globalAlpha = 1; }
   }
 
   if (CB.active && CB.anims.length > 0) {
@@ -319,7 +320,7 @@ function render(t) {
     G.fade = G.fadeAnim.from + (G.fadeAnim.to - G.fadeAnim.from) * k;
   }
   if (G.fade > 0 && G.mode !== 'hub') {
-    ctx.globalAlpha = Math.round(G.fade * 6) / 6; rect(0, 0, W, H, '#000'); ctx.globalAlpha = 1;
+    ctx.globalAlpha = Math.round(G.fade * 6) / 6; rect(-OX, 0, VW, H, '#000'); ctx.globalAlpha = 1;
   }
   drawScanlines();
   ctx.restore();

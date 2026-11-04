@@ -6,7 +6,7 @@ function drawScanlines() {
   if (!CFG.scanlines) return;
   ctx.fillStyle = '#000';
   ctx.globalAlpha = 0.06;
-  for (let y = 0; y < H; y += 2) ctx.fillRect(0, y, W, 1);
+  for (let y = 0; y < H; y += 2) ctx.fillRect(-OX, y, VW, 1);
   ctx.globalAlpha = 1;
 }
 
@@ -46,8 +46,8 @@ function onResizeFX() {
   g.fillRect(n - 1, 0, 1, n);
   g.fillRect(0, n - 1, n - 1, 1);
   gridPattern = vctx.createPattern(p, 'repeat');
-  shadowBuf.width = W * n;
-  shadowBuf.height = H * n;
+  shadowBuf.width = scene.width;
+  shadowBuf.height = scene.height;
 }
 onResizeFX();
 
@@ -57,7 +57,7 @@ function drawActorShadow(a, draw) {
   const sb = shadowBuf.getContext('2d');
   sb.setTransform(1, 0, 0, 1, 0, 0);
   sb.clearRect(0, 0, shadowBuf.width, shadowBuf.height);
-  sb.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  sb.setTransform(SCALE, 0, 0, SCALE, OX * SCALE, 0);
   sb.imageSmoothingEnabled = false;
   const prev = ctx;
   ctx = sb;
@@ -68,15 +68,20 @@ function drawActorShadow(a, draw) {
   ctx.translate(-a.x, -a.y);
   ctx.globalAlpha = 0.38;
   ctx.filter = 'brightness(0)';
-  ctx.drawImage(shadowBuf, 0, 0, W, H);
+  ctx.drawImage(shadowBuf, -OX, 0, VW, H);
   ctx.restore();
 }
 
 function present(t) {
+  const F = FRAME;
+  const scaled = F.w !== scene.width || F.h !== scene.height;
   vctx.save();
   vctx.globalCompositeOperation = 'copy';
   vctx.filter = CFG.grade ? 'contrast(1.1) saturate(1.2) brightness(1.04)' : 'none';
-  vctx.drawImage(scene, 0, 0);
+  vctx.imageSmoothingEnabled = scaled;
+  vctx.imageSmoothingQuality = 'high';
+  if (F.x || F.y) { vctx.fillStyle = '#000'; vctx.fillRect(0, 0, cv.width, cv.height); vctx.globalCompositeOperation = 'source-over'; }
+  vctx.drawImage(scene, F.x, F.y, F.w, F.h);
   vctx.restore();
 
   if (CFG.bloom) {
@@ -91,7 +96,7 @@ function present(t) {
     vctx.globalCompositeOperation = 'lighter';
     vctx.globalAlpha = CFG.bloom > 1 ? 0.8 : 0.5;
     vctx.imageSmoothingEnabled = true;
-    vctx.drawImage(bloomB, 0, 0, cv.width, cv.height);
+    vctx.drawImage(bloomB, F.x, F.y, F.w, F.h);
     vctx.restore();
   }
 
@@ -99,11 +104,12 @@ function present(t) {
     vctx.save();
     vctx.globalCompositeOperation = 'overlay';
     vctx.globalAlpha = 0.08;
-    vctx.drawImage(grainFrames[Math.floor(t / 50) % grainFrames.length], 0, 0, cv.width, cv.height);
+    vctx.drawImage(grainFrames[Math.floor(t / 50) % grainFrames.length], F.x, F.y, F.w, F.h);
     vctx.restore();
   }
 
-  if (CFG.pixelGrid && SCALE >= 3) {
+  // the grid only lines up when each game pixel is an exact block on screen
+  if (CFG.pixelGrid && SCALE >= 3 && !scaled) {
     vctx.fillStyle = gridPattern;
     vctx.fillRect(0, 0, cv.width, cv.height);
   }
@@ -115,11 +121,11 @@ function present(t) {
       fpsMeter.frames = 0;
       fpsMeter.last = t;
     }
-    const s = SCALE;
+    const s = F.h / H, x0 = F.x + F.w;
     vctx.fillStyle = 'rgba(0,0,0,0.7)';
-    vctx.fillRect((W - 40) * s, 2 * s, 38 * s, 10 * s);
+    vctx.fillRect(x0 - 40 * s, F.y + 2 * s, 38 * s, 10 * s);
     vctx.font = `${9 * s}px VT323, monospace`;
     vctx.fillStyle = fpsMeter.fps >= 50 ? '#3fbf6a' : fpsMeter.fps >= 30 ? '#e8c040' : '#ff4a5a';
-    vctx.fillText(`${fpsMeter.fps} FPS`, (W - 37) * s, 10 * s);
+    vctx.fillText(`${fpsMeter.fps} FPS`, x0 - 37 * s, F.y + 10 * s);
   }
 }

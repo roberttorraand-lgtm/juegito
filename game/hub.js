@@ -191,6 +191,7 @@ function showSettings(tab = 'audio', quiet = false) {
       <div ${panel('video')}>
         ${chips('quality', 'Calidad gráfica', [['baja', 'Baja'], ['media', 'Media'], ['alta', 'Alta'], ['ultra', 'Ultra'], ['custom', 'Personalizada']],
           'Ultra se ve mejor pero exige más al PC o al móvil')}
+        ${toggle('fill', 'Ocupar toda la pantalla', 'Sin bordes negros: el escenario se extiende hasta los lados de la pantalla')}
         ${toggle('integer', 'Píxeles nítidos (escalado entero)', 'Cada píxel del juego ocupa un bloque exacto de tu pantalla: todos iguales y bien marcados. Puede dejar bordes negros.')}
         ${toggle('pixelGrid', 'Rejilla de píxeles', 'Marca el borde de cada píxel como una pantalla de consola. Necesita píxeles nítidos.')}
         ${chips('bloom', 'Resplandor de luces (bloom)', [[0, 'No'], [1, 'Suave'], [2, 'Intenso']], 'Neones, farolas y pantallas brillan con halo')}
@@ -283,7 +284,7 @@ function bindSettingsEvents() {
   const PRESET_KEYS = Object.keys(QUALITY.alta);
   const changed = (key) => {
     if (PRESET_KEYS.includes(key)) CFG.persist('quality', 'custom');
-    if (key === 'integer') resizeCanvas();
+    if (key === 'integer' || key === 'fill') resizeCanvas();
     refreshVideoSettings();
   };
   ui.settings.querySelectorAll('[data-cfg]').forEach(el => {
@@ -418,9 +419,9 @@ function metalFrame(x, y, w, h) {
 }
 
 function drawNavBar(t) {
-  rect(0, NAV_Y, W, NAV_H, '#1a1018');
-  rect(0, NAV_Y, W, 1, '#4a3018');
-  rect(0, NAV_Y + 1, W, 1, '#8a6030');
+  rect(-OX, NAV_Y, VW, NAV_H, '#1a1018');
+  rect(-OX, NAV_Y, VW, 1, '#4a3018');
+  rect(-OX, NAV_Y + 1, VW, 1, '#8a6030');
 
   HUB_NAV.forEach((nav, i) => {
     const { x: bx, w: btnW } = getNavBtnBounds()[i];
@@ -463,7 +464,7 @@ function getNavBtnBounds() {
 }
 
 function drawHub(t) {
-  rect(0, 0, W, H, '#050407');
+  rect(-OX, 0, VW, H, '#050407');
 
   if (G.hubTab === 'mapa') {
     drawMap(t);
@@ -475,7 +476,7 @@ function drawHub(t) {
 }
 
 function drawVentana(t) {
-  drawHubBackdrop(t);
+  drawWide(() => drawHubBackdrop(t), 'hub');
 
   metalFrame(4, 4, W - 8, NAV_Y - 8);
 
@@ -605,7 +606,10 @@ const MAP_MODES = [
 ];
 
 function drawMap(t) {
-  rect(0, 0, W, NAV_Y, '#08060e');
+  drawWide(() => drawHubBackdrop(t), 'hub');
+  ctx.globalAlpha = 0.85;
+  rect(-OX, 0, VW, NAV_Y, '#08060e');
+  ctx.globalAlpha = 1;
 
   metalFrame(4, 4, W - 8, NAV_Y - 8);
 
@@ -721,15 +725,7 @@ function drawMap(t) {
   });
 }
 
-// ---------- Hub canvas click handling ----------
-function canvasToLogical(clientX, clientY) {
-  const r = cv.getBoundingClientRect();
-  return {
-    x: (clientX - r.left) / r.width * W,
-    y: (clientY - r.top) / r.height * H,
-  };
-}
-
+// ---------- Hub canvas click handling (canvasToLogical lives in renderer.js) ----------
 function hitTest(lx, ly, bx, by, bw, bh) {
   return lx >= bx && lx <= bx + bw && ly >= by && ly <= by + bh;
 }

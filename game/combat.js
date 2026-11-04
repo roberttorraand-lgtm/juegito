@@ -739,9 +739,9 @@ function smallBtn(x, y, w, h, label, fn) {
 
 function selectPanel(t) {
   const py = 124;
-  rect(0, py, W, H - py, '#0c0a10');
-  rect(0, py, W, 1, '#8a6030');
-  rect(0, py + 1, W, 1, '#3a2418');
+  rect(-OX, py, VW, H - py, '#0c0a10');
+  rect(-OX, py, VW, 1, '#8a6030');
+  rect(-OX, py + 1, VW, 1, '#3a2418');
 
   allyDice().forEach((d, i) => {
     const cx = 22 + i * 38, u = d.unit, ok = canAct(u), sel = CB.sel === d;
@@ -857,8 +857,8 @@ function pageCard(s, x, y, w, enemyTeam) {
 
 function clashPanel() {
   const py = 124;
-  rect(0, py, W, H - py, '#0c0a10');
-  rect(0, py, W, 1, '#8a6030');
+  rect(-OX, py, VW, H - py, '#0c0a10');
+  rect(-OX, py, VW, 1, '#8a6030');
   const v = CB.view;
   if (!v) return;
   pageCard(v.left, 6, 128, 140, false);
@@ -880,7 +880,7 @@ function tooltip() {
   const pg = h.data.page;
   const bw = 108, bh = 14 + pg.dice.length * 9;
   const m = CB.mouse;
-  const x = Math.round(Math.max(2, Math.min(W - bw - 2, m.x + 8)));
+  const x = Math.round(Math.max(2 - OX, Math.min(W + OX - bw - 2, m.x + 8)));
   let y = Math.round(m.y - bh - 6);
   if (y < 16) y = Math.round(m.y + 10);
   y = Math.min(y, H - bh - 2);

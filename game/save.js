@@ -30,9 +30,9 @@ const QUALITY = {
   alta:  { integer: true,  pixelGrid: true,  bloom: 1, particles: 2, shadows: true,  grade: true,  grain: true },
   ultra: { integer: true,  pixelGrid: true,  bloom: 2, particles: 3, shadows: true,  grade: true,  grain: true },
 };
-// Phones and tablets start on Media to save battery; everything can be raised in Ajustes
-const DEFAULT_QUALITY = window.matchMedia('(pointer: coarse)').matches ? 'media' : 'alta';
-const CFG_DEFAULTS = { sfxVol: 80, textSpeed: 'normal', scanlines: false, fps: false, quality: DEFAULT_QUALITY, ...QUALITY[DEFAULT_QUALITY] };
+// Phones and tablets fill the whole screen by default
+const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches;
+const CFG_DEFAULTS = { sfxVol: 80, textSpeed: 'normal', scanlines: false, fps: false, fill: IS_TOUCH, quality: 'alta', ...QUALITY.alta };
 
 const CFG = {
   persist(key, val) { this[key] = val; SAVE.save({ ['cfg_' + key]: val }); },
