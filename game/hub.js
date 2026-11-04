@@ -369,23 +369,8 @@ function drawNavBar(t) {
   rect(0, NAV_Y, W, 1, '#4a3018');
   rect(0, NAV_Y + 1, W, 1, '#8a6030');
 
-  rect(2, NAV_Y + 3, 52, 15, '#0e0c14');
-  rect(2, NAV_Y + 3, 52, 1, '#4a3018');
-  ctx.font = '8px VT323, monospace';
-  ctx.fillStyle = '#c09050'; ctx.fillText('LV', 5, NAV_Y + 10);
-  ctx.font = '13px VT323, monospace';
-  ctx.fillStyle = '#e8e4dc'; ctx.fillText('001', 14, NAV_Y + 11);
-  rect(34, NAV_Y + 6, 16, 3, '#2a1810');
-  rect(34, NAV_Y + 6, 6, 3, '#3fbf6a');
-  ctx.font = '7px VT323, monospace';
-  ctx.fillStyle = '#8a6030'; ctx.fillText('EP.1', 34, NAV_Y + 15);
-
-  const btnW = 38, gap = 4;
-  const totalW = HUB_NAV.length * btnW + (HUB_NAV.length - 1) * gap;
-  const startX = 66 + (W - 66 - totalW) / 2;
-
   HUB_NAV.forEach((nav, i) => {
-    const bx = startX + i * (btnW + gap);
+    const { x: bx, w: btnW } = getNavBtnBounds()[i];
     const sel = G.hubNavSel === i;
     const active = (G.hubTab === nav.id);
 
@@ -393,7 +378,9 @@ function drawNavBar(t) {
       rect(bx, NAV_Y + 4, btnW, 14, '#0e0c14');
       ctx.font = '8px VT323, monospace';
       ctx.fillStyle = '#2a2620';
-      ctx.fillText(nav.label, bx + btnW / 2 - nav.label.length * 1.5, NAV_Y + 13);
+      ctx.textAlign = 'center';
+      ctx.fillText(nav.label, bx + btnW / 2, NAV_Y + 13);
+      ctx.textAlign = 'left';
     } else {
       rect(bx, NAV_Y + 4, btnW, 14, sel ? '#3a1820' : '#18141e');
       rect(bx, NAV_Y + 4, btnW, 1, sel ? '#c0283a' : '#4a3018');
@@ -406,17 +393,17 @@ function drawNavBar(t) {
       }
       ctx.font = '10px VT323, monospace';
       ctx.fillStyle = sel ? '#fff' : (active ? '#c09050' : '#8a8070');
-      ctx.fillText(nav.icon, bx + 4, NAV_Y + 13);
+      ctx.fillText(nav.icon, bx + 7, NAV_Y + 13);
       ctx.font = '8px VT323, monospace';
-      ctx.fillText(nav.label, bx + 12, NAV_Y + 13);
+      ctx.fillText(nav.label, bx + 17, NAV_Y + 13);
     }
   });
 }
 
 function getNavBtnBounds() {
-  const btnW = 38, gap = 4;
+  const btnW = 52, gap = 6;
   const totalW = HUB_NAV.length * btnW + (HUB_NAV.length - 1) * gap;
-  const startX = 66 + (W - 66 - totalW) / 2;
+  const startX = Math.round((W - totalW) / 2);
   return HUB_NAV.map((nav, i) => ({
     x: startX + i * (btnW + gap), y: NAV_Y + 4, w: btnW, h: 14, nav, idx: i
   }));
