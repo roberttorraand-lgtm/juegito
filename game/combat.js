@@ -67,7 +67,7 @@ const COMBAT_UNITS = {
   },
   // TETH: whips and shocks, but every few turns it reboots and is left defenceless
   operator: {
-    id: 'operator', name: 'OPERADOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 105, maxSt: 40, speed: [3, 7], nDice: 2,
+    id: 'operator', name: 'OPERADOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 95, maxSt: 38, speed: [3, 7], nDice: 2,
     kind: 'operator', bg: 'cell', height: 84, bx: 250, by: 106, scale: 1, reboot: 3,
     defeat: 'La pantalla de El Operador Desconectado se apaga para siempre.',
     pages: [
@@ -78,7 +78,7 @@ const COMBAT_UNITS = {
     ],
   },
 };
-const HAND_START = 4, HAND_MAX = 8;
+const HAND_START = 2, HAND_MAX = 8;
 const FORGOTTEN_PIECE = { name: 'Pieza olvidada', cost: 0, copies: 0, dice: [['pierce', 4, 8], ['pierce', 2, 5]] };
 
 const CB = {
