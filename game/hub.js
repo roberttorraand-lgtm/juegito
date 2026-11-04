@@ -611,8 +611,8 @@ const CITY_CONNECTIONS = [
 const MAP_MODES = [
   { id: 'historia', label: 'Historia', icon: '▶', enabled: true },
   { id: 'combate', label: 'vs Empleado', icon: '⚔', enabled: true, enemy: 'corrupted' },
-  { id: 'combate2', label: 'vs Máquina', icon: '⚔', enabled: true, enemy: 'machine' },
-  { id: 'combate3', label: 'vs Operador', icon: '⚔', enabled: true, enemy: 'operator' },
+  { id: 'combate2', label: 'vs E.G.O Machine', icon: '⚔', enabled: true, enemy: 'machine' },
+  { id: 'combate3', label: 'vs Operator', icon: '⚔', enabled: true, enemy: 'operator' },
 ];
 
 function drawMap(t) {
@@ -643,7 +643,7 @@ function drawMap(t) {
     ctx.fillStyle = sel ? '#fff' : '#8a8070';
     ctx.fillText(mode.icon, lx + 10, my + 11);
     ctx.font = '8px VT323, monospace';
-    ctx.fillText(mode.label, lx + 10, my + 19);
+    ctx.fillText(mode.label, lx + 10, my + 19, lw - 16);
   });
 
   ctx.font = '7px VT323, monospace';

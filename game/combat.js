@@ -84,10 +84,10 @@ const COMBAT_UNITS = {
   },
   // ZAYIN: two pages a turn on a fixed cycle; its conveyor sometimes hands out a "forgotten piece"
   machine: {
-    id: 'machine', name: 'MÁQUINA E.G.O.', tag: 'ZAYIN', tagCol: '#2a7a3a', team: 'enemy', maxHp: 80, maxSt: 18, speed: [1, 4], nDice: 2,
+    id: 'machine', name: 'E.G.O EXTRACTION MACHINE', tag: 'ZAYIN', tagCol: '#2a7a3a', team: 'enemy', maxHp: 80, maxSt: 18, speed: [1, 4], nDice: 2,
     kind: 'machine', bg: 'cell', height: 86, bx: 252, by: 106, scale: 1, givesPieces: 0.4,
     pattern: [[0, 1], [2, 3], [0, 2], [1, 3]],
-    defeat: 'La Máquina de Extracción E.G.O. se apaga con un último chirrido.',
+    defeat: 'E.G.O Extraction Machine se apaga con un último chirrido.',
     pages: [
       { name: 'Prensa hidráulica', dice: [['blunt', 5, 9]] },
       { name: 'Cinta transportadora', dice: [['blunt', 2, 4], ['blunt', 2, 4], ['blunt', 2, 4]] },
@@ -97,10 +97,10 @@ const COMBAT_UNITS = {
   },
   // TETH: four pages a turn on a fixed cycle; every 3rd turn it reboots and does nothing
   operator: {
-    id: 'operator', name: 'OPERADOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 110, maxSt: 26, speed: [3, 7], nDice: 4,
+    id: 'operator', name: 'THE DISCONNECTED OPERATOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 110, maxSt: 26, speed: [3, 7], nDice: 4,
     kind: 'operator', bg: 'cell', height: 84, bx: 250, by: 106, scale: 1, reboot: 3,
     pattern: [[0, 2, 0, 1], [3, 0, 2, 0], [1, 3, 0, 2]],
-    defeat: 'La pantalla de El Operador Desconectado se apaga para siempre.',
+    defeat: 'La pantalla de The Disconnected Operator se apaga para siempre.',
     pages: [
       { name: 'Latigazo de cable', dice: [['slash', 4, 7], ['slash', 3, 6]] },
       { name: 'Descarga', dice: [['pierce', 6, 10]] },
@@ -927,6 +927,18 @@ function txt(s, x, y, col, size = 8, align = 'left') {
   ctx.textAlign = 'left';
 }
 
+// Left-aligned text squeezed horizontally when it is wider than maxW.
+function txtFit(s, x, y, col, size, maxW) {
+  ctx.font = `${size}px VT323, monospace`;
+  const w = ctx.measureText(s).width;
+  if (w <= maxW) return txt(s, x, y, col, size);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(maxW / w, 1);
+  txt(s, 0, 0, col, size);
+  ctx.restore();
+}
+
 function hexPath(cx, cy, r) {
   const p = [];
   for (let i = 0; i < 6; i++) {
@@ -1127,7 +1139,7 @@ function enemyPlate(u, t) {
   rect(x0, y0, w, 1, '#5a1a24');
   rect(x0 + 2, y0 + 2, 22, 5, u.tagCol);
   txt(u.tag, x0 + 13, y0 + 7, '#ffe0e0', 7, 'center');
-  txt(u.name, x0 + 27, y0 + 7, '#d8d0c0', 7);
+  txtFit(u.name, x0 + 27, y0 + 7, '#d8d0c0', 7, w - 29);
   const hp = u.hp / u.maxHp;
   rect(x0 + 2, y0 + 9, bw, 2, '#2a1418');
   rect(x0 + 2, y0 + 9, Math.round(bw * hp), 2, '#e03040');
@@ -1259,7 +1271,7 @@ function pageCard(s, x, y, w, enemyTeam) {
   const tc = enemyTeam ? '#ff5a6a' : '#ffd060';
   rect(x, y, w, 50, '#16121a');
   rect(x, y, w, 1, tc);
-  txt(s.unit.name, x + 4, y + 9, tc, 8);
+  txtFit(s.unit.name, x + 4, y + 9, tc, 8, s.unit.shield ? w - 48 : w - 8);
   if (s.unit.shield) txt(`ESCUDO ${s.unit.shield}`, x + w - 4, y + 9, '#9ac0ff', 8, 'right');
   if (!s.page) { txt('Sin defensa', x + 4, y + 20, '#8a8090', 9); return; }
   txt(s.page.name, x + 4, y + 17, '#e8e4dc', 8);

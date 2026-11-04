@@ -7,10 +7,20 @@
 //  work from file:// in the desktop build.
 // =====================================================================
 
-// key → file name in game/audio/. Add entries as recorded sounds arrive.
-const SOUND_FILES = {};
+// Original sounds made with tools/sound_studio.py (no third-party audio).
+const CAN_OGG = (() => { try { return !!new Audio().canPlayType('audio/ogg; codecs="vorbis"'); } catch (e) { return false; } })();
+const ogg = names => CAN_OGG ? Object.fromEntries(names.map(n => [n, n + '.ogg'])) : {};
+// key → file name in game/audio/. Without a file the synth recipe plays.
+const SOUND_FILES = {
+  ...ogg(['clash', 'slash', 'pierce', 'blunt', 'block', 'shield', 'evade', 'counter', 'dice', 'tie',
+    'stagger', 'ko', 'light', 'turn', 'reboot', 'victory', 'defeat',
+    'select', 'confirm', 'error', 'alert',
+    'scream', 'thud', 'rift', 'gacha', 'disconnect',
+    'blip_lobelto', 'blip_gonza', 'blip_narr']),
+  ...(CAN_OGG ? { hit: 'blunt.ogg', 'blip_¿¿??': 'blip_monster.ogg' } : {}),
+};
 // key → file name in game/audio/music/
-const MUSIC_FILES = {};
+const MUSIC_FILES = ogg(['hub', 'call', 'room', 'branch', 'battle_zayin', 'battle_teth', 'boss_distortion']);
 // which music key each place uses
 const MUSIC_FOR = {
   hub: 'hub', call: 'call', share: 'call', room: 'room', branch: 'branch',
