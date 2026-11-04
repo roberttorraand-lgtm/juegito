@@ -30,7 +30,9 @@ const QUALITY = {
   alta:  { integer: true,  pixelGrid: true,  bloom: 1, particles: 2, shadows: true,  grade: true,  grain: true },
   ultra: { integer: true,  pixelGrid: true,  bloom: 2, particles: 3, shadows: true,  grade: true,  grain: true },
 };
-const CFG_DEFAULTS = { sfxVol: 80, textSpeed: 'normal', scanlines: false, fps: false, quality: 'alta', ...QUALITY.alta };
+// Phones and tablets start on Media to save battery; everything can be raised in Ajustes
+const DEFAULT_QUALITY = window.matchMedia('(pointer: coarse)').matches ? 'media' : 'alta';
+const CFG_DEFAULTS = { sfxVol: 80, textSpeed: 'normal', scanlines: false, fps: false, quality: DEFAULT_QUALITY, ...QUALITY[DEFAULT_QUALITY] };
 
 const CFG = {
   persist(key, val) { this[key] = val; SAVE.save({ ['cfg_' + key]: val }); },
