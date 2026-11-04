@@ -76,7 +76,7 @@ const PAL = {
 // ---- Lobelto & Gonza: black stickmen ----
 const FIG = { body: '#10101a', edge: '#4a4660', eye: '#f0ecdc' };
 
-const GLASSES = { frame: '#e0c070', shade: '#a08840', lens: '#1c2440', glint: '#fff8e0' };
+const GLASSES = '#62627a';
 
 function figure(x, y, o, t) {
   const kid = o.hat === 'cap';
@@ -106,12 +106,10 @@ function figure(x, y, o, t) {
   const mpx = (dx, dy, c) => px(hx + dx * f, hy + dy, c);
   const mrect = (dx, dy, w, h, c) => rect(f > 0 ? hx + dx : hx - dx - w + 1, hy + dy, w, h, c);
   if (o.hat === 'headset') {
-    // round gold glasses
-    const G = GLASSES;
-    mpx(1, -2, G.frame); mpx(3, -2, G.frame);
-    mpx(0, -1, G.frame); mpx(2, -1, G.frame); mpx(4, -1, G.frame);
-    mpx(1, 0, G.shade); mpx(3, 0, G.shade);
-    mrect(-3, -1, 3, 1, G.shade);
+    // simple rectangular frames, no lenses
+    mrect(0, -2, 5, 1, GLASSES); mrect(0, 0, 5, 1, GLASSES);
+    mpx(0, -1, GLASSES); mpx(2, -1, GLASSES); mpx(4, -1, GLASSES);
+    mrect(-3, -1, 3, 1, GLASSES);
   } else if (kid) {
     rect(hx - 5, hy - 6, 11, 3, '#3a384e');
     rect(hx + (f > 0 ? 2 : -9), hy - 4, 8, 2, '#3a384e');
@@ -140,28 +138,24 @@ function avatarHead(cx, cy, hat, t, dim) {
   disc(cx, cy, 10, '#0b0a10');
 
   if (lob) {
-    // round gold glasses: two rounded lenses with tint, bridge and temple
-    const G = GLASSES;
-    const fr = dim ? '#4a4656' : G.frame, sh = dim ? '#34323e' : G.shade;
-    for (const x0 of [cx, cx + 5]) {
-      if (!dim) rect(x0 + 1, cy - 3, 3, 4, G.lens);
-      rect(x0 + 1, cy - 4, 3, 1, fr);
-      rect(x0, cy - 3, 1, 4, fr); rect(x0 + 4, cy - 3, 1, 4, fr);
-      rect(x0 + 1, cy + 1, 3, 1, sh);
+    // simple rectangular frames, no lenses
+    const g = dim ? '#4a4656' : '#9a9ab4';
+    for (const x0 of [cx - 1, cx + 5]) {
+      rect(x0, cy - 4, 6, 1, g); rect(x0, cy + 1, 6, 1, g);
+      rect(x0, cy - 4, 1, 6, g); rect(x0 + 5, cy - 4, 1, 6, g);
     }
-    rect(cx + 4, cy - 3, 2, 1, fr);
-    rect(cx - 8, cy - 3, 8, 1, sh);
+    rect(cx - 9, cy - 3, 8, 1, g);
   } else {
     rect(cx - 10, cy - 12, 21, 5, dim ? '#24222c' : '#2c2a3a');
     rect(cx + 4, cy - 8, 14, 3, dim ? '#24222c' : '#2c2a3a');
     if (!dim) px(cx - 1, cy - 11, '#8a4a4a');
   }
 
+  const [e1, e2] = lob ? [cx + 1, cx + 7] : [cx + 2, cx + 6];
   if (dim) {
-    rect(cx + 1, cy - 1, 3, 1, '#4a4656'); rect(cx + 6, cy - 1, 3, 1, '#4a4656');
+    rect(e1 - 1, cy - 1, 3, 1, '#4a4656'); rect(e2 - 1, cy - 1, 3, 1, '#4a4656');
   } else {
-    rect(cx + 2, cy - 2, 2, 2, FIG.eye); rect(cx + 6, cy - 2, 2, 2, FIG.eye);
-    if (lob) { px(cx + 1, cy - 3, GLASSES.glint); px(cx + 6, cy - 3, GLASSES.glint); }
+    rect(e1, cy - 2, 2, 2, FIG.eye); rect(e2, cy - 2, 2, 2, FIG.eye);
   }
 }
 
