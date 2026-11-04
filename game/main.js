@@ -22,6 +22,7 @@ const G = {
   scene: null,
   steps: [],
   pendingScene: null,
+  alerts: [],
 };
 
 function isSceneUnlocked(sc) {
@@ -73,7 +74,8 @@ function handle(st) {
     if (G.skip) later(300, advance);
     return true;
   }
-  if (st.bg) { G.s.bg = st.bg; return false; }
+  if (st.bg) { G.s.bg = st.bg; Music.play(MUSIC_FOR[st.bg]); return false; }
+  if (st.fx === 'alert') { G.alerts.push({ who: st.who, start: now }); SFX.play('alert'); return false; }
   if (st.set) {
     for (const k in st.set) {
       const v = st.set[k];
@@ -116,9 +118,18 @@ function showText(st) {
   const who = st.who || (st.scream ? '¿¿??' : null);
   G.s.speaker = who; G.s.typing = true;
   G.waiting = 'text';
-  G.typing = { full, shown: 0, who, cut: st.cut };
+  // shouted lines (screams, or written in capitals) shake letter by letter, Deltarune style
+  const shout = !!st.scream || (/[A-ZÁÉÍÓÚÑ]{4}/.test(full) && full === full.toUpperCase());
+  G.typing = { full, shown: 0, who, cut: st.cut, shout };
   ui.text.textContent = '';
   tick();
+}
+
+function setBoxText(ty, n) {
+  const s = ty.full.slice(0, n);
+  if (!ty.shout) { ui.text.textContent = s; return; }
+  ui.text.innerHTML = [...s].map((c, i) => (c === ' ' ? ' '
+    : `<span class="sh" style="animation-delay:-${(i * 53) % 240}ms">${c.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]))}</span>`)).join('');
 }
 
 function tick() {
@@ -126,9 +137,9 @@ function tick() {
   if (!ty) return;
   if (G.skip) ty.shown = ty.full.length;
   else ty.shown++;
-  ui.text.textContent = ty.full.slice(0, ty.shown);
+  setBoxText(ty, ty.shown);
   const ch = ty.full[ty.shown - 1];
-  if (ch && ch !== ' ' && ty.shown % 2 && ty.who) SFX.blip(ty.who);
+  if (ch && ch !== ' ' && ty.shown % 2) SFX.blip(ty.who || 'narr');
   if (ty.shown >= ty.full.length) return finishTyping();
   const spd = CFG.textSpeed === 'muyrapido' ? 0.3 : CFG.textSpeed === 'rapido' ? 0.6 : 1;
   const pause = (/[.,!?]/.test(ch) ? 90 : 28) * spd;
@@ -138,7 +149,7 @@ function tick() {
 function finishTyping() {
   const ty = G.typing;
   clearTimeout(ty.timer);
-  ui.text.textContent = ty.full;
+  setBoxText(ty, ty.full.length);
   G.s.typing = false;
   ui.next.classList.add('on');
   G.typing = { ...ty, done: true };
@@ -171,7 +182,7 @@ function advance() {
 
 // ---------- Keyboard ----------
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'm' || e.key === 'M') { SFX.muted = !SFX.muted; return; }
+  if (e.key === 'm' || e.key === 'M') { SFX.muted = !SFX.muted; Music.setVolume(); return; }
   if (e.key === 'h' || e.key === 'H') { ui.box.classList.toggle('dim'); return; }
   if (e.key === 'Control') { if (!G.skip) { G.skip = true; if (G.waiting === 'text' || G.waiting === 'card') advance(); } return; }
   if (G.mode === 'hub') {
@@ -242,6 +253,28 @@ document.getElementById('game').addEventListener('click', (e) => {
   if (G.mode !== 'hub' && G.mode !== 'combat') advance();
 });
 
+// Deltarune-style "!" that pops over a character's head
+function drawAlerts(t) {
+  const now = performance.now();
+  G.alerts = G.alerts.filter(al => now - al.start < 900);
+  for (const al of G.alerts) {
+    const a = G.actors[al.who];
+    if (!a) continue;
+    const k = (now - al.start) / 900;
+    const s = (a.scale || 1) * (a.hat === 'cap' ? 0.86 : 1);
+    const pop = k < 0.15 ? k / 0.15 * 1.3 : k < 0.25 ? 1.3 - (k - 0.15) * 3 : 1;
+    const x = a.x + (a.ox || 0), y = a.y - 52 * s - 6;
+    ctx.globalAlpha = k > 0.8 ? (1 - k) / 0.2 : 1;
+    ctx.font = `${Math.round(14 * pop)}px VT323, monospace`;
+    ctx.textAlign = 'center';
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { ctx.fillStyle = '#000'; ctx.fillText('!', x + dx, y + dy); }
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('!', x, y);
+    ctx.textAlign = 'left';
+    ctx.globalAlpha = 1;
+  }
+}
+
 // ---------- Render ----------
 const hintEl = $('hint');
 function render(t) {
@@ -265,10 +298,25 @@ function render(t) {
       if (!a) continue;
       const talk = G.s.typing && G.s.speaker === id;
       const enemyDraw = { corrupted, machine: egoMachine, operator }[a.kind];
-      const draw = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk }, t));
-      if (CFG.shadows && !a.lifted) drawActorShadow(a, draw);
-      draw();
+      const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk }, t));
+      // combat animation offsets: ox/oy move, tilt rotates and sq squashes around the feet
+      const posed = () => {
+        if (!a.ox && !a.oy && !a.tilt && !a.sq) return base();
+        ctx.save();
+        ctx.translate(a.x + (a.ox || 0), a.y + (a.oy || 0));
+        if (a.tilt) ctx.rotate(a.tilt);
+        if (a.sq) ctx.scale(1 + a.sq, 1 - a.sq);
+        ctx.translate(-a.x, -a.y);
+        base();
+        ctx.restore();
+      };
+      if (CFG.shadows && !a.lifted) drawActorShadow(a, () => { ctx.save(); ctx.translate(a.ox || 0, 0); base(); ctx.restore(); });
+      for (const g of a.ghosts || []) {
+        ctx.save(); ctx.globalAlpha = g.a; ctx.translate(g.dx, 0); posed(); ctx.restore();
+      }
+      posed();
     }
+    drawAlerts(t);
     const r = G.s.rift;
     if (r) { r.w += (r.target - r.w) * 0.04; rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }
     postFX(G.s, t);

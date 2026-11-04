@@ -163,6 +163,13 @@ body {
 #text { font-size: 2.8cqw; line-height: 1.2; white-space: pre-wrap; }
 #text.narr { color: #b9b2a6; font-style: italic; }
 #text.scream { color: #ff3b4a; font-size: 3.4cqw; }
+#text .sh { display: inline-block; animation: chshake .16s steps(2) infinite; }
+@keyframes chshake {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(.12cqw, -.1cqw); }
+  50% { transform: translate(-.1cqw, .12cqw); }
+  75% { transform: translate(.1cqw, .1cqw); }
+}
 #next {
   position: absolute; right: 1.6cqw; bottom: .6cqw; font-size: 2.4cqw;
   animation: blink 1s steps(2) infinite; visibility: hidden;

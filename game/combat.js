@@ -115,7 +115,7 @@ const CB = {
   active: false, turn: 0, phase: 'select',
   allies: [], enemies: [], all: [], dice: [],
   sel: null, view: null, hits: [], mouse: null,
-  animating: false, anims: [],
+  animating: false, anims: [], fx: [], parts: [], instant: false,
 };
 
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
@@ -163,7 +163,8 @@ function startCombatTest(enemyId = 'corrupted') {
   ui.hub.classList.add('hidden');
   hideAllOverlays();
   G.s = { bg: COMBAT_UNITS[enemyId].bg }; G.actors = {}; G.fade = 0;
-  CB.active = true; CB.turn = 0; CB.anims = []; CB.view = null; CB.animating = false;
+  CB.active = true; CB.turn = 0; CB.anims = []; CB.fx = []; CB.parts = []; CB.view = null; CB.animating = false;
+  Music.play(MUSIC_FOR[enemyId]);
   CB.enemyId = enemyId;
   CB.allies = [makeUnit(COMBAT_UNITS.lobelto), makeUnit(COMBAT_UNITS.gonza)];
   CB.enemies = [makeUnit(COMBAT_UNITS[enemyId])];
@@ -208,6 +209,7 @@ function newTurn() {
     if (u.rebooting) {
       const p = headPos(u);
       spawnAnim('text', p.x, p.y - 4, 'REINICIANDO...', '#9ac0ff', 1600, { big: true });
+      SFX.play('reboot');
     }
   }
   const targets = allyDice().filter(d => alive(d.unit));
@@ -220,6 +222,7 @@ function newTurn() {
   }
   CB.sel = allyDice().find(d => canAct(d.unit)) || null;
   spawnAnim('text', 160, 72, `TURNO ${CB.turn}`, '#e8c060', 1200, { big: true });
+  SFX.play('turn');
 }
 
 function selectDie(d) {
@@ -261,7 +264,7 @@ function toggleCard(card) {
   const d = CB.sel;
   if (!d) return;
   if (d.card === card) { unassign(d); SFX.play('select'); return; }
-  if (!canAfford(d, card)) { SFX.play('disconnect'); return; }
+  if (!canAfford(d, card)) { SFX.play('error'); return; }
   assignCard(d, card);
   const next = allyDice().find(a => canAct(a.unit) && !a.page);
   if (next) CB.sel = next;
@@ -276,7 +279,7 @@ function defenseButton(u) {
   if (onDie) { unassign(onDie); SFX.play('select'); return; }
   let card = u.hand.find(c => c.page === u.defense);
   if (!card) {
-    if (u.defTurn === CB.turn || u.hand.length >= HAND_MAX) { SFX.play('disconnect'); return; }
+    if (u.defTurn === CB.turn || u.hand.length >= HAND_MAX) { SFX.play('error'); return; }
     card = { page: u.defense };
     u.hand.push(card);
     u.defTurn = CB.turn;
@@ -303,7 +306,7 @@ async function combatExecute() {
   if (CB.animating || CB.phase !== 'select') return;
   CB.animating = true;
   CB.phase = 'resolve';
-  SFX.play('select');
+  SFX.play('confirm');
 
   for (const d of allyDice()) {
     if (d.card) d.unit.hand = d.unit.hand.filter(c => c !== d.card);
@@ -363,7 +366,9 @@ function endTurn() {
   }
   if (checkEnd()) {
     CB.phase = 'done';
-    SFX.play(CB.enemies.every(u => !alive(u)) ? 'gacha' : 'disconnect');
+    const won = CB.enemies.every(u => !alive(u));
+    SFX.play(won ? 'victory' : 'defeat');
+    if (won) { const u = CB.allies.find(alive); if (u) bark(u, 'win'); }
     renderCombatUI();
   } else {
     newTurn();
@@ -421,6 +426,252 @@ function headPos(u) {
   return { x: a.x, y: a.y - (u.kind ? u.height : 42) * s };
 }
 
+// ---------------------------------------------------------------------
+//  Animation helpers: tweens on actor offsets, effects and particles
+// ---------------------------------------------------------------------
+const easeOut = (k) => 1 - (1 - k) * (1 - k);
+const easeIn = (k) => k * k;
+
+// Animates numeric fields of `obj` (ox, oy, tilt, sq...) toward `to`.
+function tween(obj, to, ms, ease = easeOut) {
+  if (!obj) return Promise.resolve();
+  const from = {};
+  for (const k in to) from[k] = obj[k] || 0;
+  if (CB.instant || ms <= 0) { Object.assign(obj, to); return Promise.resolve(); }
+  const start = performance.now();
+  return new Promise(res => {
+    const step = () => {
+      const k = Math.min(1, (performance.now() - start) / ms), e = ease(k);
+      for (const p in to) obj[p] = from[p] + (to[p] - from[p]) * e;
+      if (k < 1) requestAnimationFrame(step); else res();
+    };
+    step();
+  });
+}
+const wait = (ms) => (CB.instant ? Promise.resolve() : delay(ms));
+const actorOf = (u) => G.actors[u.id];
+const dirTo = (A, B) => (Math.sign((actorOf(B) || B).x - (actorOf(A) || A).x) || 1);
+function chest(u) { const p = headPos(u); return { x: p.x + ((actorOf(u) && actorOf(u).ox) || 0), y: p.y + (u.kind ? 26 : 12) }; }
+
+function fx(type, x, y, ms, extra) { CB.fx.push({ type, x, y, start: performance.now(), ms, ...extra }); }
+function particles(x, y, n, cols, speed = 1.6, grav = 0.08, life = 26) {
+  for (let i = 0; i < n * CFG.particles; i++) {
+    const a = Math.random() * Math.PI * 2, v = speed * (0.4 + Math.random());
+    CB.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 0.6, g: grav, life, max: life, col: cols[i % cols.length] });
+  }
+}
+function shake(ms) { G.shakeUntil = Math.max(G.shakeUntil, performance.now() + ms); }
+
+// Speech bubble over a unit with a short voiced line
+function bark(u, kind, chance = 1) {
+  if (CB.instant || Math.random() > chance || !alive(u) && kind !== 'stagger') return;
+  const line = SFX.voice(u.id, kind);
+  if (!line) return;
+  const p = headPos(u);
+  CB.fx = CB.fx.filter(f => !(f.type === 'bubble' && f.who === u.id));
+  fx('bubble', p.x, p.y - 30, 1500, { text: line, who: u.id, enemy: u.team === 'enemy' });
+}
+
+const FX_DRAW = {
+  // crescent swipe that sweeps in, then fades
+  slash(f, k) {
+    const sweep = Math.min(1, k * 3.5), n = 26, R = f.r || 13;
+    for (let i = 0; i <= n * sweep; i++) {
+      const s = i / n, a = (-2.3 + s * 3.2) * f.dir, th = Math.sin(s * Math.PI) * 3 + 1;
+      const x = f.x + Math.cos(a) * R * f.dir, y = f.y + Math.sin(a) * R;
+      ctx.globalAlpha = Math.max(0, 1 - k) * (0.5 + s * 0.5);
+      rect(x - th / 2, y - th / 2, th, th, s > 0.7 ? '#ffffff' : f.col);
+    }
+    ctx.globalAlpha = 1;
+  },
+  // straight thrust line with a glint at the tip
+  pierce(f, k) {
+    const ext = Math.min(1, k * 4), x1 = f.x0 + (f.x1 - f.x0) * ext, y1 = f.y0 + (f.y1 - f.y0) * ext;
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    line(f.x0, f.y0, x1, y1, f.col, 3);
+    line(f.x0, f.y0, x1, y1, '#ffffff', 1);
+    star(Math.round(x1), Math.round(y1), '#ffffff');
+    ctx.globalAlpha = 1;
+  },
+  // ground shockwave ring
+  shock(f, k) {
+    const r = 3 + k * 22;
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    for (let i = 0; i < 40; i++) {
+      const a = (i / 40) * Math.PI * 2;
+      rect(f.x + Math.cos(a) * r, f.y + Math.sin(a) * r * 0.3, 2, 1, i % 2 ? f.col : '#ffffff');
+    }
+    ctx.globalAlpha = 1;
+  },
+  // star burst where two pages collide
+  clash(f, k) {
+    const len = 4 + k * 16;
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    light(f.x, f.y, 18 * (1 - k) + 4, 18 * (1 - k) + 4, '#ffe080', 0.6, 3);
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + 0.3;
+      line(f.x + Math.cos(a) * 3, f.y + Math.sin(a) * 3, f.x + Math.cos(a) * len, f.y + Math.sin(a) * len, i % 2 ? '#ffd060' : '#ffffff');
+    }
+    if (k < 0.25) disc(f.x, f.y, Math.round(6 * (1 - k * 4)) + 1, '#ffffff');
+    ctx.globalAlpha = 1;
+  },
+  // hexagonal guard in front of a blocker
+  hexShield(f, k) {
+    const pulse = 1 + Math.sin(k * Math.PI * 6) * 0.06;
+    ctx.globalAlpha = (k < 0.15 ? k / 0.15 : k > 0.75 ? (1 - k) / 0.25 : 1) * 0.5;
+    poly(hexPath(f.x, f.y, 11 * pulse), '#4a8ad8');
+    ctx.globalAlpha *= 1.8;
+    const pts = hexPath(f.x, f.y, 11 * pulse);
+    pts.forEach(([x, y], i) => { const [nx, ny] = pts[(i + 1) % 6]; line(x, y, nx, ny, '#c8e0ff'); });
+    ctx.globalAlpha = 1;
+  },
+  // counter "!" with a parry star
+  parry(f, k) {
+    const s = k < 0.2 ? 0.6 + k * 4 : 1.4;
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    star(Math.round(f.x + 6), Math.round(f.y - 4), '#ffffff');
+    ctx.font = `${Math.round(12 * s)}px VT323, monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#000'; ctx.fillText('!', f.x + 1, f.y + 1);
+    ctx.fillStyle = DIE.counter.col; ctx.fillText('!', f.x, f.y);
+    ctx.textAlign = 'left';
+    ctx.globalAlpha = 1;
+  },
+  // horizontal speed lines behind a dashing unit
+  dash(f, k) {
+    ctx.globalAlpha = Math.max(0, 0.6 * (1 - k));
+    for (let i = 0; i < 5; i++) rect(f.x - f.dir * (6 + i * 3 + k * 10), f.y - 14 + i * 6, 8, 1, '#ffffff');
+    ctx.globalAlpha = 1;
+  },
+  bubble(f, k) {
+    const a = k < 0.08 ? k / 0.08 : k > 0.85 ? (1 - k) / 0.15 : 1;
+    ctx.globalAlpha = a;
+    ctx.font = '8px VT323, monospace';
+    const w = Math.ceil(ctx.measureText(f.text).width) + 6;
+    const x = Math.round(Math.max(-OX + 2, Math.min(W + OX - w - 2, f.x - w / 2))), y = Math.round(f.y - (k < 0.08 ? (1 - k / 0.08) * 3 : 0));
+    rrect(x - 1, y - 1, w + 2, 12, '#000', 2);
+    rrect(x, y, w, 10, f.enemy ? '#2a0e14' : '#f0ece0', 2);
+    poly([[f.x - 2, y + 9], [f.x + 2, y + 9], [f.x, y + 13]], f.enemy ? '#2a0e14' : '#f0ece0');
+    txt(f.text, x + 3, y + 8, f.enemy ? '#ff6a78' : '#16121a', 8);
+    ctx.globalAlpha = 1;
+  },
+};
+
+function drawFx() {
+  const now = performance.now();
+  CB.fx = CB.fx.filter(f => {
+    const k = (now - f.start) / f.ms;
+    if (k >= 1) return false;
+    if (k >= 0) FX_DRAW[f.type](f, k);
+    return true;
+  });
+  CB.parts = CB.parts.filter(p => {
+    p.x += p.vx; p.y += p.vy; p.vy += p.g; p.vx *= 0.97;
+    ctx.globalAlpha = Math.max(0, p.life / p.max);
+    rect(p.x, p.y, 1, 1, p.col);
+    return --p.life > 0;
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------------
+//  Move animations
+// ---------------------------------------------------------------------
+// The attacker's swing for one die, ending at the moment of impact.
+async function strikeAnim(U, T, type) {
+  const a = actorOf(U), dir = dirTo(U, T), c = chest(T);
+  if (!a) return;
+  a.atk = true;
+  const k = kindOf(type) === 'counter' ? 'counter' : type;
+  if (k === 'counter') {
+    const p = chest(U);
+    fx('parry', p.x, p.y - 18, 500);
+    SFX.play('counter');
+    a.pose = 'strike';
+    await tween(a, { ox: (a.ox || 0) + dir * 10 }, 70);
+    fx('slash', c.x, c.y, 280, { dir, col: DIE.counter.col });
+  } else if (k === 'blunt') {
+    a.pose = 'slam';
+    await tween(a, { oy: -12, sq: -0.08 }, 120);
+    a.pose = 'strike';
+    await tween(a, { oy: 0, sq: 0.12, ox: (a.ox || 0) + dir * 8 }, 70, easeIn);
+    fx('shock', c.x, (actorOf(T) || T).y || c.y + 20, 450, { col: DIE.blunt.col });
+    particles(c.x, c.y + 14, 8, ['#8a8090', '#5a5060', '#c8c0b0'], 1.2, 0.12);
+    SFX.play('blunt');
+    shake(220);
+    tween(a, { sq: 0 }, 120);
+  } else if (k === 'pierce') {
+    a.pose = 'windup';
+    await tween(a, { ox: (a.ox || 0) - dir * 4, tilt: -0.08 * dir }, 80);
+    a.pose = 'strike';
+    const p = chest(U);
+    fx('dash', p.x, p.y + 8, 200, { dir });
+    await tween(a, { ox: (a.ox || 0) + dir * 16, tilt: 0.06 * dir }, 55, easeIn);
+    fx('pierce', 0, 0, 260, { x0: p.x + dir * 8, y0: p.y, x1: c.x + dir * 14, y1: c.y, col: DIE.pierce.col });
+    SFX.play('pierce');
+  } else {
+    a.pose = 'windup';
+    await tween(a, { ox: (a.ox || 0) - dir * 4, tilt: -0.1 * dir }, 80);
+    a.pose = 'strike';
+    await tween(a, { ox: (a.ox || 0) + dir * 10, tilt: 0.08 * dir }, 60, easeIn);
+    fx('slash', c.x, c.y, 280, { dir, col: DIE[type] ? DIE[type].col : '#ffffff' });
+    SFX.play('slash');
+  }
+}
+
+// Return to the neutral stance after a move
+function settle(u) {
+  const a = actorOf(u);
+  if (!a) return Promise.resolve();
+  a.atk = false;
+  a.pose = null;
+  return tween(a, { ox: 0, oy: 0, tilt: 0, sq: 0 }, 140);
+}
+
+async function recoilAnim(T, from) {
+  const a = actorOf(T);
+  if (!a) return;
+  const dir = -dirTo(T, from);
+  a.pose = 'hurt';
+  await tween(a, { ox: dir * 6, tilt: -0.12 * dir }, 60);
+  await tween(a, { ox: 0, tilt: 0 }, 160);
+  a.pose = null;
+}
+
+async function dodgeAnim(u, from) {
+  const a = actorOf(u);
+  if (!a) return;
+  const dir = -dirTo(u, from);
+  SFX.play('evade');
+  a.ghosts = [{ dx: 0, a: 0.4 }];
+  await tween(a, { ox: dir * 14, tilt: 0.15 * dir }, 90);
+  a.ghosts = [{ dx: -dir * 9, a: 0.35 }, { dx: -dir * 4, a: 0.2 }];
+  await wait(160);
+  a.ghosts = null;
+  await tween(a, { ox: 0, tilt: 0 }, 160);
+}
+
+async function guardAnim(u, from) {
+  const a = actorOf(u), c = chest(u);
+  if (!a) return;
+  a.pose = 'guard';
+  fx('hexShield', c.x + dirTo(u, from) * 12, c.y, 900);
+  SFX.play('block');
+}
+
+async function clashCollide(A, E) {
+  const a = actorOf(A), e = actorOf(E);
+  const pa = chest(A), pe = chest(E);
+  await Promise.all([tween(a, { ox: 6 }, 70, easeIn), tween(e, { ox: -6 }, 70, easeIn)]);
+  fx('clash', (pa.x + pe.x) / 2, Math.min(pa.y, pe.y) - 4, 380);
+  particles((pa.x + pe.x) / 2, Math.min(pa.y, pe.y) - 4, 12, ['#ffd060', '#ffffff', '#ffb040']);
+  SFX.play('clash');
+  shake(120);
+  G.flash = { color: '#ffffff', start: performance.now(), ms: 70 };
+  await wait(80); // hit-stop
+  await Promise.all([tween(a, { ox: -4 }, 110), tween(e, { ox: 4 }, 110)]);
+}
+
 // Applies HP damage with stagger at 25% of it (rounded up). Returns the HP damage dealt.
 function dealDamage(u, hpD) {
   if (!alive(u) || hpD <= 0) return 0;
@@ -430,60 +681,70 @@ function dealDamage(u, hpD) {
   u.hp -= hpD;
   const stD = u.staggered ? 0 : Math.ceil(hpD * ST_RATIO);
   if (stD) u.st = Math.max(0, u.st - stD);
-  const p = headPos(u);
+  const p = headPos(u), c = chest(u);
   spawnAnim('dmg', p.x, p.y, `-${hpD}`, '#ff4a5a', 1100, { big: hpD >= 10 });
   if (stD) spawnAnim('text', p.x + 12, p.y + 10, `-${stD}`, '#ffd060', 900);
-  spawnAnim('impact', p.x, p.y + 16, '', '#ffffff', 350);
-  SFX.play('slash');
+  particles(c.x, c.y, Math.min(14, 4 + hpD), u.team === 'ally' ? ['#ff4a5a', '#ffffff'] : ['#ff6a3a', '#ffd060', '#ffffff'], 1.8);
   u._hurt = performance.now() + 300;
-  G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 160 };
+  G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 120 };
   if (u.hp <= 0) {
     spawnAnim('text', p.x, p.y - 10, 'K.O.', '#ff4a5a', 1400, { big: true });
+    SFX.play('ko');
+    shake(500);
   } else if (!u.staggered && u.st <= 0) {
     u.staggered = true;
     u.staggerTurns = 2;
     spawnAnim('text', p.x, p.y - 10, 'ATURDIDO', '#ff4a5a', 1400, { big: true });
-    SFX.play('scream');
-    G.shakeUntil = performance.now() + 400;
+    SFX.play('stagger');
+    bark(u, 'stagger');
+    shake(400);
+  } else if (hpD >= 4) {
+    bark(u, 'hurt', 0.35);
   }
   return hpD;
 }
 
 // A hit is soaked by the target's shield first; what is left reaches HP.
-function applyHit(T, dmg, stats, from) {
+async function applyHit(T, dmg, stats, from, type) {
   if (!alive(T)) return;
+  await strikeAnim(from, T, type);
   const p = headPos(T);
   const soaked = Math.min(T.shield, dmg);
   if (soaked) {
     T.shield -= soaked;
     spawnAnim('text', p.x + 14, p.y + 10, `-${soaked}`, '#9ac0ff', 900);
-    SFX.play('hit');
+    particles(chest(T).x + dirTo(T, from) * 12, chest(T).y, 6, ['#9ac0ff', '#ffffff'], 1.4);
+    SFX.play('block');
   }
   const dealt = dealDamage(T, dmg - soaked);
-  if (!dealt && soaked) spawnAnim('text', p.x, p.y - 4, 'BLOQUEADO', '#9ac0ff', 800);
+  if (!dealt && soaked) { spawnAnim('text', p.x, p.y - 4, 'BLOQUEADO', '#9ac0ff', 800); bark(T, 'block', 0.5); }
   if (stats) stats[from.team] += dealt;
+  await wait(70);
+  await Promise.all([settle(from), dealt ? recoilAnim(T, from) : Promise.resolve()]);
 }
 
-function addShield(u, v) {
+function addShield(u, v, from) {
   u.shield += v;
   const p = headPos(u);
   spawnAnim('text', p.x, p.y - 26, `ESCUDO +${v}`, '#9ac0ff', 1100);
-  SFX.tone(420, 0.08, 'triangle', 0.04);
+  guardAnim(u, from);
+  SFX.play('shield');
 }
 
-function evadeFx(u, roll) {
+async function evadeFx(u, roll, from) {
   const v = Math.ceil(roll * ST_RATIO);
   u.st = Math.min(u.maxSt, u.st + v);
   const p = headPos(u);
   spawnAnim('text', p.x, p.y - 4, 'ESQUIVA', '#4ac08a', 800);
   spawnAnim('text', p.x + 12, p.y + 8, `+${v}`, '#4ac08a', 800);
-  SFX.tone(880, 0.08, 'triangle', 0.04);
+  bark(u, 'evade', 0.5);
+  await Promise.all([dodgeAnim(u, from), from ? strikeAnim(from, u, 'slash').then(() => settle(from)) : null]);
 }
 
 function rollFx(u, type, r) {
   const p = headPos(u);
   spawnAnim('text', p.x, p.y - 14, String(r), DIE[type].col, 800, { big: true });
-  SFX.tone(500 + r * 40, 0.05, 'square', 0.02);
+  SFX.play('dice', { roll: r });
 }
 
 function side(d) { return { unit: d.unit, page: d.page, i: 0, roll: null }; }
@@ -493,37 +754,45 @@ async function doClash(ad, ed) {
   const sa = side(ad), se = side(ed);
   const stats = { ally: 0, enemy: 0 };
   CB.view = { left: sa, right: se };
-  await Promise.all([animateSlide(A.id, 136, 280), animateSlide(E.id, 196, 280)]);
+  fx('dash', chest(A).x, chest(A).y + 6, 300, { dir: 1 });
+  fx('dash', chest(E).x, chest(E).y + 6, 300, { dir: -1 });
+  await Promise.all([animateSlide(A.id, 136, 260), animateSlide(E.id, 196, 260)]);
   spawnAnim('text', 166, 44, '¡CHOQUE!', '#ffd060', 800, { big: true });
-  SFX.play('hit');
-  await delay(400);
+  bark(A, 'attack', 0.6);
+  bark(E, 'attack', 0.4);
+  await wait(250);
 
   const qa = ad.page.dice, qe = ed.page.dice;
   while (sa.i < qa.length && se.i < qe.length && canAct(A) && canAct(E)) {
     const [ta, a1, a2] = qa[sa.i], [te, e1, e2] = qe[se.i];
     sa.roll = rnd(a1, a2); se.roll = rnd(e1, e2);
     rollFx(A, ta, sa.roll); rollFx(E, te, se.roll);
-    await delay(500);
-    const fx = pairEffects(ta, sa.roll, te, se.roll);
-    if (fx.shieldA) addShield(A, fx.shieldA);
-    if (fx.shieldB) addShield(E, fx.shieldB);
-    if ((fx.shieldA || fx.shieldB) && fx.hits.length) await delay(450);
-    if (fx.tie) {
+    await wait(380);
+    const f = pairEffects(ta, sa.roll, te, se.roll);
+    // both pages meet in the middle unless one side is only defending
+    if (kindOf(ta) !== 'evade' && kindOf(te) !== 'evade' && (DIE[ta].off || DIE[te].off)) await clashCollide(A, E);
+    if (f.shieldA) addShield(A, f.shieldA, E);
+    if (f.shieldB) addShield(E, f.shieldB, A);
+    if ((f.shieldA || f.shieldB) && f.hits.length) await wait(380);
+    if (f.tie) {
       const pa = headPos(A), pb = headPos(E);
       spawnAnim('text', (pa.x + pb.x) / 2, Math.min(pa.y, pb.y) - 12, 'EMPATE', '#a39c90', 700);
-      SFX.play('hit');
+      SFX.play('tie');
     }
-    if (fx.evade === 'a') evadeFx(A, sa.roll);
-    if (fx.evade === 'b') evadeFx(E, se.roll);
-    for (const h of fx.hits) {
+    if (f.evade === 'a') await evadeFx(A, sa.roll, E);
+    if (f.evade === 'b') await evadeFx(E, se.roll, A);
+    for (const h of f.hits) {
       const [T, from, die] = h.to === 'a' ? [A, E, te] : [E, A, ta];
       if (kindOf(die) === 'counter') spawnAnim('text', headPos(from).x, headPos(from).y - 22, 'CONTRAATAQUE', DIE.counter.col, 900);
-      applyHit(T, h.dmg, stats, from);
-      if (fx.hits.length > 1) await delay(300);
+      await applyHit(T, h.dmg, stats, from, die);
     }
-    await delay(500);
-    if (!fx.stayA) sa.i++;
-    if (!fx.stayB) se.i++;
+    const aa = actorOf(A), ae = actorOf(E);
+    if (aa) aa.pose = null;
+    if (ae) ae.pose = null;
+    await Promise.all([settle(A), settle(E)]);
+    await wait(250);
+    if (!f.stayA) sa.i++;
+    if (!f.stayB) se.i++;
     sa.roll = null; se.roll = null;
   }
   await leftovers(sa, E, stats);
@@ -534,7 +803,8 @@ async function doClash(ad, ed) {
     A.light++;
     const p = headPos(A);
     spawnAnim('text', p.x, p.y - 26, '+1 LUZ', '#ffe08a', 1200, { big: true });
-    SFX.tone(990, 0.1, 'triangle', 0.05);
+    particles(p.x, p.y - 20, 10, ['#ffe08a', '#ffffff'], 1.2, -0.02);
+    SFX.play('light');
   }
   A.shield = 0;
   E.shield = 0;
@@ -546,8 +816,10 @@ async function doOneSided(d, T) {
   const def = { unit: T, page: null, i: 0, roll: null };
   CB.view = d.unit.team === 'ally' ? { left: s, right: def } : { left: def, right: s };
   const tx = T.team === 'ally' ? T.bx + 40 : T.bx - 40;
-  await animateSlide(d.unit.id, tx, 300);
-  await delay(250);
+  fx('dash', chest(d.unit).x, chest(d.unit).y + 6, 300, { dir: Math.sign(tx - d.unit.bx) });
+  await animateSlide(d.unit.id, tx, 280);
+  bark(d.unit, 'attack', 0.5);
+  await wait(150);
   await leftovers(s, T, null);
   await animateSlide(d.unit.id, d.unit.bx, 250);
 }
@@ -560,9 +832,9 @@ async function leftovers(s, T, stats) {
     if (DIE[ty].off) {
       s.roll = rnd(a, b);
       rollFx(U, ty, s.roll);
-      await delay(400);
-      applyHit(T, s.roll, stats, U);
-      await delay(450);
+      await wait(300);
+      await applyHit(T, s.roll, stats, U, ty);
+      await wait(200);
     }
     s.roll = null;
     s.i++;
@@ -1062,6 +1334,7 @@ function refreshActors() {
 function drawCombatHUD(t) {
   if (!CB.active) return;
   refreshActors();
+  drawFx();
   CB.hits = [];
   for (const u of CB.allies) if (alive(u)) allyPlate(u, t);
   for (const u of CB.enemies) if (alive(u)) enemyPlate(u, t);

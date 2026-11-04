@@ -78,6 +78,15 @@ const FIG = { body: '#10101a', edge: '#4a4660', eye: '#f0ecdc' };
 
 const GLASSES = '#62627a';
 
+// Combat poses, in facing-relative offsets (front/back hand from the shoulder, feet from the ground point)
+const FIG_POSES = {
+  windup: { front: [-7, -4], back: [-6, 8], legs: [[-6, 0], [3, 0]] },
+  strike: { front: [11, -1], back: [-5, 7], legs: [[-7, 0], [6, 0]] },
+  slam:   { front: [3, -10], back: [-3, -10], legs: [[-4, 0], [4, 0]] },
+  guard:  { front: [6, 0], back: [5, 4], legs: [[-5, 0], [5, 0]] },
+  hurt:   { front: [-6, 5], back: [-8, 3], legs: [[-5, 0], [2, 0]] },
+};
+
 function figure(x, y, o, t) {
   const kid = o.hat === 'cap';
   const sc = (o.scale || 1) * (kid ? 0.86 : 1);
@@ -89,11 +98,20 @@ function figure(x, y, o, t) {
   y += bob;
   const hx = x, hy = y - 27;
   const sh = y - 20, hip = y - 10;
-  const legs = o.lifted
+  let legs = o.lifted
     ? [[x - 2, y + 1], [x + 3, y + 2]]
     : o.sitting ? [[x - 8, y], [x + 8, y]] : [[x - 4, y], [x + 4, y]];
-  const armL = o.lifted ? [x - 7, sh - 6] : [x - 6, y - 11];
-  const armR = o.armless ? [x + 3, sh + 4] : o.lifted ? [x + 7, sh - 6] : [x + 6, y - 11];
+  let armL = o.lifted ? [x - 7, sh - 6] : [x - 6, y - 11];
+  let armR = o.armless ? [x + 3, sh + 4] : o.lifted ? [x + 7, sh - 6] : [x + 6, y - 11];
+  const P = FIG_POSES[o.pose];
+  if (P) {
+    const fx = (dx) => x + dx * f;
+    const front = [fx(P.front[0]), sh + P.front[1]], back = [fx(P.back[0]), sh + P.back[1]];
+    // the arm on the facing side leads; with one arm missing, the other one does the move
+    if (o.armless) armL = front;
+    else if (f > 0) { armR = front; armL = back; } else { armL = front; armR = back; }
+    legs = P.legs.map(([dx, dy]) => [fx(dx), y + dy]);
+  }
   for (const [col, extra] of [[FIG.edge, 1], [FIG.body, 0]]) {
     const th = 2 + extra * 2;
     disc(hx, hy, 5 + extra, col);
@@ -314,7 +332,7 @@ function egoMachine(x, y, o, t) {
   if (o.shake) x += Math.round(Math.sin(t / 25) * 1.5);
   const D = '#141416', B = '#2c2c30', M = '#3c3c42', HI = '#55555c', BOLT = '#7a6a48';
   const glow = o.blind ? '#5a3010' : '#ffa030', glowH = o.blind ? '#7a4a20' : '#ffe0a0';
-  const pump = (Math.sin(t / 260) + 1) / 2;
+  const pump = o.atk ? 1 : (Math.sin(t / 260) + 1) / 2;
 
   ctx.globalAlpha = 0.35; ellipse(x, y + 1, 32, 3, '#000'); ctx.globalAlpha = 1;
 
@@ -455,6 +473,10 @@ function operator(x, y, o, t) {
     px(hx - 6 + (Math.floor(t / 300) % 3) * 2, hy + 6, '#9ac0ff');
   } else if (o.blind) {
     line(hx - 6, hy + 5, hx + 4, hy + 12, '#c02030'); line(hx + 4, hy + 5, hx - 6, hy + 12, '#c02030');
+  } else if (o.atk) {
+    rect(hx - 8, hy + 4, 14, 10, '#e8ffff');
+    rect(hx - 3, hy + 5, 2, 6, '#c02030'); rect(hx - 3, hy + 12, 2, 1, '#c02030');
+    light(hx - 1, hy + 9, 20, 16, '#c8ffff', 0.4, 3);
   } else {
     for (let r = 0; r < 10; r++) {
       const k = Math.floor(t / 70) * 10 + r;
@@ -499,52 +521,3 @@ function rift(cx, cy, w, h, t) {
     ctx.globalAlpha = 1;
   }
 }
-
-// ---- SFX ----
-const SFX = {
-  ac: null, muted: false,
-  init() { if (!this.ac) try { this.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} },
-  tone(freq, dur, type = 'square', vol = 0.04, slide = 0) {
-    if (this.muted || !this.ac) return;
-    const v = vol * (CFG.sfxVol / 100);
-    if (v <= 0) return;
-    try {
-      const o = this.ac.createOscillator(), g = this.ac.createGain(), n = this.ac.currentTime;
-      o.type = type; o.frequency.setValueAtTime(freq, n);
-      if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq + slide), n + dur);
-      g.gain.setValueAtTime(v, n); g.gain.exponentialRampToValueAtTime(0.0001, n + dur);
-      o.connect(g).connect(this.ac.destination); o.start(n); o.stop(n + dur);
-    } catch(e){}
-  },
-  noise(dur, vol = 0.2, f0 = 2000, f1 = 200) {
-    if (this.muted || !this.ac) return;
-    vol = vol * (CFG.sfxVol / 100);
-    if (vol <= 0) return;
-    try {
-      const n = this.ac.currentTime, len = Math.floor(this.ac.sampleRate * dur);
-      const buf = this.ac.createBuffer(1, len, this.ac.sampleRate), d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-      const src = this.ac.createBufferSource(); src.buffer = buf;
-      const f = this.ac.createBiquadFilter(); f.type = 'bandpass';
-      f.frequency.setValueAtTime(f0, n); f.frequency.exponentialRampToValueAtTime(f1, n + dur);
-      const g = this.ac.createGain(); g.gain.setValueAtTime(vol, n); g.gain.exponentialRampToValueAtTime(0.0001, n + dur);
-      src.connect(f).connect(g).connect(this.ac.destination); src.start(n);
-    } catch(e){}
-  },
-  blip(speaker) {
-    const base = { lobelto: 180, gonza: 240, '¿¿??': 70 }[speaker] || 130;
-    this.tone(base + Math.random() * 30, 0.04, 'square', 0.025);
-  },
-  play(name) {
-    switch (name) {
-      case 'scream': this.noise(1.4, 0.35, 900, 120); this.tone(110, 1.2, 'sawtooth', 0.08, -60); break;
-      case 'thud': this.tone(70, 0.35, 'sine', 0.3, -40); this.noise(0.2, 0.2, 400, 80); break;
-      case 'hit': this.noise(0.15, 0.4, 3000, 800); this.tone(900, 0.1, 'triangle', 0.08, -600); break;
-      case 'slash': this.noise(0.4, 0.3, 6000, 400); break;
-      case 'rift': this.noise(2.2, 0.25, 200, 3000); this.tone(55, 2.2, 'sawtooth', 0.06, 200); break;
-      case 'gacha': [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => this.tone(f, 0.25, 'triangle', 0.05), i * 90)); break;
-      case 'disconnect': this.tone(440, 0.12, 'sine', 0.06); setTimeout(() => this.tone(330, 0.2, 'sine', 0.06), 120); break;
-      case 'select': this.tone(660, 0.06, 'square', 0.03); break;
-    }
-  },
-};

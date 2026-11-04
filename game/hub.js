@@ -20,6 +20,7 @@ function showHub() {
   G.hubNavSel = 0; G.hubTab = 'ventana'; G.mapSel = 0; G.mapModeSel = 0;
   hideAllOverlays();
   ui.hub.classList.add('hidden');
+  Music.play(MUSIC_FOR.hub);
 }
 
 function showLevels() {
@@ -170,6 +171,15 @@ function showSettings(tab = 'audio', quiet = false) {
           <div class="st-hint">Arrastra la barra o haz clic para ajustar</div>
         </div>
         <div class="st-group">
+          <div class="st-label">Volumen música</div>
+          <div class="st-slider-row">
+            <div class="st-slider-track" data-slider="musicVol">
+              <div class="st-slider-fill" style="width:${CFG.musicVol}%"></div>
+            </div>
+            <div class="st-slider-val">${CFG.musicVol}%</div>
+          </div>
+        </div>
+        <div class="st-group">
           <div class="st-label">Silenciar (M)</div>
           <div class="st-toggle" data-toggle="mute">
             <div class="st-toggle-box${SFX.muted ? ' on' : ''}"><div class="st-toggle-knob"></div></div>
@@ -247,21 +257,21 @@ function bindSettingsEvents() {
     });
   });
 
-  const slider = ui.settings.querySelector('[data-slider="sfxVol"]');
-  if (slider) {
+  ui.settings.querySelectorAll('[data-slider]').forEach(slider => {
+    const key = slider.dataset.slider;
     const setVol = (e) => {
       const r = slider.getBoundingClientRect();
       const pct = Math.max(0, Math.min(100, Math.round((e.clientX - r.left) / r.width * 100)));
-      CFG.persist('sfxVol', pct);
+      CFG.persist(key, pct);
       slider.querySelector('.st-slider-fill').style.width = pct + '%';
       slider.closest('.st-group').querySelector('.st-slider-val').textContent = pct + '%';
-      SFX.play('select');
+      if (key === 'musicVol') Music.setVolume(); else SFX.play('select');
     };
     let dragging = false;
     slider.addEventListener('pointerdown', (e) => { e.stopPropagation(); dragging = true; slider.setPointerCapture(e.pointerId); setVol(e); });
     slider.addEventListener('pointermove', (e) => { if (dragging) setVol(e); });
     slider.addEventListener('pointerup', () => { dragging = false; });
-  }
+  });
 
   const muteToggle = ui.settings.querySelector('[data-toggle="mute"]');
   if (muteToggle) muteToggle.addEventListener('click', (e) => {
