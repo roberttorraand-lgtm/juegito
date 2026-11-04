@@ -196,21 +196,17 @@ document.addEventListener('keydown', (e) => {
         G.hubNavSel = next;
         SFX.init(); SFX.play('select');
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        if (G.hubTab === 'mapa') {
-          const ep1 = SCENES.filter(s => s.ep === 1);
-          const unlocked = ep1.filter(s => isSceneUnlocked(s));
-          if (unlocked.length > 0) {
-            G.mapSel = (G.mapSel + (e.key === 'ArrowDown' ? 1 : unlocked.length - 1)) % unlocked.length;
-            SFX.init(); SFX.play('select');
-          }
+        if (G.hubTab === 'mapa' && G.chapter) {
+          const eps = EPISODES.filter(x => x.chapter === G.chapter);
+          const i = eps.findIndex(x => x.ep === G.epSel);
+          G.epSel = eps[(i + (e.key === 'ArrowDown' ? 1 : eps.length - 1) + (i < 0 ? 1 : 0)) % eps.length].ep;
+          SFX.init(); SFX.play('select');
         }
       } else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        if (G.hubTab === 'mapa' && G.mapSel >= 0) {
-          const ep1 = SCENES.filter(s => s.ep === 1);
-          const sc = ep1[G.mapSel];
-          if (sc && isSceneUnlocked(sc)) { SFX.play('select'); showConfirm(sc); }
-        } else {
+        if (G.hubTab === 'mapa' && !G.chapter) openChapter(CHAPTERS[0].num);
+        else if (G.hubTab === 'mapa' && G.epSel) playEpisode(G.epSel);
+        else if (G.hubTab !== 'mapa') {
           activateNavBtn(HUB_NAV[G.hubNavSel].id);
         }
       } else if (e.key === 'Tab') {
@@ -235,6 +231,7 @@ document.addEventListener('keydown', (e) => {
       if (G.hubView === 'confirm') hideConfirm();
       else if (G.hubView === 'levels') hideLevels();
       else if (G.hubView === 'settings') hideSettings();
+      else if (G.hubTab === 'mapa' && G.chapter) closeChapter();
       else if (G.hubTab === 'mapa') { G.hubTab = 'ventana'; SFX.play('select'); }
     }
     return;
