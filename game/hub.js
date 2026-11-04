@@ -541,7 +541,7 @@ const CITY_DISTRICTS = [
   { id: 'd1', name: 'D.1', x: 100, y: 40, r: 5, col: '#6a5040' },
   { id: 'd2', name: 'D.2', x: 170, y: 35, r: 5, col: '#6a5040' },
   { id: 'd3', name: 'D.3', x: 190, y: 60, r: 5, col: '#6a5040' },
-  { id: 'd4', name: 'D.4', x: 185, y: 90, r: 6, col: '#8a5040' },
+  { id: 'd4', name: 'D.4', x: 185, y: 90, r: 5, col: '#6a5040' },
   { id: 'd5', name: 'D.5', x: 155, y: 100, r: 5, col: '#6a5040' },
   { id: 'd6', name: 'D.6', x: 120, y: 95, r: 5, col: '#6a5040' },
   { id: 'd7', name: 'D.7', x: 95, y: 75, r: 5, col: '#6a5040' },
@@ -612,7 +612,7 @@ function drawMap(t) {
   });
 
   CITY_DISTRICTS.forEach(d => {
-    const isActive = d.id === 'ext' || d.id === 'd4';
+    const isActive = d.id === 'ext';
     disc(d.x, d.y, d.r, d.col);
     disc(d.x, d.y, d.r - 1, isActive ? '#2a1018' : '#1a1018');
     if (isActive) {
