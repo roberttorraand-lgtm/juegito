@@ -126,22 +126,39 @@ function refreshHubBtns() {
 }
 
 // ---- Settings panel ----
-function showSettings() {
+function showSettings(tab = 'audio', quiet = false) {
   G.hubView = 'settings';
   const speedChip = (id, label) =>
     `<button class="st-chip${CFG.textSpeed === id ? ' on' : ''}" data-speed="${id}">${label}</button>`;
+  const tabBtn = (id, label) => `<button class="st-tab${tab === id ? ' sel' : ''}" data-stab="${id}">${label}</button>`;
+  const panel = (id) => `class="st-panel${tab === id ? '' : ' hidden'}" data-panel="${id}"`;
+  const hint = (h) => (h ? `<div class="st-hint">${h}</div>` : '');
+  const toggle = (key, label, h) => `
+    <div class="st-group">
+      <div class="st-label">${label}</div>
+      <div class="st-toggle" data-cfg="${key}">
+        <div class="st-toggle-box${CFG[key] ? ' on' : ''}"><div class="st-toggle-knob"></div></div>
+        <div class="st-toggle-label">${CFG[key] ? 'Activado' : 'Desactivado'}</div>
+      </div>${hint(h)}
+    </div>`;
+  const chips = (key, label, opts, h) => `
+    <div class="st-group">
+      <div class="st-label">${label}</div>
+      <div class="st-chips">${opts.map(([v, l]) =>
+        `<button class="st-chip${CFG[key] === v ? ' on' : ''}" data-cfg-chip="${key}" data-val="${v}">${l}</button>`).join('')}</div>${hint(h)}
+    </div>`;
   ui.settings.innerHTML = `
     <div class="st-side">
       <div class="st-side-title">— AJUSTES —</div>
-      <button class="st-tab sel" data-stab="audio">Audio</button>
-      <button class="st-tab" data-stab="juego">Juego</button>
-      <button class="st-tab" data-stab="video">Video</button>
-      <button class="st-tab" data-stab="datos">Datos</button>
+      ${tabBtn('audio', 'Audio')}
+      ${tabBtn('juego', 'Juego')}
+      ${tabBtn('video', 'Video')}
+      ${tabBtn('datos', 'Datos')}
       <button class="st-back" data-hub="back">← Volver</button>
       <div class="st-version">v0.1 — Episodio I</div>
     </div>
     <div class="st-main">
-      <div class="st-panel" data-panel="audio">
+      <div ${panel('audio')}>
         <div class="st-group">
           <div class="st-label">Volumen SFX</div>
           <div class="st-slider-row">
@@ -160,7 +177,7 @@ function showSettings() {
           </div>
         </div>
       </div>
-      <div class="st-panel hidden" data-panel="juego">
+      <div ${panel('juego')}>
         <div class="st-group">
           <div class="st-label">Velocidad de texto</div>
           <div class="st-chips">
@@ -171,22 +188,25 @@ function showSettings() {
           <div class="st-hint">Cambia la velocidad del texto letra por letra</div>
         </div>
       </div>
-      <div class="st-panel hidden" data-panel="video">
-        <div class="st-group">
-          <div class="st-label">Líneas de escaneo (CRT)</div>
-          <div class="st-toggle" data-toggle="scanlines">
-            <div class="st-toggle-box${CFG.scanlines ? ' on' : ''}"><div class="st-toggle-knob"></div></div>
-            <div class="st-toggle-label">${CFG.scanlines ? 'Activado' : 'Desactivado'}</div>
-          </div>
-          <div class="st-hint">Efecto retro de monitor CRT sobre el juego</div>
-        </div>
+      <div ${panel('video')}>
+        ${chips('quality', 'Calidad gráfica', [['baja', 'Baja'], ['media', 'Media'], ['alta', 'Alta'], ['ultra', 'Ultra'], ['custom', 'Personalizada']],
+          'Ultra se ve mejor pero exige más al PC o al móvil')}
+        ${toggle('integer', 'Píxeles nítidos (escalado entero)', 'Cada píxel del juego ocupa un bloque exacto de tu pantalla: todos iguales y bien marcados. Puede dejar bordes negros.')}
+        ${toggle('pixelGrid', 'Rejilla de píxeles', 'Marca el borde de cada píxel como una pantalla de consola. Necesita píxeles nítidos.')}
+        ${chips('bloom', 'Resplandor de luces (bloom)', [[0, 'No'], [1, 'Suave'], [2, 'Intenso']], 'Neones, farolas y pantallas brillan con halo')}
+        ${toggle('shadows', 'Sombras dinámicas', 'Los personajes proyectan su sombra en el suelo')}
+        ${chips('particles', 'Partículas', [[1, 'Normal'], [2, 'x2'], [3, 'x3']], 'Más lluvia, salpicaduras y brasas')}
+        ${toggle('grade', 'Corrección de color', 'Más contraste y saturación, estilo cine')}
+        ${toggle('grain', 'Grano de película')}
+        ${toggle('scanlines', 'Líneas de escaneo (CRT)', 'Efecto retro de monitor antiguo')}
+        ${toggle('fps', 'Mostrar FPS', 'Contador de imágenes por segundo en la esquina')}
         <div class="st-group">
           <div class="st-label">Pantalla completa</div>
           <button class="st-chip" data-act="fullscreen">Activar pantalla completa</button>
           <div class="st-hint">También puedes usar F11</div>
         </div>
       </div>
-      <div class="st-panel hidden" data-panel="datos">
+      <div ${panel('datos')}>
         <div class="st-group">
           <div class="st-label">Borrar datos guardados</div>
           <div class="st-hint">Elimina todo el progreso y ajustes. Esta acción no se puede deshacer.</div>
@@ -195,8 +215,20 @@ function showSettings() {
       </div>
     </div>`;
   ui.settings.classList.remove('hidden');
+  ui.settings.classList.toggle('see-through', tab === 'video');
   bindSettingsEvents();
   refreshHubBtns();
+  const cur = hubBtns.findIndex(b => b.dataset.stab === tab);
+  if (cur >= 0) { hubSel = cur; hubBtns.forEach((x, j) => x.classList.toggle('sel', j === cur)); }
+  if (!quiet) SFX.play('select');
+}
+
+// Re-render the video tab in place, keeping the scroll position
+function refreshVideoSettings() {
+  const main = ui.settings.querySelector('.st-main');
+  const scroll = main ? main.scrollTop : 0;
+  showSettings('video', true);
+  ui.settings.querySelector('.st-main').scrollTop = scroll;
   SFX.play('select');
 }
 
@@ -209,6 +241,7 @@ function bindSettingsEvents() {
       tabs.forEach(t => t.classList.remove('sel'));
       tab.classList.add('sel');
       panels.forEach(p => p.classList.toggle('hidden', p.dataset.panel !== tab.dataset.stab));
+      ui.settings.classList.toggle('see-through', tab.dataset.stab === 'video');
       SFX.play('select');
     });
   });
@@ -247,15 +280,34 @@ function bindSettingsEvents() {
     });
   });
 
-  const slToggle = ui.settings.querySelector('[data-toggle="scanlines"]');
-  if (slToggle) slToggle.addEventListener('click', (e) => {
-    e.stopPropagation();
-    CFG.persist('scanlines', !CFG.scanlines);
-    setCRTEnabled(CFG.scanlines);
-    const box = slToggle.querySelector('.st-toggle-box');
-    box.classList.toggle('on', CFG.scanlines);
-    slToggle.querySelector('.st-toggle-label').textContent = CFG.scanlines ? 'Activado' : 'Desactivado';
-    SFX.play('select');
+  const PRESET_KEYS = Object.keys(QUALITY.alta);
+  const changed = (key) => {
+    if (PRESET_KEYS.includes(key)) CFG.persist('quality', 'custom');
+    if (key === 'integer') resizeCanvas();
+    refreshVideoSettings();
+  };
+  ui.settings.querySelectorAll('[data-cfg]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = el.dataset.cfg;
+      CFG.persist(key, !CFG[key]);
+      changed(key);
+    });
+  });
+  ui.settings.querySelectorAll('[data-cfg-chip]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = el.dataset.cfgChip, raw = el.dataset.val;
+      if (key === 'quality') {
+        if (raw === 'custom') return;
+        CFG.applyQuality(raw);
+        resizeCanvas();
+        refreshVideoSettings();
+        return;
+      }
+      CFG.persist(key, typeof CFG[key] === 'number' ? Number(raw) : raw);
+      changed(key);
+    });
   });
 
   const fsBtn = ui.settings.querySelector('[data-act="fullscreen"]');
@@ -279,7 +331,8 @@ function bindSettingsEvents() {
       } else {
         try { localStorage.removeItem(SAVE._key); } catch(e) {}
         SAVE._data = {}; SAVE.load();
-        CFG.sfxVol = 80; CFG.textSpeed = 'normal'; CFG.scanlines = true;
+        CFG.reset();
+        resizeCanvas();
         SFX.muted = false;
         clearBtn.textContent = '✓ Datos borrados';
         clearBtn.classList.remove('confirm');

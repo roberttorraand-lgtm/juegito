@@ -23,9 +23,21 @@ const SAVE = {
 };
 SAVE.load();
 
-const CFG = {
-  sfxVol: SAVE.get('cfg_sfxVol', 80),
-  textSpeed: SAVE.get('cfg_textSpeed', 'normal'),
-  scanlines: SAVE.get('cfg_scanlines', false),
-  persist(key, val) { this[key] = val; SAVE.save({ ['cfg_' + key]: val }); },
+// Graphics presets; every value can also be changed one by one in Ajustes → Video
+const QUALITY = {
+  baja:  { integer: false, pixelGrid: false, bloom: 0, particles: 1, shadows: false, grade: false, grain: false },
+  media: { integer: true,  pixelGrid: false, bloom: 1, particles: 1, shadows: false, grade: true,  grain: false },
+  alta:  { integer: true,  pixelGrid: true,  bloom: 1, particles: 2, shadows: true,  grade: true,  grain: true },
+  ultra: { integer: true,  pixelGrid: true,  bloom: 2, particles: 3, shadows: true,  grade: true,  grain: true },
 };
+const CFG_DEFAULTS = { sfxVol: 80, textSpeed: 'normal', scanlines: false, fps: false, quality: 'alta', ...QUALITY.alta };
+
+const CFG = {
+  persist(key, val) { this[key] = val; SAVE.save({ ['cfg_' + key]: val }); },
+  applyQuality(q) {
+    for (const k in QUALITY[q]) this.persist(k, QUALITY[q][k]);
+    this.persist('quality', q);
+  },
+  reset() { for (const k in CFG_DEFAULTS) this[k] = CFG_DEFAULTS[k]; },
+};
+for (const k in CFG_DEFAULTS) CFG[k] = SAVE.get('cfg_' + k, CFG_DEFAULTS[k]);

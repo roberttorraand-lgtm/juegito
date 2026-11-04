@@ -183,6 +183,9 @@ body {
   display: flex; flex-direction: row;
   overflow: hidden;
 }
+/* Video tab: let the game show through so graphics changes are visible live */
+#settings.see-through { background: rgba(5, 4, 7, 0.25); }
+#settings.see-through .st-main { flex: 0 0 46%; background: rgba(8, 7, 12, 0.9); }
 .st-side {
   width: 28%; min-width: 0;
   background: linear-gradient(90deg, rgba(10,8,18,0.95) 70%, transparent);

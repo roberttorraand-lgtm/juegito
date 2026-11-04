@@ -1,5 +1,6 @@
 // =====================================================================
-//  EFFECTS — Lightweight canvas-based post-processing (no WebGL)
+//  EFFECTS — post-processing applied when the scene is presented, plus
+//  actor shadows. Each one is a graphics option in Ajustes → Video.
 // =====================================================================
 function drawScanlines() {
   if (!CFG.scanlines) return;
@@ -10,3 +11,115 @@ function drawScanlines() {
 }
 
 function setCRTEnabled() {}
+
+function makeCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+
+// Bloom works on a quarter-size copy: bright-pass, blur, add back on top
+const bloomA = makeCanvas(160, 90), bloomB = makeCanvas(160, 90);
+const bloomActx = bloomA.getContext('2d'), bloomBctx = bloomB.getContext('2d');
+
+// Film grain at game-pixel resolution so it keeps the pixel grid
+const grainFrames = [];
+for (let k = 0; k < 4; k++) {
+  const c = makeCanvas(W, H), g = c.getContext('2d');
+  const id = g.createImageData(W, H), d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const v = Math.random() * 255;
+    d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+  }
+  g.putImageData(id, 0, 0);
+  grainFrames.push(c);
+}
+
+let gridPattern = null;
+const shadowBuf = makeCanvas(W * SCALE, H * SCALE);
+const fpsMeter = { last: 0, frames: 0, fps: 0 };
+
+function onResizeFX() {
+  const n = SCALE;
+  const p = makeCanvas(n, n), g = p.getContext('2d');
+  g.fillStyle = `rgba(0,0,0,${n >= 5 ? 0.32 : 0.22})`;
+  g.fillRect(n - 1, 0, 1, n);
+  g.fillRect(0, n - 1, n - 1, 1);
+  gridPattern = vctx.createPattern(p, 'repeat');
+  shadowBuf.width = W * n;
+  shadowBuf.height = H * n;
+}
+onResizeFX();
+
+// Draws the actor into a buffer, then stamps it on the floor as a
+// flipped, squashed, slanted black silhouette.
+function drawActorShadow(a, draw) {
+  const sb = shadowBuf.getContext('2d');
+  sb.setTransform(1, 0, 0, 1, 0, 0);
+  sb.clearRect(0, 0, shadowBuf.width, shadowBuf.height);
+  sb.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  sb.imageSmoothingEnabled = false;
+  const prev = ctx;
+  ctx = sb;
+  try { draw(); } finally { ctx = prev; }
+  ctx.save();
+  ctx.translate(a.x, a.y);
+  ctx.transform(1, 0, -0.9, -0.32, 0, 0);
+  ctx.translate(-a.x, -a.y);
+  ctx.globalAlpha = 0.38;
+  ctx.filter = 'brightness(0)';
+  ctx.drawImage(shadowBuf, 0, 0, W, H);
+  ctx.restore();
+}
+
+function present(t) {
+  vctx.save();
+  vctx.globalCompositeOperation = 'copy';
+  vctx.filter = CFG.grade ? 'contrast(1.1) saturate(1.2) brightness(1.04)' : 'none';
+  vctx.drawImage(scene, 0, 0);
+  vctx.restore();
+
+  if (CFG.bloom) {
+    bloomActx.globalCompositeOperation = 'copy';
+    bloomActx.imageSmoothingEnabled = true;
+    bloomActx.filter = 'brightness(0.55) contrast(4) saturate(1.5)';
+    bloomActx.drawImage(scene, 0, 0, 160, 90);
+    bloomBctx.globalCompositeOperation = 'copy';
+    bloomBctx.filter = `blur(${CFG.bloom > 1 ? 4 : 2}px)`;
+    bloomBctx.drawImage(bloomA, 0, 0);
+    vctx.save();
+    vctx.globalCompositeOperation = 'lighter';
+    vctx.globalAlpha = CFG.bloom > 1 ? 0.8 : 0.5;
+    vctx.imageSmoothingEnabled = true;
+    vctx.drawImage(bloomB, 0, 0, cv.width, cv.height);
+    vctx.restore();
+  }
+
+  if (CFG.grain) {
+    vctx.save();
+    vctx.globalCompositeOperation = 'overlay';
+    vctx.globalAlpha = 0.08;
+    vctx.drawImage(grainFrames[Math.floor(t / 50) % grainFrames.length], 0, 0, cv.width, cv.height);
+    vctx.restore();
+  }
+
+  if (CFG.pixelGrid && SCALE >= 3) {
+    vctx.fillStyle = gridPattern;
+    vctx.fillRect(0, 0, cv.width, cv.height);
+  }
+
+  if (CFG.fps) {
+    fpsMeter.frames++;
+    if (t - fpsMeter.last >= 500) {
+      fpsMeter.fps = Math.round(fpsMeter.frames * 1000 / (t - fpsMeter.last));
+      fpsMeter.frames = 0;
+      fpsMeter.last = t;
+    }
+    const s = SCALE;
+    vctx.fillStyle = 'rgba(0,0,0,0.7)';
+    vctx.fillRect((W - 40) * s, 2 * s, 38 * s, 10 * s);
+    vctx.font = `${9 * s}px VT323, monospace`;
+    vctx.fillStyle = fpsMeter.fps >= 50 ? '#3fbf6a' : fpsMeter.fps >= 30 ? '#e8c040' : '#ff4a5a';
+    vctx.fillText(`${fpsMeter.fps} FPS`, (W - 37) * s, 10 * s);
+  }
+}

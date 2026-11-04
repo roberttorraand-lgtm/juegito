@@ -263,8 +263,9 @@ function render(t) {
       const a = G.actors[id];
       if (!a) continue;
       const talk = G.s.typing && G.s.speaker === id;
-      if (a.kind === 'corrupted') corrupted(a.x, a.y, a, t);
-      else figure(a.x, a.y, { ...a, talk }, t);
+      const draw = () => (a.kind === 'corrupted' ? corrupted(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk }, t));
+      if (CFG.shadows && !a.lifted) drawActorShadow(a, draw);
+      draw();
     }
     const r = G.s.rift;
     if (r) { r.w += (r.target - r.w) * 0.04; rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }
@@ -321,6 +322,7 @@ function render(t) {
   }
   drawScanlines();
   ctx.restore();
+  present(t);
 
   requestAnimationFrame(render);
 }

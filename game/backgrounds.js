@@ -108,6 +108,7 @@ function rrect(x, y, w, h, c, r = 2) {
 function rain(t, n, x0, y0, w, h, col, a, speed, len, seed = 0) {
   ctx.globalAlpha = a;
   ctx.fillStyle = col;
+  n = Math.round(n * CFG.particles);
   for (let i = 0; i < n; i++) {
     const k = i + seed * 1000;
     const sp = speed * (0.8 + hash(k + 3) * 0.4);
@@ -123,6 +124,7 @@ function splashes(t, n, x0, y0, w, h, col, seed = 0) {
   const f = Math.floor(t / 110), ph = (t / 110) % 1;
   ctx.fillStyle = col;
   ctx.globalAlpha = 0.55 * (1 - ph);
+  n = Math.round(n * CFG.particles);
   for (let i = 0; i < n; i++) {
     const k = f * 131 + i * 17 + seed;
     const x = (x0 + hash(k) * w) | 0, y = (y0 + hash(k + 1) * h) | 0;
@@ -341,8 +343,8 @@ BG.arena = (s, t) => {
   splashes(t, 12, 0, 80, W, 24, '#b0b0e0');
   ripples(t, 104, 91, 18, '#8a7ab0', 1);
   ripples(t, 218, 97, 22, '#8a7ab0', 2);
-  for (let i = 0; i < 10; i++) {
-    const k = Math.floor(t / 140) * 10 + i;
+  for (let i = 0; i < 10 * CFG.particles; i++) {
+    const k = Math.floor(t / 140) * 30 + i;
     if (hash(k) < 0.5) continue;
     ctx.globalAlpha = 0.5;
     px(hash(k + 1) * W, 20 + hash(k + 2) * 70, hash(k + 3) > 0.5 ? '#ff3a50' : '#c8a8ff');
