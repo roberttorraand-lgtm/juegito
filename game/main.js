@@ -263,9 +263,8 @@ function render(t) {
       const a = G.actors[id];
       if (!a) continue;
       const talk = G.s.typing && G.s.speaker === id;
-      const draw = () => (a.kind === 'corrupted' ? corrupted(a.x, a.y, a, t)
-        : a.kind === 'sweeper' ? sweeper(a.x, a.y, a, t)
-        : figure(a.x, a.y, { ...a, talk }, t));
+      const enemyDraw = { corrupted, machine: egoMachine, operator }[a.kind];
+      const draw = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk }, t));
       if (CFG.shadows && !a.lifted) drawActorShadow(a, draw);
       draw();
     }

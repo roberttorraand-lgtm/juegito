@@ -600,7 +600,8 @@ const CITY_CONNECTIONS = [
 const MAP_MODES = [
   { id: 'historia', label: 'Historia', icon: '▶', enabled: true },
   { id: 'combate', label: 'vs Empleado', icon: '⚔', enabled: true, enemy: 'corrupted' },
-  { id: 'combate2', label: 'vs Barrendero', icon: '⚔', enabled: true, enemy: 'sweeper' },
+  { id: 'combate2', label: 'vs Máquina', icon: '⚔', enabled: true, enemy: 'machine' },
+  { id: 'combate3', label: 'vs Operador', icon: '⚔', enabled: true, enemy: 'operator' },
 ];
 
 function drawMap(t) {

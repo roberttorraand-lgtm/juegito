@@ -307,75 +307,168 @@ function corrupted(x, y, o, t) {
   if (sc !== 1) ctx.restore();
 }
 
-// ---- Sweeper (Night in the Backstreets): coat, brimmed hat, gas mask, needle arm ----
-function sweeper(x, y, o, t) {
+// ---- E.G.O Extraction Machine (ZAYIN): hopper, glowing press, gauges, conveyor ----
+function egoMachine(x, y, o, t) {
   const sc = o.scale || 1;
   if (sc !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.translate(-x, -y); }
   if (o.shake) x += Math.round(Math.sin(t / 25) * 1.5);
-  const OL = '#05050a', RIM = '#4a4660';
-  const coat = '#18171f', coatH = '#2a2834', coatS = '#0e0d13';
-  const lens = o.blind ? '#4a4a20' : '#d8e050';
-  const sway = Math.round(Math.sin(t / 520));
-  const top = y - 58 + Math.round(Math.sin(t / 700));
+  const D = '#141416', B = '#2c2c30', M = '#3c3c42', HI = '#55555c', BOLT = '#7a6a48';
+  const glow = o.blind ? '#5a3010' : '#ffa030', glowH = o.blind ? '#7a4a20' : '#ffe0a0';
+  const pump = (Math.sin(t / 260) + 1) / 2;
 
-  ctx.globalAlpha = 0.3; disc(x, y + 2, 10, '#000'); ctx.globalAlpha = 1;
+  ctx.globalAlpha = 0.35; ellipse(x, y + 1, 32, 3, '#000'); ctx.globalAlpha = 1;
 
-  for (const [hipX, footX] of [[x - 3, x - 7], [x + 3, x + 6]]) {
-    line(hipX, y - 20, footX, y, RIM, 4);
-    line(hipX, y - 20, footX, y, coatS, 2);
-    rect(footX - 2, y - 1, 5, 2, OL);
+  // pipe arch over the top
+  line(x - 5, y - 74, x - 5, y - 86, D, 5); line(x - 5, y - 86, x + 9, y - 86, D, 5); line(x + 9, y - 86, x + 9, y - 70, D, 5);
+  line(x - 5, y - 74, x - 5, y - 86, M, 3); line(x - 5, y - 86, x + 9, y - 86, M, 3); line(x + 9, y - 86, x + 9, y - 70, M, 3);
+  rect(x + 7, y - 80, 5, 3, '#7a2a1a');
+
+  // hopper full of ore on the left
+  poly([[x - 36, y - 66], [x - 15, y - 66], [x - 20, y - 54], [x - 31, y - 54]], D);
+  poly([[x - 35, y - 65], [x - 16, y - 65], [x - 21, y - 55], [x - 30, y - 55]], B);
+  for (let k = 0; k < 7; k++) {
+    const rx = x - 34 + k * 3, ry = y - 68 - (k % 3);
+    rect(rx, ry, 3, 3, k % 2 ? '#6a6a60' : '#8a8a7e'); px(rx, ry, '#a8a89a');
+  }
+  for (const vx of [x - 28, x - 26, x - 24]) rect(vx, y - 62, 1, 3, glow);
+  rect(x - 28, y - 54, 8, 12, D); rect(x - 27, y - 54, 6, 12, B);
+
+  // gear block between hopper and press
+  rect(x - 30, y - 44, 16, 10, D); rect(x - 29, y - 43, 14, 8, B);
+  for (const gx of [x - 26, x - 18]) {
+    const a = t / 300;
+    disc(gx, y - 39, 3, M); px(gx + Math.round(Math.cos(a) * 2), y - 39 + Math.round(Math.sin(a) * 2), HI);
   }
 
-  const coatPts = [[x - 9, top], [x + 8, top], [x + 12, y - 10], [x + 7, y - 6], [x + 2, y - 12],
-    [x - 3, y - 6], [x - 9, y - 11], [x - 14, y - 7]];
-  poly(coatPts.map(([a, b]) => [a + (a < x ? -1 : 1), b - 1]), RIM);
-  poly(coatPts, coat);
-  line(x - 7, top + 2, x - 11, y - 9, coatH);
-  line(x - 1, top + 8, x - 2, y - 13, coatS);
-  line(x + 5, top + 4, x + 9, y - 9, coatS);
-  rect(x - 8, y - 32, 17, 2, OL);
-  rect(x - 1, y - 33, 3, 4, '#5a5a64');
-  for (let k = 0; k < 3; k++) px(x, top + 8 + k * 6, '#3a3a44');
-  poly([[x - 11, top + 2], [x + 10, top + 2], [x + 6, top - 4], [x - 7, top - 4]], coat);
-  rect(x - 7, top - 4, 14, 1, coatH);
-
-  // claw reaching toward the left
-  const hand = [x - 20, y - 36 + sway];
-  line(x - 8, top + 4, hand[0], hand[1], RIM, 4);
-  line(x - 8, top + 4, hand[0], hand[1], coat, 2);
-  for (let k = 0; k < 3; k++) line(hand[0], hand[1], hand[0] - 4, hand[1] - 3 + k * 3, '#8a8a98');
-
-  // needle arm lowered to the floor, dripping
-  const rh = [x + 11, y - 34];
-  line(x + 8, top + 4, rh[0], rh[1], RIM, 4);
-  line(x + 8, top + 4, rh[0], rh[1], coat, 2);
-  poly([[rh[0] - 1, rh[1] - 2], [rh[0] + 2, rh[1]], [x - 30, y - 4]], '#6a6a78');
-  line(rh[0] + 1, rh[1] - 1, x - 30, y - 4, '#b8b8c8');
-  rect(x - 30, y - 4, 1, 2, '#7a1018');
-  const drip = (t / 40) % 14;
-  if (drip < 10) px(x - 30, y - 2 + drip, '#5a0810');
-
-  // head: gas mask under a wide-brimmed hat
-  const hx = x - 1 + sway, hy = top - 9;
-  disc(hx, hy, 6, RIM);
-  disc(hx, hy, 5, '#2a2a32');
-  rect(hx - 11, hy - 5, 22, 2, OL);
-  rect(hx - 10, hy - 5, 20, 1, coatH);
-  rect(hx - 6, hy - 12, 12, 7, OL);
-  rect(hx - 5, hy - 11, 10, 6, coat);
-  rect(hx - 5, hy - 7, 10, 1, '#5a1a24');
-  for (const lx of [hx - 3, hx + 2]) {
-    disc(lx, hy, 2, '#0a0a10');
-    rect(lx - 1, hy, 2, 1, lens);
-    if (!o.blind) light(lx, hy, 5, 5, lens, 0.3 + 0.15 * Math.sin(t / 180), 3);
+  // main press column with glowing chamber
+  rect(x - 15, y - 76, 30, 70, D);
+  rect(x - 14, y - 75, 28, 68, B);
+  rect(x - 14, y - 75, 2, 68, M);
+  rect(x - 12, y - 73, 24, 7, M);
+  for (const vx of [x - 3, x, x + 3]) rect(vx, y - 72, 1, 4, glow);
+  rect(x - 10, y - 62, 20, 26, '#0c0806');
+  rect(x - 10, y - 40, 20, 4, '#3a1a08');
+  if (!o.blind) light(x, y - 44, 16, 14, '#ff9a30', 0.45 + pump * 0.3, 4);
+  rect(x - 9, y - 62, 2, 26, '#5a4a2a'); rect(x + 7, y - 62, 2, 26, '#5a4a2a');
+  px(x - 8, y - 55, glowH); px(x + 8, y - 55, glowH);
+  const pist = Math.round(4 + pump * 12);
+  rect(x - 3, y - 62, 6, pist, '#8a8a92'); rect(x - 3, y - 62, 1, pist, '#b0b0b8');
+  rect(x - 7, y - 62 + pist, 14, 3, '#c8a030');
+  for (let k = 0; k < 4; k++) px(x - 6 + k * 4, y - 61 + pist, '#1a1814');
+  for (let k = 0; k < 5; k++) {
+    if (hash(Math.floor(t / 80) * 5 + k) > 0.4) px(x - 6 + k * 3, y - 37 - Math.round(hash(k + t) * 2), k % 2 ? glow : glowH);
   }
-  rect(hx - 3, hy + 3, 5, 4, '#5a5a64');
-  rect(hx - 3, hy + 3, 5, 1, '#8a8a98');
-  line(hx + 2, hy + 6, x + 8, top + 6, '#2a2a30', 2);
+  for (const bx of [x - 13, x + 12]) for (const by of [y - 74, y - 10]) px(bx, by, BOLT);
+
+  // gauge panel on the right
+  rect(x + 15, y - 60, 13, 26, D); rect(x + 16, y - 59, 11, 24, B);
+  for (const [gy, sp] of [[y - 53, 400], [y - 44, 260]]) {
+    disc(x + 21, gy, 3, '#c8c0a0'); disc(x + 21, gy, 2, '#e0d8b8');
+    const a = -2.2 + Math.sin(t / sp) * 1.4;
+    line(x + 21, gy, x + 21 + Math.round(Math.cos(a) * 2), gy + Math.round(Math.sin(a) * 2), '#7a1a10');
+  }
+  disc(x + 21, y - 38, 1, Math.sin(t / 200) > 0 ? glow : '#5a3010');
+  line(x + 27, y - 56, x + 30, y - 66, D, 3);
+
+  // conveyor with a freshly made crystal
+  rect(x - 20, y - 30, 40, 14, D);
+  rect(x - 19, y - 29, 38, 12, M);
+  rect(x - 17, y - 27, 34, 5, '#26262a');
+  const shift = Math.floor(t / 90) % 4;
+  for (let bx = x - 17 + shift; bx < x + 17; bx += 4) rect(bx, y - 27, 1, 5, '#3a3a40');
+  for (const rx of [x - 12, x, x + 12]) { disc(rx, y - 18, 3, D); disc(rx, y - 18, 2, HI); px(rx, y - 18, D); }
+  const cx = x - 2, cy = y - 31;
+  if (!o.blind) light(cx, cy, 8, 6, '#ffb040', 0.4, 3);
+  poly([[cx, cy - 6], [cx + 4, cy], [cx, cy + 3], [cx - 4, cy]], '#e89a30');
+  poly([[cx, cy - 5], [cx + 2, cy], [cx, cy + 2]], glowH);
+  if (Math.sin(t / 150) > 0.7) px(cx + 3, cy - 5, '#fff');
+
+  // feet / base block with vents
+  rect(x - 26, y - 8, 52, 8, D); rect(x - 25, y - 7, 50, 6, B);
+  rect(x - 25, y - 7, 50, 1, HI);
+  for (const vx of [x - 3, x, x + 3]) rect(vx, y - 6, 1, 3, glow);
+  rect(x - 30, y - 3, 8, 3, D); rect(x + 22, y - 3, 8, 3, D);
 
   if (sc !== 1) ctx.restore();
 }
 
+// ---- The Disconnected Operator (TETH): cable body, scarf, CRT monitor head ----
+function operator(x, y, o, t) {
+  const sc = o.scale || 1;
+  if (sc !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.translate(-x, -y); }
+  if (o.shake) x += Math.round(Math.sin(t / 25) * 1.5);
+  const C = ['#121216', '#1e1e26', '#2a2a34'], RIM = '#4a4660';
+  const SC = '#2a3a8a', SCH = '#3e52b0';
+  const sway = Math.sin(t / 600);
+
+  ctx.globalAlpha = 0.35; ellipse(x, y + 1, 16, 3, '#000'); ctx.globalAlpha = 1;
+
+  // cables spilling from the waist down to the floor
+  for (let i = 0; i < 12; i++) {
+    const x0 = x - 6 + i, xm = x - 7 + i * 1.3 + Math.sin(t / 500 + i) * 0.8;
+    const x1 = x - 16 + i * 3 + Math.round(Math.sin(i * 1.7) * 2);
+    const col = C[i % 3];
+    line(x0, y - 36, Math.round(xm), y - 16, i % 4 ? col : RIM, 2);
+    line(Math.round(xm), y - 16, x1, y, col, 2);
+    if (i % 3 === 0) line(x1, y, x1 + (i < 6 ? -4 : 4), y + 1, col);
+  }
+  // torso of tightly wound cables
+  rect(x - 7, y - 58, 14, 24, RIM);
+  rect(x - 6, y - 58, 12, 24, C[0]);
+  for (let k = 0; k < 5; k++) rect(x - 5 + k * 2, y - 57, 1, 22, C[1 + (k % 2)]);
+  rect(x - 6, y - 40, 12, 1, '#8a6a30');
+
+  // cable arms ending in plugs
+  for (const side of [-1, 1]) {
+    const sx = x + side * 6, sy = y - 55;
+    const hx = x + side * 15 + Math.round(sway * side), hy = y - 22;
+    for (let k = 0; k < 3; k++) {
+      const mx = sx + side * (6 + k), my = y - 40 + k;
+      line(sx, sy + k, mx, my, C[k], 2);
+      line(mx, my, hx + k - 1, hy, C[k], 2);
+    }
+    line(hx - 2, hy, hx - 4, hy + 6, C[1]);
+    rect(hx - 1, hy, 4, 4, '#3a3a42'); rect(hx - 1, hy, 4, 1, '#5a5a64');
+    px(hx, hy + 4, '#9a9aa8'); px(hx + 2, hy + 4, '#9a9aa8');
+  }
+
+  // blue scarf: wrapped neck, diagonal across the chest, hanging tail
+  rect(x - 8, y - 61, 16, 4, SC); rect(x - 8, y - 61, 16, 1, SCH);
+  poly([[x - 8, y - 57], [x - 4, y - 57], [x + 8, y - 47], [x + 8, y - 43]], SC);
+  line(x - 6, y - 57, x + 7, y - 46, SCH);
+  line(x + 5, y - 58, x + 7, y - 44, SC, 2);
+  rect(x + 3, y - 50, 3, 2, '#8a6a30');
+
+  // neck cables and the monitor head
+  line(x - 2, y - 61, x - 3, y - 66, C[1], 2); line(x + 2, y - 61, x + 2, y - 66, C[2], 2);
+  const hx = x - 1 + Math.round(sway), hy = y - 82;
+  rect(hx - 12, hy, 24, 18, '#0e0c08');
+  rect(hx - 11, hy + 1, 22, 16, '#3a3428');
+  rect(hx - 11, hy + 1, 22, 1, '#5a503c');
+  rect(hx + 8, hy + 3, 3, 12, '#2a2418');
+  rect(hx - 9, hy + 3, 16, 12, '#0c1014');
+  if (o.rebooting) {
+    rect(hx - 8, hy + 4, 14, 10, '#1a2a6a');
+    const prog = Math.floor((t / 120) % 10);
+    rect(hx - 6, hy + 10, 10, 2, '#0c1440');
+    rect(hx - 6, hy + 10, prog + 1, 2, '#9ac0ff');
+    px(hx - 6 + (Math.floor(t / 300) % 3) * 2, hy + 6, '#9ac0ff');
+  } else if (o.blind) {
+    line(hx - 6, hy + 5, hx + 4, hy + 12, '#c02030'); line(hx + 4, hy + 5, hx - 6, hy + 12, '#c02030');
+  } else {
+    for (let r = 0; r < 10; r++) {
+      const k = Math.floor(t / 70) * 10 + r;
+      const w = Math.round(hash(k) * 12);
+      if (hash(k + 3) > 0.45) rect(hx - 8 + Math.round(hash(k + 1) * (14 - w)), hy + 4 + r, w, 1, hash(k + 2) > 0.6 ? '#d8e8e8' : '#7a9090');
+    }
+    light(hx - 1, hy + 9, 14, 10, '#9ad0d0', 0.18, 3);
+  }
+  line(hx + 11, hy + 8, x + 6, y - 58, C[1], 2);
+  line(hx - 12, hy + 6, hx - 15, hy + 14, C[2], 2);
+  line(hx - 15, hy + 14, x - 7, y - 56, C[2], 2);
+
+  if (sc !== 1) ctx.restore();
+}
 // ---- Dimensional rift ----
 function rift(cx, cy, w, h, t) {
   if (w <= 0) return;

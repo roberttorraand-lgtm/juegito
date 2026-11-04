@@ -836,10 +836,83 @@ BG.branch = (s, t) => {
 };
 
 // =====================================================================
+//  CONTAINMENT CELL — concrete box, pipes, hazard band, floor grates
+// =====================================================================
+function drawCell() {
+  const bx0 = 44, bx1 = 276, by0 = 14, by1 = 94, hz = 66;
+  rect(0, 0, W, H, '#1a1c1a');
+  vgrad(0, 0, W, by0, ['#0a0b0a', '#141614']);
+
+  // back wall with panel seams and chamfered corners
+  vgrad(bx0, by0, bx1 - bx0, by1 - by0, ['#2a2d29', '#31352f', '#2b2e2a']);
+  for (let x = bx0 + 58; x < bx1; x += 58) { rect(x, by0, 1, by1 - by0, '#212420'); rect(x + 1, by0, 1, by1 - by0, '#3a3e37'); }
+  rect(bx0, 40, bx1 - bx0, 1, '#212420'); rect(bx0, 41, bx1 - bx0, 1, '#3a3e37');
+  poly([[bx0, by0], [bx0 + 12, by0], [bx0, by0 + 12]], '#1e211d');
+  poly([[bx1, by0], [bx1 - 12, by0], [bx1, by0 + 12]], '#1e211d');
+  for (let i = 0; i < 40; i++) px(bx0 + hash(i + 900) * (bx1 - bx0), by0 + hash(i + 950) * (by1 - by0), '#262925');
+
+  // side walls in perspective
+  poly([[0, 0], [bx0, by0], [bx0, by1], [0, by1 + 28]], '#222521');
+  poly([[W, 0], [bx1, by0], [bx1, by1], [W, by1 + 28]], '#242723');
+  line(bx0, by0, bx0, by1, '#3a3e37');
+  line(bx1, by0, bx1, by1, '#181a17');
+
+  // hazard band across the back wall and down the side walls
+  ctx.save();
+  ctx.beginPath(); ctx.rect(bx0, hz, bx1 - bx0, 7); ctx.clip();
+  rect(bx0, hz, bx1 - bx0, 7, '#c8a030');
+  for (let x = bx0 - 8; x < bx1; x += 8) poly([[x, hz + 7], [x + 4, hz + 7], [x + 11, hz], [x + 7, hz]], '#1a1814');
+  ctx.restore();
+  poly([[0, hz + 14], [bx0, hz], [bx0, hz + 7], [0, hz + 23]], '#a88828');
+  poly([[W, hz + 14], [bx1, hz], [bx1, hz + 7], [W, hz + 23]], '#987820');
+
+  // floor tiles in perspective
+  poly([[0, by1 + 28], [bx0, by1], [bx1, by1], [W, by1 + 28], [W, H], [0, H]], '#1f211e');
+  for (const fy of [97, 102, 109, 118, 130, 146, 166]) rect(0, fy, W, 1, '#181a17');
+  for (let i = -7; i <= 7; i++) line(160 + i * 17, by1, 160 + i * 52, H, '#181a17');
+  rect(bx0, by1, bx1 - bx0, 1, '#3a3e37');
+  dither(bx0, by1 + 1, bx1 - bx0, 3, '#000', 0.3);
+  for (const gx of [70, 196]) {
+    rect(gx, 100, 54, 12, '#121411'); rect(gx, 100, 54, 1, '#2a2d29');
+    for (let k = 0; k < 5; k++) rect(gx + 3, 102 + k * 2, 48, 1, '#262925');
+  }
+
+  // pipes: vertical on the left wall, along the top of the back wall, elbow on the right
+  rect(16, 0, 6, 104, '#4a585e'); rect(16, 0, 2, 104, '#7a8a90'); rect(21, 0, 1, 104, '#2a3236');
+  rect(14, 52, 10, 5, '#7a2a1a'); rect(14, 52, 10, 1, '#a84a30');
+  rect(bx0, 18, bx1 - bx0 - 20, 4, '#3e4a50'); rect(bx0, 18, bx1 - bx0 - 20, 1, '#6a7a80');
+  rect(bx1 - 22, 18, 4, 30, '#3e4a50'); rect(bx1 - 22, 18, 1, 30, '#6a7a80');
+  for (let x = bx0 + 20; x < bx1 - 30; x += 46) rect(x, 17, 3, 6, '#2a3034');
+  rect(58, 30, 14, 18, '#3a3e34'); rect(58, 30, 14, 1, '#4e5246'); rect(62, 48, 2, 18, '#3e4a50');
+
+  // wall lamp cage
+  rect(257, 38, 11, 14, '#2a2620'); rect(258, 39, 9, 12, '#1a1712');
+}
+
+BG.cell = (s, t) => {
+  blit(layer('cell', drawCell));
+  const on = hash(Math.floor(t / 90)) > 0.06;
+  rect(259, 41, 7, 8, on ? '#ffd870' : '#6a5020');
+  rect(259, 44, 7, 1, '#2a2620');
+  if (on) {
+    light(262, 45, 42, 34, '#ffc060', 0.22, 4);
+    light(250, 106, 64, 9, '#ffc060', 0.14, 3);
+  }
+  light(160, 16, 130, 16, '#a8c0b0', 0.07, 3);
+  for (let i = 0; i < 12 * CFG.particles; i++) {
+    const k = i * 37;
+    const mx = (hash(k) * W + t * 0.004 * (1 + hash(k + 1))) % W;
+    const my = 20 + ((hash(k + 2) * 90 + t * 0.003) % 90);
+    ctx.globalAlpha = 0.35; px(mx, my, '#c8c0a0'); ctx.globalAlpha = 1;
+  }
+};
+
+// =====================================================================
 //  POST — drawn over actors
 // =====================================================================
 const POST = {
   arena: () => blit(vignette()),
+  cell: () => blit(vignette()),
   room: () => blit(vignette()),
   branch: (s, t) => { rain(t, 24, 0, 0, W, H, '#d8d8f8', 0.45, 0.75, 6, 9); blit(vignette()); },
 };

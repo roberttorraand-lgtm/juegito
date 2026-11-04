@@ -43,8 +43,8 @@ const COMBAT_UNITS = {
     ],
   },
   corrupted: {
-    id: 'corrupted', name: 'EMPLEADO', tag: 'E.G.O.', team: 'enemy', maxHp: 55, maxSt: 28, speed: [1, 5], nDice: 2,
-    kind: 'corrupted', bx: 248, by: 106, scale: 1,
+    id: 'corrupted', name: 'EMPLEADO', tag: 'E.G.O.', tagCol: '#8a2030', team: 'enemy', maxHp: 55, maxSt: 28, speed: [1, 5], nDice: 2,
+    kind: 'corrupted', bg: 'arena', height: 72, bx: 248, by: 106, scale: 1,
     defeat: 'El empleado distorsionado ha caído.',
     pages: [
       { name: 'Tajo dentado', dice: [['slash', 4, 8], ['slash', 3, 7]] },
@@ -53,19 +53,33 @@ const COMBAT_UNITS = {
       { name: 'Coraza E.G.O.', dice: [['block', 5, 9], ['slash', 4, 7]] },
     ],
   },
-  sweeper: {
-    id: 'sweeper', name: 'BARRENDERO', tag: 'NOCHE', team: 'enemy', maxHp: 66, maxSt: 32, speed: [3, 7], nDice: 2,
-    kind: 'sweeper', bx: 250, by: 106, scale: 1,
-    defeat: 'El barrendero se disuelve en la niebla de las 3 AM.',
+  // ZAYIN: weak, and its conveyor sometimes hands the team a "forgotten piece"
+  machine: {
+    id: 'machine', name: 'MÁQUINA E.G.O.', tag: 'ZAYIN', tagCol: '#2a7a3a', team: 'enemy', maxHp: 50, maxSt: 28, speed: [1, 4], nDice: 2,
+    kind: 'machine', bg: 'cell', height: 86, bx: 252, by: 106, scale: 1, givesPieces: 0.4,
+    defeat: 'La Máquina de Extracción E.G.O. se apaga con un último chirrido.',
     pages: [
-      { name: 'Barrido', dice: [['slash', 4, 7], ['slash', 4, 7]] },
-      { name: 'Perforar', dice: [['pierce', 6, 10]] },
-      { name: 'Recolección', dice: [['pierce', 3, 6], ['pierce', 3, 6], ['slash', 3, 5]] },
-      { name: 'Paso en la niebla', dice: [['evade', 5, 9], ['pierce', 5, 8]] },
+      { name: 'Prensa hidráulica', dice: [['blunt', 5, 9]] },
+      { name: 'Cinta transportadora', dice: [['blunt', 2, 4], ['blunt', 2, 4], ['blunt', 2, 4]] },
+      { name: 'Expulsar componente', dice: [['pierce', 3, 6], ['pierce', 2, 5]] },
+      { name: 'Carcasa reforzada', dice: [['block', 5, 8], ['blunt', 3, 5]] },
+    ],
+  },
+  // TETH: whips and shocks, but every few turns it reboots and is left defenceless
+  operator: {
+    id: 'operator', name: 'OPERADOR', tag: 'TETH', tagCol: '#2a5aa0', team: 'enemy', maxHp: 105, maxSt: 40, speed: [3, 7], nDice: 2,
+    kind: 'operator', bg: 'cell', height: 84, bx: 250, by: 106, scale: 1, reboot: 3,
+    defeat: 'La pantalla de El Operador Desconectado se apaga para siempre.',
+    pages: [
+      { name: 'Latigazo de cable', dice: [['slash', 5, 8], ['slash', 4, 7]] },
+      { name: 'Descarga', dice: [['pierce', 7, 11]] },
+      { name: 'Enredo', dice: [['slash', 4, 6], ['slash', 4, 6], ['slash', 4, 6]] },
+      { name: 'Sobrecarga', dice: [['pierce', 6, 10], ['slash', 5, 8]] },
     ],
   },
 };
 const HAND_START = 4, HAND_MAX = 8;
+const FORGOTTEN_PIECE = { name: 'Pieza olvidada', cost: 0, copies: 0, dice: [['pierce', 4, 8], ['pierce', 2, 5]] };
 
 const CB = {
   active: false, turn: 0, phase: 'select',
@@ -117,7 +131,7 @@ function startCombatTest(enemyId = 'corrupted') {
   G.mode = 'combat';
   ui.hub.classList.add('hidden');
   hideAllOverlays();
-  G.s = { bg: 'arena' }; G.actors = {}; G.fade = 0;
+  G.s = { bg: COMBAT_UNITS[enemyId].bg }; G.actors = {}; G.fade = 0;
   CB.active = true; CB.turn = 0; CB.anims = []; CB.view = null; CB.animating = false;
   CB.enemyId = enemyId;
   CB.allies = [makeUnit(COMBAT_UNITS.lobelto), makeUnit(COMBAT_UNITS.gonza)];
@@ -154,9 +168,16 @@ function newTurn() {
     for (let k = 0; k < u.nDice; k++)
       CB.dice.push({ unit: u, k, speed: u.staggered ? 0 : rnd(...u.speed), page: null, target: null, used: false });
   }
+  for (const u of CB.enemies) {
+    u.rebooting = !!(u.reboot && canAct(u) && CB.turn % u.reboot === 0);
+    if (u.rebooting) {
+      const p = headPos(u);
+      spawnAnim('text', p.x, p.y - 4, 'REINICIANDO...', '#9ac0ff', 1600, { big: true });
+    }
+  }
   const targets = allyDice().filter(d => alive(d.unit));
   for (const d of enemyDice()) {
-    if (!canAct(d.unit)) continue;
+    if (!canAct(d.unit) || d.unit.rebooting) continue;
     d.page = d.unit.pages[rnd(0, d.unit.pages.length - 1)];
     d.target = targets[rnd(0, targets.length - 1)] || null;
   }
@@ -262,6 +283,17 @@ function endTurn() {
       spawnAnim('text', p.x, p.y - 8, 'Recuperado', '#4ac08a', 1000);
     }
   }
+  for (const e of CB.enemies) {
+    e.rebooting = false;
+    if (!e.givesPieces || !alive(e) || Math.random() >= e.givesPieces) continue;
+    const takers = CB.allies.filter(u => alive(u) && u.hand.length < HAND_MAX);
+    if (!takers.length) continue;
+    const u = takers[rnd(0, takers.length - 1)];
+    u.hand.push({ page: FORGOTTEN_PIECE });
+    const pe = headPos(e), pu = headPos(u);
+    spawnAnim('text', pe.x, pe.y - 4, '*clac*', '#ffb040', 1200);
+    spawnAnim('text', pu.x, pu.y - 22, '+ Pieza olvidada', '#ffb040', 1600);
+  }
   if (checkEnd()) {
     CB.phase = 'done';
     SFX.play(CB.enemies.every(u => !alive(u)) ? 'gacha' : 'disconnect');
@@ -319,12 +351,13 @@ function resolveDice(A, ta, ra, B, tb, rb) {
 function headPos(u) {
   const a = G.actors[u.id] || { x: u.bx, y: u.by };
   const s = u.scale * (u.hat === 'cap' ? 0.86 : 1);
-  return { x: a.x, y: a.y - (u.kind ? 72 : 42) * s };
+  return { x: a.x, y: a.y - (u.kind ? u.height : 42) * s };
 }
 
 function dealDamage(u, hpD, stD) {
   if (!alive(u)) return;
   if (u.staggered) hpD *= 2;
+  if (u.rebooting) hpD = Math.ceil(hpD * 1.5);
   u.hp = Math.max(0, u.hp - hpD);
   if (!u.staggered && stD > 0) u.st = Math.max(0, u.st - stD);
   const p = headPos(u);
@@ -443,7 +476,7 @@ function expDamage(pg) {
 function autoAssign(mode) {
   if (CB.phase !== 'select') return;
   const used = new Set();
-  const foes = enemyDice().filter(e => canAct(e.unit) && e.page);
+  const foes = enemyDice().filter(e => canAct(e.unit));
   for (const d of allyDice()) {
     if (!canAct(d.unit) || !foes.length) continue;
     unassign(d);
@@ -451,7 +484,8 @@ function autoAssign(mode) {
     for (const card of d.unit.hand) {
       if (card.page.cost > d.unit.light) continue;
       for (const e of foes) {
-        let score = mode === 'win' ? winRate(card.page, e.page) : expDamage(card.page);
+        // a die with no page (rebooting enemy) takes a free hit: just maximise damage
+        let score = mode === 'win' && e.page ? winRate(card.page, e.page) : expDamage(card.page) / (mode === 'win' ? 20 : 1);
         if (used.has(e)) score -= mode === 'win' ? 0.5 : 20;
         if (e.target === d) score += mode === 'win' ? 0.05 : 0.5;
         if (score > bestScore) { bestScore = score; best = [card, e]; }
@@ -605,6 +639,9 @@ function drawToken(d, t) {
     d.page.dice.forEach(([ty], k) => rect(x - n + k * 2, y + 3, 1, 2, DIE[ty].col));
     const [, a, b] = d.page.dice[0];
     txt(`${a}-${b}`, x - 12, y + 3, '#ffd060', 9, 'right');
+  } else if (u.rebooting) {
+    txt('...', x, y + 2, '#9ac0ff', 10, 'center');
+    txt('REINICIO', x - 12, y + 3, '#9ac0ff', 8, 'right');
   } else {
     txt('?', x, y + 3, '#6a6070', 10, 'center');
   }
@@ -628,7 +665,7 @@ function enemyPlate(u, t) {
   const x0 = 210, y0 = 108, w = 86;
   rect(x0, y0, w, 14, '#0a080e');
   rect(x0, y0, w, 1, '#5a1a24');
-  rect(x0 + 2, y0 + 2, 22, 5, '#8a2030');
+  rect(x0 + 2, y0 + 2, 22, 5, u.tagCol);
   txt(u.tag, x0 + 13, y0 + 7, '#ffe0e0', 7, 'center');
   txt(u.name, x0 + 27, y0 + 7, '#d8d0c0', 7);
   const hp = u.hp / u.maxHp;
@@ -638,6 +675,7 @@ function enemyPlate(u, t) {
   rect(x0 + 2, y0 + 12, Math.round((w - 24) * u.st / u.maxSt), 1, '#e8c040');
   txt(String(u.hp), x0 + w - 2, y0 + 13, '#ff8a3a', 10, 'right');
   if (u.staggered && Math.floor(t / 400) % 2) txt('STAGGER', x0 + w / 2, y0 - 3, '#ff4a5a', 9, 'center');
+  else if (u.rebooting && Math.floor(t / 400) % 2) txt('REINICIANDO · DAÑO x1.5', x0 + w / 2, y0 - 3, '#9ac0ff', 8, 'center');
 }
 
 function gear(cx, cy, r, t, hov) {
@@ -814,6 +852,7 @@ function refreshActors() {
     a.pain = u.staggered;
     a.blind = u.staggered;
     a.rage = u.hp < u.maxHp * 0.3;
+    a.rebooting = u.rebooting;
   }
 }
 
