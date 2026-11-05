@@ -911,6 +911,19 @@ function mapHit(x, y) {
   return null;
 }
 
+// After an episode ends: back to the map of its chapter, with the next
+// episode (or this one, if the next is not open yet) selected.
+function showChapterOf(sc) {
+  showHub();
+  const e = sc && EPISODES.find(x => x.ep === sc.ep);
+  if (!e) return;
+  G.hubTab = 'mapa';
+  G.hubNavSel = HUB_NAV.findIndex(n => n.id === 'mapa');
+  G.chapter = e.chapter;
+  const next = EPISODES.find(x => x.chapter === e.chapter && x.ep === e.ep + 1);
+  G.epSel = next && episodeOpen(next) ? next.ep : e.ep;
+}
+
 function openChapter(num) { G.chapter = num; G.epSel = null; G.mapHover = null; SFX.play('confirm'); }
 function closeChapter() { G.chapter = null; G.epSel = null; G.mapHover = null; SFX.play('select'); }
 function playEpisode(ep) {

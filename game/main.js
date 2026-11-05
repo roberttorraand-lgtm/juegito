@@ -225,7 +225,7 @@ function advance() {
     G.waiting = null;
     if (G.mode === 'end') {
       if (G._nextScene) { startScene(G._nextScene); G._nextScene = null; }
-      else showHub();
+      else showChapterOf(G.scene);
       return;
     }
     G.mode = 'play';
