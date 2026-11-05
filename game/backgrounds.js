@@ -1230,7 +1230,7 @@ function drawDarkness(s, t) {
   // the beam fully clears the darkness in its core and softens towards the edges
   for (const [hx, hy, f] of beams) {
     const ang = f > 0 ? 0.06 : Math.PI - 0.06;
-    for (const [len, spread, a] of [[260, 0.36, 0.45], [230, 0.26, 0.6], [200, 0.16, 0.9]]) { g.globalAlpha = a * flick; tri(hx, hy, ang, spread, len); }
+    for (const [len, spread, a] of [[240, 0.34, 0.25], [210, 0.24, 0.3], [180, 0.15, 0.4]]) { g.globalAlpha = a * flick; tri(hx, hy, ang, spread, len); }
   }
   g.globalAlpha = 1;
   ctx.drawImage(_darkC, -OX, 0, VW, H);
@@ -1240,21 +1240,21 @@ function drawDarkness(s, t) {
   for (const [hx, hy, f, sc] of beams) {
     const ang = f > 0 ? 0.06 : Math.PI - 0.06;
     ctx.globalCompositeOperation = 'lighter';
-    for (const [spread, al] of [[0.3, 0.07], [0.18, 0.08], [0.08, 0.08]]) {
+    for (const [spread, al] of [[0.3, 0.03], [0.18, 0.035], [0.08, 0.04]]) {
       ctx.globalAlpha = al * flick;
       poly([[hx, hy], [hx + Math.cos(ang - spread) * 220, hy + Math.sin(ang - spread) * 220], [hx + Math.cos(ang + spread) * 220, hy + Math.sin(ang + spread) * 220]], '#e0ecff');
     }
     const spot = hx + f * 110;
-    light(spot, hy + 8, 34, 26, '#e8f0ff', 0.16 * flick, 4);
+    light(spot, hy + 8, 30, 22, '#e8f0ff', 0.07 * flick, 4);
     for (let i = 0; i < 18 * CFG.particles; i++) {
       const d = 14 + ((hash(i * 7 + 1) * 180 + t * 0.006 * (1 + hash(i))) % 180);
       const off = (hash(i * 7 + 2) - 0.5) * 2 * Math.tan(0.26) * d;
       const yy = hy + Math.sin(ang) * d + off + Math.sin(t / 900 + i) * 2;
-      ctx.globalAlpha = 0.5 * (1 - d / 200);
+      ctx.globalAlpha = 0.28 * (1 - d / 200);
       px(hx + f * d, yy, '#ffffff');
     }
     ctx.globalAlpha = 0.9;
-    light(hx + f, hy - 1, 2.5 * sc, 2 * sc, '#ffffff', 0.6, 3);
+    light(hx + f, hy - 1, 2 * sc, 1.6 * sc, '#ffffff', 0.35, 3);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = op;
   }
