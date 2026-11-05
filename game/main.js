@@ -24,6 +24,7 @@ const G = {
   pendingScene: null,
   alerts: [],
   emotes: [],
+  runId: 0,
 };
 
 function isSceneUnlocked(sc) {
@@ -38,6 +39,7 @@ showHub();
 
 // ---------- Story runner ----------
 function run() {
+  if (!G.scene || G.mode === 'hub') return;
   while (G.idx < G.steps.length) {
     const st = G.steps[G.idx++];
     if (handle(st)) return;
@@ -66,7 +68,12 @@ function finishScene() {
   G._nextScene = next;
 }
 
-function later(ms, fn) { setTimeout(fn, G.skip ? Math.min(ms, 60) : ms); }
+// Timers belong to the scene run that set them: leaving or restarting a scene
+// bumps G.runId, so a stale fade, wait or walk can never drive the new one.
+function later(ms, fn) {
+  const id = G.runId;
+  setTimeout(() => { if (id === G.runId) fn(); }, G.skip ? Math.min(ms, 60) : ms);
+}
 
 function handle(st) {
   const now = performance.now();
@@ -132,12 +139,14 @@ function walkActors(st) {
     a.walking = st.run ? 'run' : true;
     if (!st.keepFace && to[k] !== a.x) a.face = Math.sign(to[k] - a.x);
   }
-  const start = performance.now();
+  const start = performance.now(), runId = G.runId;
   const done = () => {
+    if (runId !== G.runId) return;
     for (const k in from) { const a = G.actors[k]; if (a) { a.x = to[k]; a.walking = false; } }
     if (!st.async) { G.waiting = null; run(); }
   };
   const step = () => {
+    if (runId !== G.runId) return;
     const k = Math.min(1, (performance.now() - start) / ms);
     for (const id in from) { const a = G.actors[id]; if (a) a.x = from[id] + (to[id] - from[id]) * k; }
     if (k < 1) requestAnimationFrame(step); else done();
@@ -177,7 +186,7 @@ function setBoxText(ty, n) {
 
 function tick() {
   const ty = G.typing;
-  if (!ty) return;
+  if (!ty || G.mode === 'hub') return;
   if (G.skip) ty.shown = ty.full.length;
   else ty.shown++;
   setBoxText(ty, ty.shown);
@@ -289,6 +298,8 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') showHub();
 });
 document.addEventListener('keyup', (e) => { if (e.key === 'Control') G.skip = false; });
+// switching window while holding Ctrl never delivers the keyup: stop skipping
+window.addEventListener('blur', () => { G.skip = false; });
 window.addEventListener('blur', () => { G.skip = false; });
 document.getElementById('game').addEventListener('click', (e) => {
   if (G.mode !== 'hub' && G.mode !== 'combat') advance();

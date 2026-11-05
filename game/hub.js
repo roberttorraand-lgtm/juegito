@@ -17,6 +17,8 @@ function hideAllOverlays() {
 function showHub() {
   G.mode = 'hub'; G.hubView = 'main'; G.s = {}; G.actors = {}; G.fade = 0;
   G.scene = null; G.steps = []; G.pendingScene = null;
+  G.runId++; G.waiting = null; G.skip = false; G.fadeAnim = null;
+  if (G.typing) { clearTimeout(G.typing.timer); G.typing = null; }
   G.hubNavSel = 0; G.hubTab = 'ventana'; G.mapSel = 0; G.mapModeSel = 0; G.chapter = null; G.epSel = null; G.mapHover = null;
   hideAllOverlays();
   ui.hub.classList.add('hidden');
@@ -105,7 +107,9 @@ function hideConfirm() {
 }
 
 function startScene(sc) {
-  G.mode = 'play'; G.scene = sc; G.steps = sc.steps; G.idx = 0;
+  G.runId++; G.fadeAnim = null;
+  if (G.typing) { clearTimeout(G.typing.timer); G.typing = null; }
+  G.mode = 'play'; G.scene = sc; G.steps = sc.steps; G.idx = 0; G.waiting = null;
   G.s = { bg: 'black' }; G.actors = {}; G.fade = 1;
   ui.hub.classList.add('hidden');
   hideAllOverlays();
@@ -157,7 +161,7 @@ function showSettings(tab = 'audio', quiet = false) {
       ${tabBtn('video', 'Video')}
       ${tabBtn('datos', 'Datos')}
       <button class="st-back" data-hub="back">← Volver</button>
-      <div class="st-version">v0.1 — Episodio I</div>
+      <div class="st-version">v0.2 — Episodios I y II</div>
     </div>
     <div class="st-main">
       <div ${panel('audio')}>
@@ -486,6 +490,16 @@ function drawHub(t) {
   drawNavBar(t);
 }
 
+const CONTINUE_BTN = { x: 80, y: 99, w: 56, h: 11 };
+function continueStory() {
+  const sc = SCENES.find(s => !isSceneDone(s) && isSceneUnlocked(s));
+  if (!sc) return false;
+  SFX.play('select');
+  G.confirmFrom = 'map';
+  showConfirm(sc);
+  return true;
+}
+
 function drawVentana(t) {
   drawWide(() => drawHubBackdrop(t), 'hub');
 
@@ -516,15 +530,28 @@ function drawVentana(t) {
   ctx.font = '8px VT323, monospace';
   ctx.fillStyle = '#8a8070'; ctx.fillText('PROGRESO ACTUAL', cx + 10, cy + 60);
   ctx.font = '10px VT323, monospace';
+  // the episode shown is the one the player is in: the next scene's, else the last one played
+  const curEp = EPISODES.find(e => e.ep === (nextScene || lastScene || SCENES[0]).ep) || EPISODES[0];
   if (nextScene) {
     ctx.fillStyle = '#c09050'; ctx.fillText('Próximo:', cx + 10, cy + 70);
-    ctx.fillStyle = '#e8e4dc'; ctx.fillText(`Esc.${nextScene.num}: ${nextScene.title}`, cx + 48, cy + 70);
+    ctx.fillStyle = '#e8e4dc'; ctx.fillText(`Ep.${curEp.roman} · Esc.${nextScene.num}: ${nextScene.title}`, cx + 48, cy + 70, cw - 106);
   } else if (lastScene) {
-    ctx.fillStyle = '#3fbf6a'; ctx.fillText('✓ Episodio 1 completado', cx + 10, cy + 70);
+    ctx.fillStyle = '#3fbf6a';
+    ctx.fillText(curEp.wip ? '✓ Al día · continuará...' : `✓ Episodio ${curEp.roman} completado`, cx + 10, cy + 70);
   }
   ctx.fillStyle = '#5d5850';
   const doneCount = SCENES.filter(s => isSceneDone(s)).length;
-  ctx.fillText(`${doneCount}/${SCENES.length} escenas`, cx + 10, cy + 82);
+  ctx.fillText(`${doneCount}/${SCENES.length} escenas en total`, cx + 10, cy + 82);
+  const epScenes = episodeScenes(curEp), epDone = epScenes.filter(isSceneDone).length;
+  if (nextScene) {
+    // quick way back into the story without going through the map
+    const hv = G.ventHover;
+    rect(CONTINUE_BTN.x, CONTINUE_BTN.y, CONTINUE_BTN.w, CONTINUE_BTN.h, hv ? '#c0283a' : '#5a1a24');
+    rect(CONTINUE_BTN.x, CONTINUE_BTN.y, CONTINUE_BTN.w, 1, '#ff6a78');
+    ctx.font = '8px VT323, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.fillText('▶ CONTINUAR', CONTINUE_BTN.x + CONTINUE_BTN.w / 2, CONTINUE_BTN.y + 8);
+    ctx.textAlign = 'left';
+  }
 
   rect(cx + cw - 50, cy + 50, 46, 48, '#16141e');
   rect(cx + cw - 50, cy + 50, 46, 2, '#2a2638');
@@ -536,14 +563,16 @@ function drawVentana(t) {
   const rx = 260, ry = 14, rw = 52, rh = 46;
   metalRect(rx, ry, rw, rh);
   ctx.font = '7px VT323, monospace';
-  ctx.fillStyle = '#8a6030'; ctx.fillText('EPISODIO I', rx + 6, ry + 12);
+  ctx.fillStyle = '#8a6030'; ctx.fillText(`EPISODIO ${curEp.roman}`, rx + 6, ry + 12);
   ctx.font = '8px VT323, monospace';
-  ctx.fillStyle = '#e8e4dc'; ctx.fillText('La Distorsión', rx + 4, ry + 22);
-  ctx.fillStyle = '#c09050'; ctx.fillText('Externa', rx + 14, ry + 30);
+  wrap(curEp.title, rw - 8, 8).slice(0, 2).forEach((ln, i) => {
+    ctx.fillStyle = i ? '#c09050' : '#e8e4dc';
+    ctx.textAlign = 'center'; ctx.fillText(ln, rx + rw / 2, ry + 22 + i * 8); ctx.textAlign = 'left';
+  });
   rect(rx + 4, ry + 34, rw - 8, 3, '#2a1810');
-  rect(rx + 4, ry + 34, Math.round((rw - 8) * doneCount / Math.max(1, SCENES.length)), 3, '#c0283a');
+  rect(rx + 4, ry + 34, Math.round((rw - 8) * epDone / Math.max(1, epScenes.length)), 3, '#c0283a');
   ctx.font = '7px VT323, monospace';
-  ctx.fillStyle = '#5d5850'; ctx.fillText(`${doneCount}/${SCENES.length}`, rx + 4, ry + 43);
+  ctx.fillStyle = '#5d5850'; ctx.fillText(`${epDone}/${epScenes.length}${curEp.wip ? ' · en desarrollo' : ''}`, rx + 4, ry + 43, rw - 8);
 
   metalRect(rx, ry + rh + 6, rw, 82);
   const previewY = ry + rh + 10;
@@ -575,8 +604,8 @@ function drawVentana(t) {
   disc(16, 110, 3, light2);
   ctx.font = '7px VT323, monospace';
   ctx.fillStyle = '#4a3018'; ctx.fillText('DIST.EXT', 12, 125);
-  ctx.fillText('v0.1', 22, 133);
-  ctx.fillText('EP.I', 22, 141);
+  ctx.fillText('v0.2', 22, 133);
+  ctx.fillText('EP.I-II', 18, 141);
 
   for (let i = 0; i < 8; i++) {
     const k = Math.floor(t / 300) * 8 + i;
@@ -924,6 +953,7 @@ cv.addEventListener('click', (e) => {
     }
   }
 
+  if (G.hubTab === 'ventana' && hitTest(x, y, CONTINUE_BTN.x, CONTINUE_BTN.y, CONTINUE_BTN.w, CONTINUE_BTN.h)) { continueStory(); return; }
   if (G.hubTab === 'mapa') {
     MAP_MODES.forEach((mode, i) => {
       const my = 16 + i * 30;
@@ -941,11 +971,19 @@ cv.addEventListener('click', (e) => {
 cv.addEventListener('mousemove', (e) => {
   if (G.mode !== 'hub' || G.hubView !== 'main') return;
   const { x, y } = canvasToLogical(e.clientX, e.clientY);
+  if (G.hubTab === 'ventana') {
+    const hv = hitTest(x, y, CONTINUE_BTN.x, CONTINUE_BTN.y, CONTINUE_BTN.w, CONTINUE_BTN.h);
+    if (hv && !G.ventHover) SFX.play('select');
+    G.ventHover = hv;
+    cv.style.cursor = hv ? 'pointer' : 'default';
+  }
   if (G.hubTab === 'mapa') {
     const h = mapHit(x, y);
     if (h !== G.mapHover && h && h !== 'play') SFX.play('select');
     G.mapHover = h;
-    if (h && h.startsWith('ep')) G.epSel = +h.slice(2);
+    // a tap also fires a mousemove: on touch screens selecting is left to the tap
+    // itself, so the first tap shows the summary and only the second one plays
+    if (h && h.startsWith('ep') && !IS_TOUCH) G.epSel = +h.slice(2);
     cv.style.cursor = h ? 'pointer' : 'default';
   }
   const bounds = getNavBtnBounds();

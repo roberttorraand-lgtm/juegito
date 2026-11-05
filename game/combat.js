@@ -760,7 +760,8 @@ async function koAnim(u, a) {
   dust(u, 8);
   await wait(500);
   await tween(a, { alpha: 0 }, 400);
-  delete G.actors[u.id];
+  // a retry may already have put a fresh actor under this id
+  if (G.actors[u.id] === a) delete G.actors[u.id];
 }
 
 // Applies HP damage with stagger at 25% of it (rounded up). Returns the HP damage dealt.
@@ -1135,12 +1136,6 @@ function focusUnit() {
   return null;
 }
 
-// Hovered token, for the targeting preview.
-function tokenAt(m) {
-  if (!m) return null;
-  return CB.dice.find(d => alive(d.unit) && !d.unit.staggered && (p => Math.abs(m.x - p.x) <= TOKEN_R + 2 && Math.abs(m.y - p.y) <= TOKEN_R + 2)(tokenPos(d))) || null;
-}
-
 function arrowHead([x, y], [qx, qy], col) {
   const a = Math.atan2(y - qy, x - qx);
   poly([
@@ -1413,7 +1408,9 @@ function selectPanel(t) {
   txt('INICIAR', 270, 134, '#ffd8a0', 8, 'center');
   const gh = hitArea(255, 140, 30, 32, combatExecute);
   gear(270, 156, 13, t, gh);
-  smallBtn(290, 140, 28, 11, 'Ganar', () => autoAssign('win'));
+  // automatic page picking: favour winning clashes, or raw damage
+  txt('AUTO', 304, 137, '#8a8070', 7, 'center');
+  smallBtn(290, 140, 28, 11, 'Choque', () => autoAssign('win'));
   smallBtn(290, 156, 28, 11, 'Daño', () => autoAssign('dmg'));
 }
 

@@ -52,23 +52,37 @@ function onResizeFX() {
 onResizeFX();
 
 // Draws the actor into a buffer, then stamps it on the floor as a
-// flipped, squashed, slanted black silhouette.
+// flipped, squashed, slanted black silhouette. Only the box around the actor
+// is touched, and the silhouette is made black with a composite fill
+// (no canvas filter), which keeps this cheap even at high resolutions.
 function drawActorShadow(a, draw) {
+  const sc = a.scale || 1;
+  const bw = Math.ceil(130 * sc), bh = Math.ceil(140 * sc);
+  const x0 = Math.floor(a.x + (a.ox || 0) - bw / 2), y0 = Math.floor(a.y - bh + 10);
+  const px0 = Math.max(0, (x0 + OX) * SCALE), py0 = Math.max(0, y0 * SCALE);
+  const pw = Math.min(shadowBuf.width - px0, (x0 + OX) * SCALE + bw * SCALE - px0);
+  const ph = Math.min(shadowBuf.height - py0, y0 * SCALE + bh * SCALE - py0);
+  if (pw <= 0 || ph <= 0) return;
   const sb = shadowBuf.getContext('2d');
   sb.setTransform(1, 0, 0, 1, 0, 0);
-  sb.clearRect(0, 0, shadowBuf.width, shadowBuf.height);
+  sb.clearRect(px0, py0, pw, ph);
+  sb.save();
+  sb.beginPath(); sb.rect(px0, py0, pw, ph); sb.clip();
   sb.setTransform(SCALE, 0, 0, SCALE, OX * SCALE, 0);
   sb.imageSmoothingEnabled = false;
   const prev = ctx;
   ctx = sb;
-  try { draw(); } finally { ctx = prev; }
+  try { draw(); } finally { ctx = prev; sb.restore(); }
+  sb.globalCompositeOperation = 'source-in';
+  sb.fillStyle = '#000';
+  sb.fillRect(px0, py0, pw, ph);
+  sb.globalCompositeOperation = 'source-over';
   ctx.save();
   ctx.translate(a.x, a.y);
   ctx.transform(1, 0, -0.9, -0.32, 0, 0);
   ctx.translate(-a.x, -a.y);
   ctx.globalAlpha = 0.38;
-  ctx.filter = 'brightness(0)';
-  ctx.drawImage(shadowBuf, -OX, 0, VW, H);
+  ctx.drawImage(shadowBuf, px0, py0, pw, ph, px0 / SCALE - OX, py0 / SCALE, pw / SCALE, ph / SCALE);
   ctx.restore();
 }
 
