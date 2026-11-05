@@ -378,6 +378,40 @@ def sfx_item():
     return norm(mix((0, instrument('bell', 84, 0.5, 1)), (0.08, instrument('bell', 91, 0.6, 0.8)), (0.16, instrument('bell', 96, 0.7, 0.6))), 0.6)
 
 
+# ---- emote stings for cutscene expressions (short, cartoony, quiet)
+def emote_vein():
+    pop = lambda f: osc('square', sweep(f, f * 0.7, 0.05), 0.05, 0.3) * env_ad(0.05, 0.001, 5)
+    return norm(mix((0, pop(520)), (0.07, pop(440))), 0.55)
+
+
+def emote_sweat():
+    return norm(osc('sine', sweep(1400, 700, 0.22), 0.22) * env_ad(0.22, 0.005, 3) + 0.3 * osc('tri', sweep(2800, 1400, 0.22), 0.22) * env_ad(0.22, 0.005, 4), 0.45)
+
+
+def emote_gloom():
+    notes = [(0, 62), (0.16, 59), (0.32, 55)]
+    return norm(mix(*[(st, instrument('tri', m, 0.22, 1)) for st, m in notes]), 0.45)
+
+
+def emote_sparkle():
+    return norm(mix((0, instrument('bell', 93, 0.25, 1)), (0.05, instrument('bell', 98, 0.25, 0.8)), (0.1, instrument('bell', 100, 0.35, 0.6))), 0.45)
+
+
+def emote_question():
+    return norm(osc('sine', sweep(380, 760, 0.18), 0.18) * env_ad(0.18, 0.005, 2) * (1 + 0.3 * osc('sine', 18, 0.18)), 0.45)
+
+
+def emote_dots():
+    tick = lambda: osc('square', 880, 0.025, 0.25) * env_ad(0.025, 0.001, 4)
+    return norm(mix((0, tick()), (0.14, tick()), (0.28, tick())), 0.35)
+
+
+def emote_shock():
+    hit = osc('square', sweep(700, 1500, 0.08), 0.08, 0.25) * env_ad(0.08, 0.001, 2)
+    ring_ = osc('sine', 1500, 0.3) * env_ad(0.3, 0.001, 5) * 0.4
+    return norm(mix((0, hit), (0.06, ring_)), 0.5)
+
+
 SFX = {
     'clash': sfx_clash, 'slash': sfx_slash, 'pierce': sfx_pierce, 'blunt': sfx_blunt, 'block': sfx_block,
     'shield': sfx_shield, 'evade': sfx_evade, 'counter': sfx_counter, 'dice': sfx_dice, 'tie': sfx_tie,
@@ -385,6 +419,8 @@ SFX = {
     'victory': sfx_victory, 'defeat': sfx_defeat,
     'select': sfx_select, 'confirm': sfx_confirm, 'error': sfx_error, 'alert': sfx_alert,
     'scream': sfx_scream, 'thud': sfx_thud, 'rift': sfx_rift, 'gacha': sfx_gacha, 'disconnect': sfx_disconnect,
+    'emote_vein': emote_vein, 'emote_sweat': emote_sweat, 'emote_gloom': emote_gloom, 'emote_sparkle': emote_sparkle,
+    'emote_question': emote_question, 'emote_dots': emote_dots, 'emote_shock': emote_shock,
     'door': sfx_door, 'drip': sfx_drip, 'punch': sfx_punch, 'locker': sfx_locker, 'item': sfx_item,
     'blip_lobelto': lambda: blip('square', 150, 0.05, 0.5, 0.3 * osc('square', 300, 0.05, 0.25) * env_ad(0.05, 0.001, 4)),
     'blip_gonza': lambda: blip('square', 247, 0.042, 0.25),

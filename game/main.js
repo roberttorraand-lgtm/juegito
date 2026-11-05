@@ -23,6 +23,7 @@ const G = {
   steps: [],
   pendingScene: null,
   alerts: [],
+  emotes: [],
 };
 
 function isSceneUnlocked(sc) {
@@ -93,6 +94,7 @@ function handle(st) {
     return false;
   }
   if (st.sfx) { SFX.play(st.sfx); return false; }
+  if (st.exprs) { for (const k in st.exprs) setExpr(k, st.exprs[k]); return false; }
   if (st.walk) return walkActors(st);
   if (st.fx === 'shake') { G.shakeUntil = now + st.ms; return false; }
   if (st.fx === 'flash') { G.flash = { color: st.color, start: now, ms: st.ms }; return false; }
@@ -152,7 +154,11 @@ function showText(st) {
   G.waiting = 'text';
   // shouted lines (screams, or written in capitals) shake letter by letter, Deltarune style
   const shout = !!st.scream || (/[A-ZÁÉÍÓÚÑ]{4}/.test(full) && full === full.toUpperCase());
-  G.typing = { full, shown: 0, who, cut: st.cut, shout };
+  if (who && 'expr' in st) setExpr(who, st.expr);
+  if (st.exprs) for (const k in st.exprs) setExpr(k, st.exprs[k]);
+  // the voice follows the mood: explicit expression, else shouting, a question or silence
+  const mood = st.expr || (shout ? 'shout' : /^[\s.]+$/.test(full) ? 'blank' : /\?\s*$/.test(full) ? 'ask' : null);
+  G.typing = { full, shown: 0, who, cut: st.cut, shout, mood };
   ui.text.textContent = '';
   tick();
 }
@@ -171,10 +177,11 @@ function tick() {
   else ty.shown++;
   setBoxText(ty, ty.shown);
   const ch = ty.full[ty.shown - 1];
-  if (ch && ch !== ' ' && ty.shown % 2) SFX.blip(ty.who || 'narr');
+  if (ch && ch !== ' ' && ty.shown % 2) SFX.blip(ty.who || 'narr', ty.mood, ty.shown / ty.full.length);
   if (ty.shown >= ty.full.length) return finishTyping();
   const spd = CFG.textSpeed === 'muyrapido' ? 0.3 : CFG.textSpeed === 'rapido' ? 0.6 : 1;
-  const pause = (/[.,!?]/.test(ch) ? 90 : 28) * spd;
+  const pace = MOOD_PACE[ty.mood] || 1;
+  const pause = (/[.,!?]/.test(ch) ? 90 : 28) * spd * pace;
   ty.timer = setTimeout(tick, pause);
 }
 
@@ -283,6 +290,81 @@ document.getElementById('game').addEventListener('click', (e) => {
 });
 
 // Deltarune-style "!" that pops over a character's head
+// Expressions: eyes/brows on the figure plus an anime-style emote over the head.
+const MOOD_PACE = { shout: 0.8, angry: 0.85, happy: 0.9, shock: 0.85, sad: 1.35, blank: 1.6, nervous: 1.1 };
+const EMOTE_FOR = { angry: 'vein', sad: 'gloom', nervous: 'sweat', shock: 'shock', happy: 'sparkle', confused: 'question', blank: 'dots', smug: 'sparkle' };
+function setExpr(id, e) {
+  const a = G.actors[id];
+  if (!a || a.expr === e) return;
+  a.expr = e || null;
+  const em = EMOTE_FOR[e];
+  if (!em) return;
+  a.emote = { type: em, start: performance.now() };
+  SFX.play('emote_' + em);
+}
+
+function drawEmotes(t) {
+  const now = performance.now();
+  for (const id in G.actors) {
+    const a = G.actors[id], em = a && a.emote;
+    if (!em || !a.expr || a.kind !== 'fig') continue;
+    const k = (now - em.start) / 1000;
+    const s = (a.scale || 1) * (a.hat === 'cap' ? 0.86 : 1), f = a.face || 1;
+    const hx = a.x + (a.ox || 0), hy = a.y - 27 * s;
+    const pop = Math.min(1, k * 6);
+    const lasting = em.type === 'vein' || em.type === 'sweat' || em.type === 'gloom';
+    if (!lasting && k > 1.6) continue;
+    ctx.save();
+    ctx.globalAlpha = lasting ? 1 : Math.min(1, (1.6 - k) / 0.3);
+    ctx.translate(hx, hy); ctx.scale(s, s);
+    if (em.type === 'vein') {
+      // pulsing cross-shaped vein at the temple
+      const b = 1 + (Math.sin(t / 120) > 0.6 ? 1 : 0);
+      const x = -f * 6, y = -7;
+      rect(x - 1, y - 2 - b, 2, 2, '#ff3040'); rect(x + 1, y - 2 - b, 2, 2, '#ff3040');
+      rect(x - 1, y + 1, 2, 2, '#ff3040'); rect(x + 1, y + 1, 2, 2, '#ff3040');
+      rect(x - 2 - b, y - 1, 2, 2, '#ff3040'); rect(x + 2 + b, y - 1, 2, 2, '#ff3040');
+    } else if (em.type === 'sweat') {
+      const y = -6 + ((t / 60) % 8);
+      const x = -f * 7;
+      px(x, y, '#cfeaff'); rect(x - 1, y + 1, 3, 2, '#8ac8ff'); px(x, y + 3, '#5aa0e0');
+    } else if (em.type === 'gloom') {
+      for (let i = 0; i < 4; i++) {
+        const h = 4 + ((Math.floor(t / 160) + i) % 3);
+        ctx.globalAlpha = 0.7;
+        rect(-5 + i * 3, -14 - h + 2, 1, h, '#6a7ab0');
+      }
+    } else if (em.type === 'sparkle') {
+      for (const [dx, dy, ph] of [[7, -9, 0], [10, -4, 2], [4, -13, 4]]) {
+        const on = (Math.floor(t / 110) + ph) % 6 < 4;
+        if (!on) continue;
+        const x = dx * f, y = dy;
+        px(x, y, '#fff6c0'); px(x - 1, y, '#ffd060'); px(x + 1, y, '#ffd060'); px(x, y - 1, '#ffd060'); px(x, y + 1, '#ffd060');
+      }
+    } else if (em.type === 'shock') {
+      for (const [dx, dy, ex, ey] of [[-7, -6, -11, -9], [0, -9, 0, -14], [7, -6, 11, -9]]) {
+        const e = pop;
+        line(dx, dy, dx + (ex - dx) * e, dy + (ey - dy) * e, '#ffffff');
+      }
+    } else if (em.type === 'question' || em.type === 'dots') {
+      const label = em.type === 'question' ? '?' : '...';
+      const by = -12 - pop * 3;
+      ctx.font = '9px VT323, monospace'; ctx.textAlign = 'center';
+      if (em.type === 'dots') {
+        rrect(-8, by - 7, 16, 9, '#f0ece0', 2);
+        const n = Math.min(3, Math.floor(k * 4) + 1);
+        for (let i = 0; i < n; i++) rect(-5 + i * 4, by - 3, 2, 2, '#16121a');
+      } else {
+        for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { ctx.fillStyle = '#000'; ctx.fillText(label, f * 7 + ox, by + oy); }
+        ctx.fillStyle = '#ffd060'; ctx.fillText(label, f * 7, by);
+      }
+      ctx.textAlign = 'left';
+    }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawAlerts(t) {
   const now = performance.now();
   G.alerts = G.alerts.filter(al => now - al.start < 900);
@@ -349,6 +431,7 @@ function render(t) {
       ctx.globalAlpha = 1;
     }
     drawDarkness(G.s, t);
+    drawEmotes(t);
     drawAlerts(t);
     const r = G.s.rift;
     if (r) { r.w += (r.target - r.w) * 0.04; rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }

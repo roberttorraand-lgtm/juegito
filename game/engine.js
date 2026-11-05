@@ -92,6 +92,33 @@ const FIG_POSES = {
   search: { front: [8, -4], back: [6, 2], legs: [[-4, 0], [5, 0]] },
 };
 
+// Eyes and brows carry the expression (no mouths: the stickmen stay simple).
+// dx grows toward the facing side; the eyes sit at dx 1 and 3, row -1.
+const EXPRS = {
+  angry:    { eyes: [[1, -1], [3, -1]], brows: [[0, -3], [1, -2], [3, -2], [4, -3]] },
+  sad:      { eyes: [[1, 0], [3, 0]], brows: [[0, -2], [1, -3], [3, -3], [4, -2]] },
+  nervous:  { eyes: [[1, -1], [3, -1]], brows: [[0, -2], [1, -3], [3, -3], [4, -2]] },
+  shock:    { eyes: [[1, -2], [1, -1], [3, -2], [3, -1]], brows: [[1, -4], [3, -4]] },
+  happy:    { eyes: [[0, 0], [1, -1], [2, 0], [3, -1], [4, 0]] },
+  confused: { eyes: [[1, -1], [3, -1]], brows: [[0, -3], [1, -3], [3, -2], [4, -2]] },
+  blank:    { eyes: [[0, -1], [1, -1], [3, -1], [4, -1]] },
+  smug:     { eyes: [[1, -1], [2, -1], [3, -1], [4, -1]], brows: [[3, -3], [4, -3]] },
+};
+function drawEyes(o, mpx, t) {
+  const E = EXPRS[o.expr];
+  // blink now and then unless an expression holds the eyes
+  const blink = !E && !o.pain && (Math.floor(t / 90 + (o.hat === 'cap' ? 17 : 0)) % 48) === 0;
+  if (o.pain) { mpx(1, -1, FIG.eye); mpx(3, -1, FIG.eye); mpx(1, -2, FIG.eye); mpx(3, 0, FIG.eye); return; }
+  if (!E) {
+    if (blink) { mpx(0, -1, FIG.eye); mpx(1, -1, FIG.eye); mpx(3, -1, FIG.eye); mpx(4, -1, FIG.eye); }
+    else { mpx(1, -1, FIG.eye); mpx(3, -1, FIG.eye); }
+    return;
+  }
+  for (const [dx, dy] of E.eyes) mpx(dx, dy, FIG.eye);
+  const up = o.hat === 'headset' ? 1 : 0;   // clear Lobelto's glasses frame
+  for (const [dx, dy] of E.brows || []) mpx(dx, dy - up, FIG.eye);
+}
+
 function figure(x, y, o, t) {
   const kid = o.hat === 'cap';
   const sc = (o.scale || 1) * (kid ? 0.86 : 1);
@@ -146,8 +173,7 @@ function figure(x, y, o, t) {
     px(hx - 1, hy - 5, '#8a4a4a');
   }
 
-  mpx(1, -1, FIG.eye); mpx(3, -1, FIG.eye);
-  if (o.pain) { mpx(1, -2, FIG.eye); mpx(3, 0, FIG.eye); }
+  drawEyes(o, mpx, t);
   if (o.cry) {
     // two streams of tears running down from the eyes
     const k = Math.floor(t / 120) % 4;

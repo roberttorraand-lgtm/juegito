@@ -16,6 +16,7 @@ const SOUND_FILES = {
     'stagger', 'ko', 'light', 'turn', 'reboot', 'victory', 'defeat',
     'select', 'confirm', 'error', 'alert',
     'scream', 'thud', 'rift', 'gacha', 'disconnect', 'door', 'drip', 'punch', 'locker', 'item',
+    'emote_vein', 'emote_sweat', 'emote_gloom', 'emote_sparkle', 'emote_question', 'emote_dots', 'emote_shock',
     'blip_lobelto', 'blip_gonza', 'blip_narr']),
   ...(CAN_OGG ? { hit: 'blunt.ogg', 'blip_¿¿??': 'blip_monster.ogg' } : {}),
 };
@@ -61,6 +62,20 @@ const VOICE = {
   operator: { pitch: 180, type: 'square', robot: true },
 };
 const VOWEL = { a: [760, 1300], e: [460, 1900], i: [300, 2300], o: [500, 900], u: [330, 780] };
+
+const BLIP_MOOD = {
+  none:    { rate: 1, vol: 1, jitter: 0.06 },
+  shout:   { rate: 0.9, vol: 1.25, jitter: 0.12 },
+  angry:   { rate: 0.86, vol: 1.2, jitter: 0.1 },
+  happy:   { rate: 1.14, vol: 1, jitter: 0.1 },
+  shock:   { rate: 1.22, vol: 1.1, jitter: 0.08 },
+  sad:     { rate: 0.82, vol: 0.65, jitter: 0.03 },
+  blank:   { rate: 0.92, vol: 0.5, jitter: 0.02 },
+  nervous: { rate: 1.04, vol: 0.85, jitter: 0.22 },
+  confused:{ rate: 1.02, vol: 0.9, jitter: 0.08 },
+  smug:    { rate: 0.95, vol: 0.95, jitter: 0.04 },
+  ask:     { rate: 1, vol: 1, jitter: 0.05 },
+};
 
 // Deltarune-style text blips: one short tone per two letters, a voice per speaker
 const BLIP = {
@@ -177,13 +192,17 @@ const SFX = {
     try { this.osc(type, freq, t, dur, vol, slide ? freq + slide : 0); } catch (e) {}
   },
 
-  blip(who) {
+  blip(who, mood, prog = 0) {
     if (!this.vol()) return;
-    if (this.playFile('blip_' + who, 0.97 + Math.random() * 0.06, 0.8)) return;
+    // pitch, loudness and wobble per mood; questions rise at the end
+    const M = BLIP_MOOD[mood] || BLIP_MOOD.none;
+    let rate = M.rate * (1 + (Math.random() - 0.5) * M.jitter);
+    if (mood === 'ask' && prog > 0.6) rate *= 1 + (prog - 0.6) * 0.5;
+    if (this.playFile('blip_' + who, rate, 0.8 * M.vol)) return;
     if (!this.ac) return;
     const b = BLIP[who] || BLIP.narr, t = this.ac.currentTime;
     this.master.gain.value = this.vol();
-    const f = b.f * (0.96 + Math.random() * 0.08);
+    const f = b.f * rate;
     try {
       this.osc(b.type, f, t, b.dur, b.vol, f * 0.92);
       if (b.oct) this.osc('square', f * 2, t, b.dur * 0.7, b.vol * b.oct);
@@ -275,6 +294,10 @@ const RECIPES = {
   disconnect(S, t) { S.osc('sine', 620, t, 0.12, 0.08, 520); S.osc('sine', 420, t + 0.13, 0.25, 0.08, 300); },
 };
 // synth stand-ins for sounds that only exist as files
+Object.assign(RECIPES, {
+  emote_vein: RECIPES.error, emote_sweat: RECIPES.select, emote_gloom: RECIPES.tie, emote_sparkle: RECIPES.light,
+  emote_question: RECIPES.select, emote_dots: RECIPES.select, emote_shock: RECIPES.alert,
+});
 Object.assign(RECIPES, { punch: RECIPES.blunt, locker: RECIPES.block, door: RECIPES.thud, item: RECIPES.light, drip: RECIPES.select });
 
 // ---------------------------------------------------------------------
