@@ -420,8 +420,10 @@ BG.call = (s, t) => {
     ctx.save();
     ctx.beginPath(); ctx.rect(p.x, 22, 136, 96); ctx.clip();
     ctx.translate(p.x + 68, 56); ctx.scale(1.6, 1.6); ctx.translate(-(p.x + 68), -56);
-    avatarHead(p.x + 68, 56, p.hat, t, off);
+    const ex = s.exprs && s.exprs[p.id];
+    avatarHead(p.x + 68, 56, p.hat, t, off, ex && ex.expr);
     ctx.restore();
+    if (ex && ex.emote && ex.expr && !off) drawEmoteAt(ex.emote, p.x + 68, 64, 2.4, 1, t);
 
     if (s.glitch === p.id) {
       for (let i = 0; i < 16; i++) {

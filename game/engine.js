@@ -206,7 +206,20 @@ function figure(x, y, o, t) {
   if (sc !== 1) ctx.restore();
 }
 
-function avatarHead(cx, cy, hat, t, dim) {
+// Expressions for the big call avatars: per-eye pixel offsets from the
+// eye's top-left, written for the left eye (dx grows toward the nose).
+const AV_EXPRS = {
+  angry:    { brow: [[-1, -4], [0, -4], [1, -3], [2, -3]] },
+  sad:      { brow: [[-1, -3], [0, -3], [1, -4], [2, -4]], low: 1 },
+  nervous:  { brow: [[-1, -3], [0, -3], [1, -4], [2, -4]] },
+  confused: { brow: [[-1, -4], [0, -4], [1, -4], [2, -4]], one: true },
+  shock:    { eye: [[0, -1], [1, -1], [0, 0], [1, 0], [0, 1], [1, 1]], brow: [[0, -4], [1, -4]] },
+  happy:    { eye: [[-1, 1], [0, 0], [1, 0], [2, 1]] },
+  blank:    { eye: [[-1, 1], [0, 1], [1, 1], [2, 1]] },
+  smug:     { eye: [[0, 1], [1, 1], [2, 1]], brow: [[0, -3], [1, -3]], one: true },
+};
+
+function avatarHead(cx, cy, hat, t, dim, expr) {
   const lob = hat === 'headset';
   disc(cx, cy + 22, 16, dim ? '#1b1a22' : '#14131a');
   disc(cx, cy, 11, dim ? '#24222c' : '#3a3646');
@@ -229,8 +242,20 @@ function avatarHead(cx, cy, hat, t, dim) {
   const [e1, e2] = lob ? [cx + 1, cx + 7] : [cx + 2, cx + 6];
   if (dim) {
     rect(e1 - 1, cy - 1, 3, 1, '#4a4656'); rect(e2 - 1, cy - 1, 3, 1, '#4a4656');
+  } else if (AV_EXPRS[expr]) {
+    const X = AV_EXPRS[expr], up = lob ? 2 : 0;
+    [e1, e2].forEach((ex, i) => {
+      // mirror the right eye so brows slant symmetrically
+      const P = (dx, dy) => rect(i ? ex + 1 - dx : ex + dx, cy - 2 + dy, 1, 1, FIG.eye);
+      if (X.eye) X.eye.forEach(([dx, dy]) => P(dx, dy + (X.low || 0)));
+      else rect(ex, cy - 2 + (X.low || 0), 2, 2, FIG.eye);
+      if (X.brow && (!X.one || i === 1)) X.brow.forEach(([dx, dy]) => P(dx, dy - up));
+    });
   } else {
-    rect(e1, cy - 2, 2, 2, FIG.eye); rect(e2, cy - 2, 2, 2, FIG.eye);
+    // blink now and then
+    const bl = Math.floor(t / 90 + (lob ? 0 : 23)) % 52 === 0;
+    if (bl) { rect(e1 - 1, cy - 1, 3, 1, FIG.eye); rect(e2 - 1, cy - 1, 3, 1, FIG.eye); }
+    else { rect(e1, cy - 2, 2, 2, FIG.eye); rect(e2, cy - 2, 2, 2, FIG.eye); }
   }
 }
 

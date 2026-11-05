@@ -295,73 +295,74 @@ const MOOD_PACE = { shout: 0.8, angry: 0.85, happy: 0.9, shock: 0.85, sad: 1.35,
 const EMOTE_FOR = { angry: 'vein', sad: 'gloom', nervous: 'sweat', shock: 'shock', happy: 'sparkle', confused: 'question', blank: 'dots', smug: 'sparkle' };
 function setExpr(id, e) {
   const a = G.actors[id];
-  if (!a || a.expr === e) return;
-  a.expr = e || null;
+  // during the Discord call they are profile pictures, not figures on stage
+  const onCall = !a && G.s.bg === 'call';
+  if (!a && !onCall) return;
+  const cur = a ? a.expr : G.s.exprs && G.s.exprs[id] && G.s.exprs[id].expr;
+  if (cur === (e || null)) return;
   const em = EMOTE_FOR[e];
-  if (!em) return;
-  a.emote = { type: em, start: performance.now() };
-  SFX.play('emote_' + em);
+  const emote = em ? { type: em, start: performance.now() } : null;
+  if (a) { a.expr = e || null; a.emote = emote; }
+  else G.s.exprs = { ...(G.s.exprs || {}), [id]: { expr: e || null, emote } };
+  if (em) SFX.play('emote_' + em);
 }
 
 function drawEmotes(t) {
-  const now = performance.now();
   for (const id in G.actors) {
-    const a = G.actors[id], em = a && a.emote;
-    if (!em || !a.expr || a.kind !== 'fig') continue;
-    const k = (now - em.start) / 1000;
-    const s = (a.scale || 1) * (a.hat === 'cap' ? 0.86 : 1), f = a.face || 1;
-    const hx = a.x + (a.ox || 0), hy = a.y - 27 * s;
-    const pop = Math.min(1, k * 6);
-    const lasting = em.type === 'vein' || em.type === 'sweat' || em.type === 'gloom';
-    if (!lasting && k > 1.6) continue;
-    ctx.save();
-    ctx.globalAlpha = lasting ? 1 : Math.min(1, (1.6 - k) / 0.3);
-    ctx.translate(hx, hy); ctx.scale(s, s);
-    if (em.type === 'vein') {
-      // pulsing cross-shaped vein at the temple
-      const b = 1 + (Math.sin(t / 120) > 0.6 ? 1 : 0);
-      const x = -f * 6, y = -7;
-      rect(x - 1, y - 2 - b, 2, 2, '#ff3040'); rect(x + 1, y - 2 - b, 2, 2, '#ff3040');
-      rect(x - 1, y + 1, 2, 2, '#ff3040'); rect(x + 1, y + 1, 2, 2, '#ff3040');
-      rect(x - 2 - b, y - 1, 2, 2, '#ff3040'); rect(x + 2 + b, y - 1, 2, 2, '#ff3040');
-    } else if (em.type === 'sweat') {
-      const y = -6 + ((t / 60) % 8);
-      const x = -f * 7;
-      px(x, y, '#cfeaff'); rect(x - 1, y + 1, 3, 2, '#8ac8ff'); px(x, y + 3, '#5aa0e0');
-    } else if (em.type === 'gloom') {
-      for (let i = 0; i < 4; i++) {
-        const h = 4 + ((Math.floor(t / 160) + i) % 3);
-        ctx.globalAlpha = 0.7;
-        rect(-5 + i * 3, -14 - h + 2, 1, h, '#6a7ab0');
-      }
-    } else if (em.type === 'sparkle') {
-      for (const [dx, dy, ph] of [[7, -9, 0], [10, -4, 2], [4, -13, 4]]) {
-        const on = (Math.floor(t / 110) + ph) % 6 < 4;
-        if (!on) continue;
-        const x = dx * f, y = dy;
-        px(x, y, '#fff6c0'); px(x - 1, y, '#ffd060'); px(x + 1, y, '#ffd060'); px(x, y - 1, '#ffd060'); px(x, y + 1, '#ffd060');
-      }
-    } else if (em.type === 'shock') {
-      for (const [dx, dy, ex, ey] of [[-7, -6, -11, -9], [0, -9, 0, -14], [7, -6, 11, -9]]) {
-        const e = pop;
-        line(dx, dy, dx + (ex - dx) * e, dy + (ey - dy) * e, '#ffffff');
-      }
-    } else if (em.type === 'question' || em.type === 'dots') {
-      const label = em.type === 'question' ? '?' : '...';
-      const by = -12 - pop * 3;
-      ctx.font = '9px VT323, monospace'; ctx.textAlign = 'center';
-      if (em.type === 'dots') {
-        rrect(-8, by - 7, 16, 9, '#f0ece0', 2);
-        const n = Math.min(3, Math.floor(k * 4) + 1);
-        for (let i = 0; i < n; i++) rect(-5 + i * 4, by - 3, 2, 2, '#16121a');
-      } else {
-        for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { ctx.fillStyle = '#000'; ctx.fillText(label, f * 7 + ox, by + oy); }
-        ctx.fillStyle = '#ffd060'; ctx.fillText(label, f * 7, by);
-      }
-      ctx.textAlign = 'left';
-    }
-    ctx.restore();
+    const a = G.actors[id];
+    if (!a || !a.emote || !a.expr || a.kind !== 'fig') continue;
+    const s = (a.scale || 1) * (a.hat === 'cap' ? 0.86 : 1);
+    drawEmoteAt(a.emote, a.x + (a.ox || 0), a.y - 27 * s, s, a.face || 1, t);
   }
+}
+
+// Draws one emote around a head centred at (hx, hy); offsets are in head
+// units of a scale-1 stickman (head radius 5) and scaled by s.
+function drawEmoteAt(em, hx, hy, s, f, t) {
+  const k = (performance.now() - em.start) / 1000;
+  const pop = Math.min(1, k * 6);
+  const lasting = em.type === 'vein' || em.type === 'sweat' || em.type === 'gloom';
+  if (!lasting && k > 1.6) return;
+  ctx.save();
+  ctx.globalAlpha = lasting ? 1 : Math.min(1, (1.6 - k) / 0.3);
+  ctx.translate(hx, hy); ctx.scale(s, s);
+  if (em.type === 'vein') {
+    // pulsing cross-shaped vein at the temple
+    const b = Math.sin(t / 120) > 0.6 ? 1 : 0;
+    const x = -f * 6, y = -7;
+    rect(x - 1, y - 2 - b, 2, 2, '#ff3040'); rect(x + 1, y - 2 - b, 2, 2, '#ff3040');
+    rect(x - 1, y + 1, 2, 2, '#ff3040'); rect(x + 1, y + 1, 2, 2, '#ff3040');
+    rect(x - 2 - b, y - 1, 2, 2, '#ff3040'); rect(x + 2 + b, y - 1, 2, 2, '#ff3040');
+  } else if (em.type === 'sweat') {
+    const y = -6 + ((t / 60) % 8), x = -f * 7;
+    px(x, y, '#cfeaff'); rect(x - 1, y + 1, 3, 2, '#8ac8ff'); px(x, y + 3, '#5aa0e0');
+  } else if (em.type === 'gloom') {
+    ctx.globalAlpha = 0.7;
+    for (let i = 0; i < 4; i++) {
+      const h = 4 + ((Math.floor(t / 160) + i) % 3);
+      rect(-5 + i * 3, -12 - h, 1, h, '#6a7ab0');
+    }
+  } else if (em.type === 'sparkle') {
+    for (const [dx, dy, ph] of [[7, -9, 0], [10, -4, 2], [4, -13, 4]]) {
+      if ((Math.floor(t / 110) + ph) % 6 >= 4) continue;
+      const x = dx * f, y = dy;
+      px(x, y, '#fff6c0'); px(x - 1, y, '#ffd060'); px(x + 1, y, '#ffd060'); px(x, y - 1, '#ffd060'); px(x, y + 1, '#ffd060');
+    }
+  } else if (em.type === 'shock') {
+    for (const [dx, dy, ex, ey] of [[-7, -6, -11, -9], [0, -9, 0, -14], [7, -6, 11, -9]]) line(dx, dy, dx + (ex - dx) * pop, dy + (ey - dy) * pop, '#ffffff');
+  } else if (em.type === 'dots') {
+    const by = -12 - pop * 3;
+    rrect(-8, by - 7, 16, 9, '#f0ece0', 2);
+    const n = Math.min(3, Math.floor(k * 4) + 1);
+    for (let i = 0; i < n; i++) rect(-5 + i * 4, by - 3, 2, 2, '#16121a');
+  } else if (em.type === 'question') {
+    const by = -12 - pop * 3;
+    ctx.font = '9px VT323, monospace'; ctx.textAlign = 'center';
+    for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) { ctx.fillStyle = '#000'; ctx.fillText('?', f * 7 + ox, by + oy); }
+    ctx.fillStyle = '#ffd060'; ctx.fillText('?', f * 7, by);
+    ctx.textAlign = 'left';
+  }
+  ctx.restore();
   ctx.globalAlpha = 1;
 }
 
