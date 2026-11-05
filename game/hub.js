@@ -617,7 +617,7 @@ const CHAPTERS = [
 ];
 const EPISODES = [
   { ep: 1, chapter: 1, roman: 'I', title: 'La Distorsión Externa', desc: 'Una noche en Discord termina al otro lado de una brecha, frente a una vieja sucursal.', x: 104, y: 112 },
-  { ep: 2, chapter: 1, roman: 'II', title: 'Entrada y documentos', desc: 'Dentro de la vieja sucursal de Lobotomy Corp., Lobelto y Gonza buscan algo con lo que sobrevivir.', x: 156, y: 66 },
+  { ep: 2, chapter: 1, roman: 'II', wip: true, title: 'Entrada y documentos', desc: 'Dentro de la vieja sucursal de Lobotomy Corp., Lobelto y Gonza buscan algo con lo que sobrevivir.', x: 156, y: 66 },
   { ep: 3, chapter: 1, roman: 'III', title: '???', desc: 'Próximamente.', x: 206, y: 104 },
 ];
 const MAP_PANEL = { x: 78, y: 10, w: 152, h: 140 };
@@ -797,7 +797,13 @@ function drawChapterMap(t) {
     ctx.fillStyle = open ? '#c09050' : '#4a4650';
     ctx.fillText(`EPISODIO ${e.roman}`, e.x, e.y + 19);
     ctx.textAlign = 'left';
-    if (done) { ctx.font = '8px VT323, monospace'; ctx.fillStyle = '#3fbf6a'; ctx.fillText('✓', e.x + 8, e.y - 7); }
+    if (done && !e.wip) { ctx.font = '8px VT323, monospace'; ctx.fillStyle = '#3fbf6a'; ctx.fillText('✓', e.x + 8, e.y - 7); }
+    if (e.wip) {
+      ctx.font = '6px VT323, monospace';
+      const w = Math.ceil(ctx.measureText('EN DESARROLLO').width) + 4;
+      rect(e.x - w / 2, e.y - 21, w, 7, '#5a4010');
+      ctx.fillStyle = '#ffd060'; ctx.textAlign = 'center'; ctx.fillText('EN DESARROLLO', e.x, e.y - 16); ctx.textAlign = 'left';
+    }
     if (!open) { ctx.font = '7px VT323, monospace'; ctx.fillStyle = '#5a5660'; ctx.fillText('🔒', e.x + 7, e.y - 6); }
   }
 }
@@ -839,11 +845,12 @@ function drawEpisodePanel(t) {
     y += 11;
   };
   if (open) {
-    row('Escenas', String(scenes.length), '#e8e4dc');
+    row('Escenas', e.wip ? `${scenes.length} (de momento)` : String(scenes.length), '#e8e4dc');
     row('Enemigos', enemies.length ? `Sí (${enemies.length})` : 'No', enemies.length ? '#ff6a78' : '#3fbf6a');
     ctx.font = '6px VT323, monospace';
     for (const n of enemies.slice(0, 3)) { ctx.fillStyle = '#c08088'; ctx.fillText('· ' + n, rx + 8, y - 3, rw - 14); y += 7; }
     row('Completadas', `${scenes.filter(isSceneDone).length}/${scenes.length}`, '#c09050');
+    if (e.wip) row('Estado', 'Incompleto', '#ffd060');
   } else {
     row('Estado', 'Bloqueado', '#6a6670');
   }
