@@ -88,6 +88,8 @@ const FIG_POSES = {
   run:    { front: [5, 6], back: [-8, 4], legs: [[-8, -1], [7, 0]] },
   brace:  { front: [7, 2], back: [-6, 6], legs: [[-8, 0], [7, 0]] },
   follow: { front: [7, 10], back: [-7, 4], legs: [[-7, 0], [7, 0]] },
+  hold:   { front: [7, 1], back: [-5, 8], legs: [[-4, 0], [4, 0]] },
+  search: { front: [8, -4], back: [6, 2], legs: [[-4, 0], [5, 0]] },
 };
 
 function figure(x, y, o, t) {
@@ -99,7 +101,8 @@ function figure(x, y, o, t) {
   if (o.talk) bob -= Math.round(Math.abs(Math.sin(t / 90)));
   if (o.shake) x += Math.round(Math.sin(t / 25) * 1.2);
   y += bob;
-  const hx = x, hy = y - 27;
+  const nod = o.nod ? Math.round(Math.abs(Math.sin(t / 70)) * 2) : 0;
+  const hx = x, hy = y - 27 + nod;
   const sh = y - 20, hip = y - 10;
   let legs = o.lifted
     ? [[x - 2, y + 1], [x + 3, y + 2]]
@@ -115,6 +118,12 @@ function figure(x, y, o, t) {
     else if (f > 0) { armR = front; armL = back; } else { armL = front; armR = back; }
     legs = P.legs.map(([dx, dy]) => [fx(dx), y + dy]);
   }
+  if (o.walking) {
+    const sw = Math.round(Math.sin(t / (o.walking === 'run' ? 60 : 110)) * (o.walking === 'run' ? 5 : 4));
+    legs = [[x - sw, y], [x + sw, y]];
+  }
+  // the hand that holds things: the leading arm in a pose, else the free one
+  const hand = P ? (o.armless ? armL : f > 0 ? armR : armL) : o.armless ? armL : f > 0 ? armR : armL;
   for (const [col, extra] of [[FIG.edge, 1], [FIG.body, 0]]) {
     const th = 2 + extra * 2;
     disc(hx, hy, 5 + extra, col);
@@ -139,6 +148,25 @@ function figure(x, y, o, t) {
 
   mpx(1, -1, FIG.eye); mpx(3, -1, FIG.eye);
   if (o.pain) { mpx(1, -2, FIG.eye); mpx(3, 0, FIG.eye); }
+  if (o.cry) {
+    // two streams of tears running down from the eyes
+    const k = Math.floor(t / 120) % 4;
+    for (const ex of [1, 3]) for (let j = 0; j < 3; j++) if ((j + k) % 4 !== 3) mpx(ex, j + 1, '#6ab4ff');
+    if (k === 0) mpx(4, 4, '#6ab4ff');
+  }
+  if (o.phone) {
+    // phone in hand, its flash pointing forward
+    rect(hand[0] - 1, hand[1] - 3, 3, 4, '#2a2a38');
+    px(hand[0] + (f > 0 ? 1 : -1), hand[1] - 3, '#f0f4ff');
+  }
+  if (o.item === 'pistol') {
+    // small low-calibre pistol held by the grip, barrel pointing forward
+    const [gx, gy] = hand, d = f > 0 ? 1 : -1;
+    rect(gx - (d > 0 ? 0 : 1), gy - 1, 2, 3, '#3a3a44');             // grip
+    rect(d > 0 ? gx : gx - 5, gy - 3, 6, 2, '#5c5c68');              // slide / barrel
+    px(gx + d * 5, gy - 3, '#9a9aa8');                                // muzzle glint
+    px(gx + d, gy, '#1a1a20');                                         // trigger guard
+  }
   if (o.armless) {
     if (o.bandaged) {
       rect(armR[0] - 1, armR[1] - 1, 3, 3, '#d8d0c0');

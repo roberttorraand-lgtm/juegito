@@ -53,6 +53,9 @@ function finishScene() {
   if (next) {
     ui.cardTitle.textContent = `ESCENA ${sc.num} COMPLETADA`;
     ui.cardSub.textContent = 'Siguiente: ' + next.title;
+  } else if (sc.partial) {
+    ui.cardTitle.textContent = 'CONTINUARÁ...';
+    ui.cardSub.textContent = `Episodio ${sc.ep} en desarrollo`;
   } else {
     ui.cardTitle.textContent = 'FIN DEL EPISODIO ' + sc.ep;
     ui.cardSub.textContent = 'Continuará...';
@@ -90,6 +93,7 @@ function handle(st) {
     return false;
   }
   if (st.sfx) { SFX.play(st.sfx); return false; }
+  if (st.walk) return walkActors(st);
   if (st.fx === 'shake') { G.shakeUntil = now + st.ms; return false; }
   if (st.fx === 'flash') { G.flash = { color: st.color, start: now, ms: st.ms }; return false; }
   if (st.fade) {
@@ -107,6 +111,34 @@ function handle(st) {
   }
   if (st.say || st.narr || st.scream) { showText(st); return true; }
   return false;
+}
+
+// { walk: { id: x, ... }, ms, async } — actors walk to new x positions,
+// turning to face where they go unless keepFace is set.
+function walkActors(st) {
+  const ms = G.skip ? 60 : (st.ms || 1000);
+  const from = {}, to = st.walk;
+  for (const k in to) {
+    const a = G.actors[k];
+    if (!a) continue;
+    from[k] = a.x;
+    a.walking = st.run ? 'run' : true;
+    if (!st.keepFace && to[k] !== a.x) a.face = Math.sign(to[k] - a.x);
+  }
+  const start = performance.now();
+  const done = () => {
+    for (const k in from) { const a = G.actors[k]; if (a) { a.x = to[k]; a.walking = false; } }
+    if (!st.async) { G.waiting = null; run(); }
+  };
+  const step = () => {
+    const k = Math.min(1, (performance.now() - start) / ms);
+    for (const id in from) { const a = G.actors[id]; if (a) a.x = from[id] + (to[id] - from[id]) * k; }
+    if (k < 1) requestAnimationFrame(step); else done();
+  };
+  if (st.async) { step(); return false; }
+  G.waiting = 'timer';
+  step();
+  return true;
 }
 
 function showText(st) {
@@ -316,6 +348,7 @@ function render(t) {
       posed();
       ctx.globalAlpha = 1;
     }
+    drawDarkness(G.s, t);
     drawAlerts(t);
     const r = G.s.rift;
     if (r) { r.w += (r.target - r.w) * 0.04; rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }

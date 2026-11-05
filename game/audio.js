@@ -15,15 +15,16 @@ const SOUND_FILES = {
   ...ogg(['clash', 'slash', 'pierce', 'blunt', 'block', 'shield', 'evade', 'counter', 'dice', 'tie',
     'stagger', 'ko', 'light', 'turn', 'reboot', 'victory', 'defeat',
     'select', 'confirm', 'error', 'alert',
-    'scream', 'thud', 'rift', 'gacha', 'disconnect',
+    'scream', 'thud', 'rift', 'gacha', 'disconnect', 'door', 'drip', 'punch', 'locker', 'item',
     'blip_lobelto', 'blip_gonza', 'blip_narr']),
   ...(CAN_OGG ? { hit: 'blunt.ogg', 'blip_¿¿??': 'blip_monster.ogg' } : {}),
 };
 // key → file name in game/audio/music/
-const MUSIC_FILES = ogg(['hub', 'call', 'room', 'branch', 'battle_zayin', 'battle_teth', 'boss_distortion']);
+const MUSIC_FILES = ogg(['hub', 'call', 'room', 'branch', 'lcorp', 'battle_zayin', 'battle_teth', 'boss_distortion']);
 // which music key each place uses
 const MUSIC_FOR = {
   hub: 'hub', call: 'call', share: 'call', room: 'room', branch: 'branch',
+  reception: 'lcorp', hallway: 'lcorp', breakroom: 'lcorp',
   corrupted: 'boss_distortion', machine: 'battle_zayin', operator: 'battle_teth',
 };
 
@@ -273,6 +274,8 @@ const RECIPES = {
   },
   disconnect(S, t) { S.osc('sine', 620, t, 0.12, 0.08, 520); S.osc('sine', 420, t + 0.13, 0.25, 0.08, 300); },
 };
+// synth stand-ins for sounds that only exist as files
+Object.assign(RECIPES, { punch: RECIPES.blunt, locker: RECIPES.block, door: RECIPES.thud, item: RECIPES.light, drip: RECIPES.select });
 
 // ---------------------------------------------------------------------
 //  Music: one looping track at a time, crossfaded. Only plays when a file

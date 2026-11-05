@@ -345,6 +345,39 @@ def blip(kind, f, d, duty=0.5, extra=None):
     return fade_tail(norm(x, 0.55))
 
 
+def sfx_door():
+    # an old metal door dragged open: wobbling screech over a grinding rumble
+    d = 2.2
+    wob = 1 + 0.06 * np.sin(2 * np.pi * 7 * tvec(d)) + 0.03 * np.sin(2 * np.pi * 2.3 * tvec(d))
+    f0 = sweep(340, 520, d, 'lin') * wob
+    screech = fft_filter(osc('saw', f0, d) + 0.6 * osc('saw', f0 * 2.01, d), 'band', 1400, 1.2)
+    screech *= adsr(d, 0.15, 0.4, 0.8, 0.4) * (0.7 + 0.3 * np.abs(np.sin(2 * np.pi * 3.1 * tvec(d))))
+    grind = fft_filter(noise(d), 'lp', 400) * adsr(d, 0.05, 0.2, 0.7, 0.3) * 0.8
+    clunk = metal(120, 0.8) * 0.6
+    return norm(reverb(mix((0, screech * 0.6), (0, grind), (d - 0.3, clunk)), 1.2, 0.3))
+
+
+def sfx_drip():
+    plink = osc('sine', sweep(1900, 900, 0.12), 0.12) * env_ad(0.12, 0.001, 6)
+    return norm(reverb(plink, 0.8, 0.35), 0.6)
+
+
+def sfx_punch():
+    slap = fft_filter(noise(0.06), 'band', 1800, 0.8) * env_ad(0.06, 0.0005, 5)
+    body = osc('sine', sweep(180, 60, 0.18), 0.18) * env_ad(0.18, 0.001, 5)
+    return norm(np.tanh(2 * mix((0, slap), (0, body * 0.9))))
+
+
+def sfx_locker():
+    bang = metal(260, 0.9, (1, 1.34, 2.1, 2.9, 4.4)) * 0.8
+    rattle = sum(fft_filter(noise(0.05), 'band', 3000, 2) * env_ad(0.05, 0.001, 5) for _ in range(1))
+    return norm(reverb(mix((0, bang), (0.12, rattle * 0.5), (0.2, rattle * 0.3)), 1.0, 0.3))
+
+
+def sfx_item():
+    return norm(mix((0, instrument('bell', 84, 0.5, 1)), (0.08, instrument('bell', 91, 0.6, 0.8)), (0.16, instrument('bell', 96, 0.7, 0.6))), 0.6)
+
+
 SFX = {
     'clash': sfx_clash, 'slash': sfx_slash, 'pierce': sfx_pierce, 'blunt': sfx_blunt, 'block': sfx_block,
     'shield': sfx_shield, 'evade': sfx_evade, 'counter': sfx_counter, 'dice': sfx_dice, 'tie': sfx_tie,
@@ -352,6 +385,7 @@ SFX = {
     'victory': sfx_victory, 'defeat': sfx_defeat,
     'select': sfx_select, 'confirm': sfx_confirm, 'error': sfx_error, 'alert': sfx_alert,
     'scream': sfx_scream, 'thud': sfx_thud, 'rift': sfx_rift, 'gacha': sfx_gacha, 'disconnect': sfx_disconnect,
+    'door': sfx_door, 'drip': sfx_drip, 'punch': sfx_punch, 'locker': sfx_locker, 'item': sfx_item,
     'blip_lobelto': lambda: blip('square', 150, 0.05, 0.5, 0.3 * osc('square', 300, 0.05, 0.25) * env_ad(0.05, 0.001, 4)),
     'blip_gonza': lambda: blip('square', 247, 0.042, 0.25),
     'blip_narr': lambda: blip('tri', 392, 0.035),
@@ -625,6 +659,24 @@ SONGS = {
             {'type': 'melody', 'inst': 'bell', 'low': 71, 'high': 86, 'vol': 0.14, 'from': 4, 'rest': 0.3,
              'rhythm': [(0, 1), (1, 1), (2, 2), (4, 1.5), (5.5, 0.5), (6, 2)]},
             {'type': 'drums', 'vols': {'k': 0.3, 'h': 0.06}, 'from': 8, 'bars': ['k.......k.......']},
+        ],
+    },
+    # Inside the abandoned L.Corp branch: cold drone, failing lights' hum,
+    # water drops and a distant metallic groan. Mostly silence and tension.
+    'lcorp': {
+        'bpm': 60, 'seed': 77, 'scale': scale_of('B', MIN), 'verb': 3.2, 'mix': 0.5,
+        'prog': ['Bm', 'Bm', 'G', 'G', 'Em', 'Em', 'F#', 'F#'] * 2,
+        'layers': [
+            {'type': 'drone', 'oct': 23, 'vol': 0.16},
+            {'type': 'hum', 'vol': 0.02},
+            {'type': 'chords', 'inst': 'strings', 'oct': 47, 'vol': 0.07, 'hits': [(0, 4)]},
+            {'type': 'drums', 'vols': {'l': 0.06}, 'bars': ['l...............', '................', '................', '................', '................', '................', '................', '................']},
+            {'type': 'notes', 'inst': 'bell', 'vol': 0.05, 'notes': [
+                (b * 4 + st, 0.5, n) for b, st, n in [(0, 1.5, 95), (1, 3, 93), (2, 0.5, 98), (3, 2.5, 95), (5, 1, 97), (6, 3.5, 93),
+                                                    (8, 2, 95), (9, 0.5, 98), (11, 1.5, 93), (12, 3, 97), (14, 0.5, 95), (15, 2, 98)]]},
+            {'type': 'notes', 'inst': 'strings', 'vol': 0.12, 'notes': [
+                (32, 4, 66), (36, 4, 67), (40, 4, 64), (44, 4, 65),
+                (48, 4, 66), (52, 4, 62), (56, 4, 64), (60, 4, 65)]},
         ],
     },
     # ZAYIN — E.G.O Extraction Machine, inside a containment cell of the

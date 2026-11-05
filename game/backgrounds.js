@@ -201,6 +201,9 @@ const PXF = {
   U: '#.# #.# #.# #.# ###', V: '#.# #.# #.# #.# .#.', W: '#.# #.# ### ### #.#', X: '#.# #.# .#. #.# #.#',
   Y: '#.# #.# .#. .#. .#.', Z: '### ..# .#. #.. ###', '?': '##. ..# .#. ... .#.', '.': '... ... ... ... .#.',
   '!': '.#. .#. .#. ... .#.',
+  0: '### #.# #.# #.# ###', 1: '.#. ##. .#. .#. ###', 2: '##. ..# .#. #.. ###', 3: '##. ..# .#. ..# ##.',
+  4: '#.# #.# ### ..# ..#', 5: '### #.. ##. ..# ##.', 6: '.## #.. ### #.# ###', 7: '### ..# .#. .#. .#.',
+  8: '### #.# ### #.# ###', 9: '### #.# ### ..# ##.', '-': '... ... ### ... ...',
 };
 for (const k in PXF) PXF[k] = PXF[k].split(' ');
 
@@ -908,6 +911,356 @@ BG.cell = (s, t) => {
 };
 
 // =====================================================================
+//  OLD L.CORP BRANCH — Episode 2 interiors
+// =====================================================================
+// A skeleton whose bones are not quite human: teal crystal growths and an
+// extra joint. pose 'sit' leans against something, 'lie' lies on the floor.
+function skeleton(x, y, pose, flip = 1) {
+  const B = '#b8b49a', S = '#7a7664', D = '#0c0c0e', C = '#5a9a8c', V = '#8a6aa0';
+  const L = (x0, y0, x1, y1, c = B) => line(x + x0 * flip, y + y0, x + x1 * flip, y + y1, c);
+  if (pose === 'sit') {
+    disc(x + 2 * flip, y - 22, 4, B); px(x + 1 * flip, y - 23, D); px(x + 3 * flip, y - 23, D); rect(x + (flip > 0 ? 0 : -3), y - 19, 4, 1, S);
+    L(0, -18, 0, -4, S);
+    for (let k = 0; k < 4; k++) { L(0, -16 + k * 2, -4, -14 + k * 2); L(0, -16 + k * 2, 4, -14 + k * 2); }
+    rect(x - 3, y - 4, 7, 3, B);
+    L(0, -2, 10, -1); L(10, -1, 16, 1); L(1, -2, 8, -6); L(8, -6, 13, 0);
+    L(-1, -16, -5, -8); L(-5, -8, -7, -2); L(-7, -2, -6, 0, S);
+    // growths
+    px(x + 5 * flip, y - 15, C); px(x + 6 * flip, y - 16, C); px(x + 6 * flip, y - 14, C); px(x - 4 * flip, y - 10, V);
+    px(x + 10 * flip, y - 2, C); px(x + 11 * flip, y - 3, C);
+  } else {
+    disc(x - 18 * flip, y - 3, 4, B); px(x - 19 * flip, y - 4, D); px(x - 17 * flip, y - 2, D);
+    L(-14, -2, 2, -2, S);
+    for (let k = 0; k < 4; k++) { L(-12 + k * 2, -2, -10 + k * 2, -6); L(-12 + k * 2, -2, -10 + k * 2, 1); }
+    rect(x + 1, y - 4, 4, 5, B);
+    L(4, -2, 12, -1); L(12, -1, 19, 0); L(4, 0, 10, 2); L(10, 2, 16, 4);
+    L(-12, -3, -8, -9); L(-8, -9, -2, -10); L(-2, -10, 0, -9, S);
+    px(x - 7 * flip, y - 7, C); px(x - 6 * flip, y - 8, C); px(x - 6 * flip, y - 6, V); px(x + 13 * flip, y - 2, C);
+  }
+}
+
+// perspective room shell: back wall, side walls, tiled floor
+function roomShell(o) {
+  const { bx0, bx1, by0, by1 } = o;
+  rect(0, 0, W, H, o.base);
+  vgrad(0, 0, W, by0, [o.ceil[0], o.ceil[1]]);
+  vgrad(bx0, by0, bx1 - bx0, by1 - by0, o.wall);
+  poly([[0, 0], [bx0, by0], [bx0, by1], [0, by1 + 46]], o.left);
+  poly([[W, 0], [bx1, by0], [bx1, by1], [W, by1 + 46]], o.right);
+  line(bx0, by0, bx0, by1, o.edge); line(bx1, by0, bx1, by1, '#0c0c0e');
+  poly([[0, by1 + 46], [bx0, by1], [bx1, by1], [W, by1 + 46], [W, H], [0, H]], o.floor);
+  const rows = [3, 8, 15, 25, 38, 55];
+  for (const r of rows) rect(0, by1 + r, W, 1, o.grout);
+  for (let i = -9; i <= 9; i++) line(160 + i * 18, by1, 160 + i * 58, H, o.grout);
+  rect(bx0, by1, bx1 - bx0, 1, o.edge);
+  dither(bx0, by1 + 1, bx1 - bx0, 3, '#000', 0.35);
+}
+
+function drawReception() {
+  const bx0 = 36, bx1 = 284, by0 = 12, by1 = 122;
+  roomShell({ bx0, bx1, by0, by1, base: '#0e1012', ceil: ['#060708', '#0c0e10'], wall: ['#1e2428', '#22292c', '#1c2124'],
+    left: '#161a1d', right: '#181d20', edge: '#2e383c', floor: '#1a1d1e', grout: '#121415' });
+  // wall seams, water stains and cracks
+  for (let x = bx0 + 31; x < bx1; x += 31) rect(x, by0, 1, by1 - by0, '#181d20');
+  rect(bx0, 74, bx1 - bx0, 1, '#181d20'); rect(bx0, 75, bx1 - bx0, 1, '#283034');
+  for (let i = 0; i < 9; i++) {
+    const sx = bx0 + 8 + hash(i + 11) * (bx1 - bx0 - 16), sw = 3 + hash(i + 12) * 7;
+    dither(sx, by0, sw, 20 + hash(i + 13) * 60, '#101416', 0.5);
+  }
+  for (let i = 0; i < 4; i++) {
+    let cx = bx0 + 20 + hash(i + 40) * 200, cy = by0 + 6;
+    for (let k = 0; k < 8; k++) { const nx = cx + (hash(i * 9 + k) - 0.5) * 8, ny = cy + 4 + hash(i * 7 + k) * 5; line(cx, cy, nx, ny, '#111517'); cx = nx; cy = ny; }
+  }
+  // company emblem and name, faded and chipped
+  ring(160, 38, 16, '#3c4a46', 2); ring(160, 38, 11, '#2c3634', 1);
+  line(160, 30, 160, 47, '#3c4a46', 2); line(160, 36, 154, 31, '#3c4a46'); line(160, 36, 166, 31, '#3c4a46');
+  line(160, 41, 155, 37, '#3c4a46'); line(160, 41, 165, 37, '#3c4a46');
+  pixText('LOBOTOMY CORPORATION', 120, 60, '#3a4644');
+  for (let i = 0; i < 14; i++) rect(118 + hash(i + 70) * 84, 58 + hash(i + 71) * 8, 2, 2, '#1f2529');
+  // hanging cables and a fallen ceiling panel
+  for (const [cx, len] of [[70, 26], [214, 18], [252, 30]]) {
+    for (let k = 0; k < len; k++) px(cx + Math.round(Math.sin(k / 6) * 2), by0 - 10 + k, '#0a0a0c');
+  }
+  // lockers against the back wall (the 3rd one is the one Gonza opens)
+  for (let i = 0; i < 4; i++) {
+    const lx = 212 + i * 17;
+    rect(lx, 64, 16, 58, '#2a363c'); rect(lx, 64, 16, 1, '#41525a'); rect(lx, 64, 1, 58, '#3a4a52'); rect(lx + 15, 64, 1, 58, '#1a2226');
+    for (let v = 0; v < 3; v++) rect(lx + 4, 70 + v * 3, 8, 1, '#1a2226');
+    rect(lx + 12, 92, 2, 5, '#6a7a80');
+    if (i === 0) {
+      rect(lx + 1, 65, 14, 56, '#0c0f10');
+      poly([[lx - 1, 65], [lx - 9, 69], [lx - 9, 119], [lx - 1, 121]], '#33424a');
+      for (let v = 0; v < 3; v++) line(lx - 7, 74 + v * 3, lx - 3, 72 + v * 3, '#1a2226');
+    }
+    if (i === 3) { rect(lx + 3, 104, 9, 6, '#20292d'); }
+  }
+  // reception desk
+  rect(66, 102, 114, 5, '#3a2e26'); rect(66, 102, 114, 1, '#5a4636');
+  rect(68, 107, 110, 31, '#261e19');
+  for (let x = 68; x < 178; x += 22) rect(x, 107, 1, 31, '#1a1410');
+  rect(68, 137, 110, 1, '#120e0c');
+  rect(96, 92, 16, 11, '#2a2a28'); rect(97, 93, 14, 8, '#0e1110'); line(98, 94, 108, 100, '#3a4a44');
+  rect(102, 103, 4, 1, '#2a2a28');
+  poly([[140, 101], [151, 97], [153, 99], [142, 103]], '#4a3a20');
+  for (let i = 0; i < 6; i++) rect(124 + i * 7, 101 - (i % 2), 5, 1, '#8a8678');
+  // floor: puddles, papers, debris and the bodies
+  ellipse(232, 150, 26, 4, '#121619'); shimmer(214, 148, 36, 4, '#3a4a54', 0.3);
+  ellipse(60, 168, 18, 3, '#121619');
+  for (let i = 0; i < 12; i++) {
+    const x = 20 + hash(i + 300) * 280, y = 128 + hash(i + 301) * 48;
+    rect(x, y, 4, 2, i % 3 ? '#6a685e' : '#8a8678');
+  }
+  for (let i = 0; i < 24; i++) px(bx0 + hash(i + 500) * (bx1 - bx0), by1 + 2 + hash(i + 501) * 6, '#2a2e30');
+  poly([[180, 156], [214, 150], [222, 156], [190, 164]], '#22282a'); line(180, 156, 214, 150, '#30383a');
+  skeleton(122, 140, 'sit');
+  skeleton(44, 160, 'lie', -1);
+}
+
+BG.reception = (s, t) => {
+  blit(layer('reception', drawReception));
+  if (s.lockerOpen) {
+    const lx = 212 + 2 * 17;
+    rect(lx + 1, 65, 14, 56, '#0a0c0d');
+    rect(lx + 2, 88, 12, 1, '#2a3236');
+    poly([[lx + 16, 65], [lx + 24, 69], [lx + 24, 119], [lx + 16, 121]], '#33424a');
+  }
+  // the hanging lamp sparks now and then
+  const k = Math.floor(t / 80);
+  const sp = hash(k) > 0.93;
+  line(252, 0, 252, 18, '#0a0a0c');
+  rect(248, 18, 9, 3, '#2a2a28');
+  if (sp) { rect(249, 21, 7, 1, '#fff0c0'); px(250 + hash(k + 1) * 6, 23 + hash(k + 2) * 3, '#ffd060'); }
+  s._lamp = sp;
+  for (let i = 0; i < 14 * CFG.particles; i++) {
+    const kk = i * 31;
+    const mx = (hash(kk) * W + t * 0.003 * (1 + hash(kk + 1))) % W, my = 14 + ((hash(kk + 2) * 120 + t * 0.002) % 120);
+    ctx.globalAlpha = 0.3; px(mx, my, '#b8b8a8'); ctx.globalAlpha = 1;
+  }
+};
+
+// One-point corridor: d = 0 at the near edge, 1 at the far end
+const HALL = { vx0: 136, vx1: 184, vy0: 56, vy1: 92 };
+const hallL = (d, v) => [HALL.vx0 * d, v === 'top' ? HALL.vy0 * d : H - (H - HALL.vy1) * d];
+const hallR = (d, v) => [W - (W - HALL.vx1) * d, v === 'top' ? HALL.vy0 * d : H - (H - HALL.vy1) * d];
+
+function drawHallway() {
+  const { vx0, vx1, vy0, vy1 } = HALL;
+  rect(0, 0, W, H, '#0c0e10');
+  poly([[0, 0], [W, 0], [vx1, vy0], [vx0, vy0]], '#121617');
+  poly([[0, 0], [vx0, vy0], [vx0, vy1], [0, H]], '#1a2023');
+  poly([[W, 0], [vx1, vy0], [vx1, vy1], [W, H]], '#1c2225');
+  poly([[0, H], [vx0, vy1], [vx1, vy1], [W, H]], '#181b1c');
+  rect(vx0, vy0, vx1 - vx0, vy1 - vy0, '#07080a');
+  light(160, 86, 14, 4, '#802020', 0.25, 2);
+  // wall panels, rust runs and a waist rail
+  for (const d of [0.12, 0.28, 0.44, 0.6, 0.74, 0.86, 0.95]) {
+    line(...hallL(d, 'top'), ...hallL(d, 'bot'), '#11161a');
+    line(...hallR(d, 'top'), ...hallR(d, 'bot'), '#13181b');
+  }
+  for (const side of [hallL, hallR]) {
+    const r0 = side(0, 'top'), r1 = side(1, 'top'), b0 = side(0, 'bot'), b1 = side(1, 'bot');
+    line(b0[0], b0[1] - 70, b1[0], b1[1] - 14, '#2a3236', 2);
+    for (let i = 0; i < 6; i++) {
+      const d = 0.08 + hash(i + (side === hallL ? 10 : 20)) * 0.75;
+      const [x, y] = side(d, 'top');
+      dither(x - 1, y + 4, 3, 26 - d * 18, '#4a2a18', 0.35);
+    }
+  }
+  // ceiling pipes converging
+  for (const [nx, fx2, c] of [[20, 140, '#2e3a3e'], [60, 150, '#283236'], [290, 178, '#2e3a3e'], [250, 170, '#263034']]) {
+    line(nx, 0, fx2, vy0 + 1, c, 3); line(nx + 1, 0, fx2, vy0, '#4a5a60');
+  }
+  // floor grating and puddles
+  for (const d of [0.08, 0.18, 0.3, 0.44, 0.6, 0.76, 0.9]) {
+    const y = H - (H - vy1) * d;
+    rect(hallL(d, 'bot')[0], Math.round(y), hallR(d, 'bot')[0] - hallL(d, 'bot')[0], 1, '#101314');
+  }
+  for (let i = -6; i <= 6; i++) line(160 + i * 4, vy1, 160 + i * 34, H, '#121516');
+  for (const [px2, py, rx] of [[110, 150, 26], [214, 166, 30], [170, 118, 14]]) {
+    ellipse(px2, py, rx, Math.max(2, rx / 7), '#0e1214');
+    shimmer(px2 - rx * 0.6, py - 2, rx * 1.2, 4, '#3a4a58', 0.25);
+  }
+  // door to the break room on the right wall, with its sign
+  const d0 = 0.24, d1 = 0.4;
+  const [x0, yb0] = hallR(d0, 'bot'), [x1, yb1] = hallR(d1, 'bot');
+  const [, yt0] = hallR(d0, 'top'), [, yt1] = hallR(d1, 'top');
+  const top0 = yb0 - (yb0 - yt0) * 0.6, top1 = yb1 - (yb1 - yt1) * 0.6;
+  poly([[x0 + 2, top0 - 2], [x1 - 2, top1 - 2], [x1 - 2, yb1], [x0 + 2, yb0]], '#3e4a50');
+  poly([[x0, top0], [x1, top1], [x1, yb1], [x0, yb0]], '#2a3236');
+  line(x0 - 4, (top0 + yb0) / 2, x0 - 4, (top0 + yb0) / 2 + 6, '#7a8a90', 2);
+  rect(254, 26, 40, 16, '#1a2a22'); rect(254, 26, 40, 1, '#3a5a4a');
+  pixText('SALA DE', 260, 28, '#8ac0a0'); pixText('DESCANSO', 258, 35, '#8ac0a0');
+  // emergency lamps
+  for (const [x, y] of [[40, 34], [104, 50], [262, 60]]) { rect(x, y, 6, 4, '#2a1a14'); }
+}
+
+const HALL_DRIPS = [[96, 0.2], [188, 0.45], [232, 0.12]];
+BG.hallway = (s, t) => {
+  blit(layer('hallway', drawHallway));
+  if (s.doorOpen) {
+    const d0 = 0.24, d1 = 0.4;
+    const [x0, yb0] = hallR(d0, 'bot'), [x1, yb1] = hallR(d1, 'bot');
+    const [, yt0] = hallR(d0, 'top'), [, yt1] = hallR(d1, 'top');
+    const top0 = yb0 - (yb0 - yt0) * 0.6, top1 = yb1 - (yb1 - yt1) * 0.6;
+    poly([[x0, top0], [x1, top1], [x1, yb1], [x0, yb0]], '#08090a');
+    poly([[x0, top0], [x0 + 10, top0 + 6], [x0 + 10, yb0 + 4], [x0, yb0]], '#2a3236');
+  }
+  s._lamps = [];
+  for (const [x, y, k] of [[40, 34, 1], [104, 50, 2], [262, 60, 3]]) {
+    const on = hash(Math.floor(t / 110) + k * 77) > 0.12;
+    rect(x + 1, y + 1, 4, 2, on ? '#ff7a3a' : '#4a2010');
+    if (on) { light(x + 3, y + 6, 18, 12, '#ff6a30', 0.12, 3); s._lamps.push([x + 3, y + 8]); }
+  }
+  // water dripping from the ceiling pipes
+  for (const [x, d] of HALL_DRIPS) {
+    const yTop = HALL.vy0 * d + 4, yFloor = H - (H - HALL.vy1) * d - 6;
+    const period = 1700 + x * 3, ph = (t + x * 41) % period;
+    const fall = ph / 520;
+    if (fall < 1) { rect(x, yTop + (yFloor - yTop) * fall * fall, 1, 2, '#8ab4d0'); }
+    else if (fall < 1.8) {
+      const k = (fall - 1) / 0.8, r = 1 + k * 7;
+      ctx.globalAlpha = 0.6 * (1 - k);
+      rect(x - r, yFloor + 1, 2, 1, '#7a9ab0'); rect(x + r - 1, yFloor + 1, 2, 1, '#7a9ab0');
+      rect(x - r * 0.5, yFloor, r, 1, '#5a7a90');
+      ctx.globalAlpha = 1;
+    }
+  }
+};
+
+function drawBreakroom() {
+  const bx0 = 30, bx1 = 290, by0 = 14, by1 = 120;
+  roomShell({ bx0, bx1, by0, by1, base: '#121012', ceil: ['#08070a', '#100e10'], wall: ['#2a2622', '#2e2a25', '#26221e'],
+    left: '#1e1b18', right: '#211d1a', edge: '#3a352e', floor: '#221f1c', grout: '#191715' });
+  rect(bx0, 84, bx1 - bx0, 36, '#211d19'); rect(bx0, 84, bx1 - bx0, 1, '#3a342c');
+  for (let i = 0; i < 7; i++) dither(bx0 + hash(i + 80) * 250, by0, 4 + hash(i + 81) * 6, 30 + hash(i + 82) * 40, '#1a1714', 0.45);
+  // stopped clock and faded posters
+  ring(160, 34, 7, '#4a443a', 1); disc(160, 34, 6, '#d8d0b8'); line(160, 34, 160, 30, '#2a2620'); line(160, 34, 163, 36, '#2a2620');
+  rect(206, 26, 22, 30, '#3a3630'); rect(207, 27, 20, 28, '#5a5448'); rect(210, 31, 14, 2, '#2a2620'); rect(210, 36, 10, 1, '#3a3630'); rect(210, 39, 12, 1, '#3a3630');
+  rect(96, 28, 18, 24, '#3a3630'); rect(97, 29, 16, 22, '#4e3a32'); disc(105, 37, 4, '#7a5a40');
+  // cabinet with numbered folders
+  rect(38, 48, 46, 72, '#2a241e'); rect(38, 48, 46, 1, '#4a4036');
+  for (let r = 0; r < 3; r++) {
+    const sy = 52 + r * 22;
+    rect(40, sy + 18, 42, 2, '#3a3228');
+    for (let k = 0; k < 7; k++) {
+      if (r === 2 && k > 4) continue;
+      const cols = ['#6a3a2a', '#2a4a5a', '#5a5a2a', '#3a2a4a'];
+      rect(41 + k * 6, sy + 2 + (k % 3 === 2 ? 2 : 0), 5, 16 - (k % 3 === 2 ? 2 : 0), cols[(k + r) % 4]);
+      px(43 + k * 6, sy + 6, '#d8d0b8');
+    }
+  }
+  pixText('ARCHIVO', 47, 42, '#6a6050');
+  // vending machine, broken
+  rect(250, 50, 32, 70, '#3a1a1a'); rect(250, 50, 32, 1, '#6a2a2a');
+  rect(254, 56, 18, 40, '#0e0c0e');
+  for (let r = 0; r < 4; r++) for (let k = 0; k < 3; k++) rect(256 + k * 6, 59 + r * 9, 4, 6, ['#6a5a3a', '#3a5a6a', '#6a3a3a'][(r + k) % 3]);
+  line(256, 58, 270, 90, '#5a6a70'); line(262, 56, 258, 72, '#5a6a70');
+  rect(274, 62, 6, 12, '#1a0e0e'); rect(256, 102, 16, 8, '#140a0a');
+  // table with old computers and reports
+  rect(100, 110, 132, 5, '#3a3228'); rect(100, 110, 132, 1, '#5a4a38');
+  rect(104, 115, 3, 25, '#2a241e'); rect(225, 115, 3, 25, '#2a241e');
+  rect(140, 115, 2, 18, '#2a241e'); rect(190, 115, 2, 18, '#2a241e');
+  for (const mx of [112, 152, 192]) {
+    rect(mx, 92, 24, 18, '#4a4a42'); rect(mx, 92, 24, 1, '#6a6a60'); rect(mx + 3, 95, 18, 12, '#0c100e');
+    rect(mx + 8, 108, 8, 3, '#3a3a34'); rect(mx - 2, 111, 28, 1, '#3a3a34');
+  }
+  for (let i = 0; i < 5; i++) rect(176 + i * 3, 108 - i, 8, 2, i % 2 ? '#c8c0a8' : '#a8a088');
+  rect(214, 106, 12, 4, '#6a3a2a'); rect(214, 106, 12, 1, '#8a5a3a');
+  // chairs
+  for (const cx of [126, 206]) { rect(cx, 116, 12, 3, '#2e2822'); rect(cx + 1, 104, 2, 12, '#2e2822'); rect(cx + 1, 119, 2, 12, '#241e1a'); rect(cx + 9, 119, 2, 12, '#241e1a'); }
+  for (let i = 0; i < 8; i++) rect(30 + hash(i + 600) * 260, 128 + hash(i + 601) * 46, 4, 2, '#8a8270');
+}
+
+BG.breakroom = (s, t) => {
+  blit(layer('breakroom', drawBreakroom));
+  const tube = hash(Math.floor(t / 70)) > 0.15;
+  rect(140, 6, 40, 3, tube ? '#d8e8e0' : '#4a504c');
+  if (tube) light(160, 30, 90, 30, '#c8e0d8', 0.08, 3);
+  s._tube = tube;
+  // the middle computer still glows faintly
+  const g = 0.7 + 0.3 * Math.sin(t / 300);
+  ctx.globalAlpha = g; rect(155, 95, 18, 12, '#1a3a26'); ctx.globalAlpha = 1;
+  for (let y = 96; y < 107; y += 2) rect(155, y, 18, 1, '#13281c');
+  if (hash(Math.floor(t / 400)) > 0.3) rect(157, 97, 6, 1, '#6ae08a');
+};
+
+// =====================================================================
+//  DARKNESS — scenes with `dark` set are dimmed; the phone flashlight,
+//  lamps and screens cut light into it.
+// =====================================================================
+const DARK_LIGHTS = {
+  reception: (s) => (s._lamp ? [[252, 24, 34]] : []),
+  hallway: (s) => (s._lamps || []).map(([x, y]) => [x, y, 26]),
+  breakroom: (s) => [[164, 101, 30], ...(s._tube ? [[160, 12, 60]] : [])],
+};
+let _darkC = null;
+function drawDarkness(s, t) {
+  if (!s.dark) return;
+  if (!_darkC || _darkC.width !== VW) { _darkC = document.createElement('canvas'); _darkC.width = VW; _darkC.height = H; }
+  const g = _darkC.getContext('2d');
+  g.globalCompositeOperation = 'source-over';
+  g.clearRect(0, 0, VW, H);
+  g.fillStyle = `rgba(3,3,8,${s.dark})`;
+  g.fillRect(0, 0, VW, H);
+  g.globalCompositeOperation = 'destination-out';
+  g.fillStyle = '#000';
+  const hole = (x, y, r, a) => {
+    for (let k = 3; k >= 1; k--) {
+      g.globalAlpha = a / 3;
+      g.beginPath(); g.arc(Math.round(x + OX), Math.round(y), r * k / 3, 0, Math.PI * 2); g.fill();
+    }
+  };
+  const beams = [];
+  for (const id in G.actors) {
+    const a = G.actors[id];
+    if (!a || (a.kind && a.kind !== 'fig')) continue;
+    const sc = (a.scale || 1) * (a.hat === 'cap' ? 0.86 : 1);
+    hole(a.x, a.y - 16 * sc, 13 * sc + 6, 0.45);   // keep the characters readable
+    if (a.phone) beams.push([a.x + (a.face || 1) * 7 * sc, a.y - 19 * sc, a.face || 1, sc]);
+  }
+  for (const [x, y, r] of (DARK_LIGHTS[s.bg] ? DARK_LIGHTS[s.bg](s) : [])) hole(x, y, r, 0.75);
+  const flick = 0.94 + 0.06 * Math.sin(t / 40) * Math.sin(t / 13);
+  const tri = (hx, hy, ang, spread, len) => {
+    g.beginPath();
+    g.moveTo(hx + OX, hy);
+    g.lineTo(hx + OX + Math.cos(ang - spread) * len, hy + Math.sin(ang - spread) * len);
+    g.lineTo(hx + OX + Math.cos(ang + spread) * len, hy + Math.sin(ang + spread) * len);
+    g.closePath(); g.fill();
+  };
+  // the beam fully clears the darkness in its core and softens towards the edges
+  for (const [hx, hy, f] of beams) {
+    const ang = f > 0 ? 0.06 : Math.PI - 0.06;
+    for (const [len, spread, a] of [[260, 0.36, 0.45], [230, 0.26, 0.6], [200, 0.16, 0.9]]) { g.globalAlpha = a * flick; tri(hx, hy, ang, spread, len); }
+  }
+  g.globalAlpha = 1;
+  ctx.drawImage(_darkC, -OX, 0, VW, H);
+  // visible light: a cold tint in the beam, a hot spot where it lands,
+  // dust floating inside it and the glare of the phone's flash
+  const op = ctx.globalCompositeOperation;
+  for (const [hx, hy, f, sc] of beams) {
+    const ang = f > 0 ? 0.06 : Math.PI - 0.06;
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [spread, al] of [[0.3, 0.07], [0.18, 0.08], [0.08, 0.08]]) {
+      ctx.globalAlpha = al * flick;
+      poly([[hx, hy], [hx + Math.cos(ang - spread) * 220, hy + Math.sin(ang - spread) * 220], [hx + Math.cos(ang + spread) * 220, hy + Math.sin(ang + spread) * 220]], '#e0ecff');
+    }
+    const spot = hx + f * 110;
+    light(spot, hy + 8, 34, 26, '#e8f0ff', 0.16 * flick, 4);
+    for (let i = 0; i < 18 * CFG.particles; i++) {
+      const d = 14 + ((hash(i * 7 + 1) * 180 + t * 0.006 * (1 + hash(i))) % 180);
+      const off = (hash(i * 7 + 2) - 0.5) * 2 * Math.tan(0.26) * d;
+      const yy = hy + Math.sin(ang) * d + off + Math.sin(t / 900 + i) * 2;
+      ctx.globalAlpha = 0.5 * (1 - d / 200);
+      px(hx + f * d, yy, '#ffffff');
+    }
+    ctx.globalAlpha = 0.9;
+    light(hx + f, hy - 1, 2.5 * sc, 2 * sc, '#ffffff', 0.6, 3);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = op;
+  }
+}
+
+// =====================================================================
 //  WIDE SCREENS — when the view is wider than 320 (fill mode), scenery
 //  repeats into the side margins; UI-style screens get a flat colour.
 // =====================================================================
@@ -936,6 +1289,9 @@ const POST = {
   arena: blitVignette,
   cell: blitVignette,
   room: blitVignette,
+  reception: blitVignette,
+  hallway: blitVignette,
+  breakroom: blitVignette,
   branch: (s, t) => { rain(t, 24, -OX, 0, VW, H, '#d8d8f8', 0.45, 0.75, 6, 9); blitVignette(); },
 };
 function postFX(s, t) { const f = POST[s.bg]; if (f) f(s, t); }

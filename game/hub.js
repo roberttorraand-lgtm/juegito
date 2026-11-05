@@ -617,7 +617,7 @@ const CHAPTERS = [
 ];
 const EPISODES = [
   { ep: 1, chapter: 1, roman: 'I', title: 'La Distorsión Externa', desc: 'Una noche en Discord termina al otro lado de una brecha, frente a una vieja sucursal.', x: 104, y: 112 },
-  { ep: 2, chapter: 1, roman: 'II', title: '???', desc: 'Próximamente.', x: 156, y: 66 },
+  { ep: 2, chapter: 1, roman: 'II', title: 'Entrada y documentos', desc: 'Dentro de la vieja sucursal de Lobotomy Corp., Lobelto y Gonza buscan algo con lo que sobrevivir.', x: 156, y: 66 },
   { ep: 3, chapter: 1, roman: 'III', title: '???', desc: 'Próximamente.', x: 206, y: 104 },
 ];
 const MAP_PANEL = { x: 78, y: 10, w: 152, h: 140 };
