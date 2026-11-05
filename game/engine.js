@@ -90,7 +90,16 @@ const FIG_POSES = {
   follow: { front: [7, 10], back: [-7, 4], legs: [[-7, 0], [7, 0]] },
   hold:   { front: [7, 1], back: [-5, 8], legs: [[-4, 0], [4, 0]] },
   search: { front: [8, -4], back: [6, 2], legs: [[-4, 0], [5, 0]] },
+  ready:  { front: [7, 3], back: [4, 7], legs: [[-5, 0], [5, 0]] },
+  slump:  { front: [3, 13], back: [-2, 13], legs: [[-6, 0], [3, 0]] },
 };
+// arms hanging, feet together: what "no pose" looks like, so poses can blend from it
+const FIG_NEUTRAL = { front: [6, 9], back: [-6, 9], legs: [[-4, 0], [4, 0]] };
+const lerpPose = (A, B, k) => ({
+  front: [A.front[0] + (B.front[0] - A.front[0]) * k, A.front[1] + (B.front[1] - A.front[1]) * k],
+  back: [A.back[0] + (B.back[0] - A.back[0]) * k, A.back[1] + (B.back[1] - A.back[1]) * k],
+  legs: A.legs.map((l, i) => [l[0] + (B.legs[i][0] - l[0]) * k, l[1] + (B.legs[i][1] - l[1]) * k]),
+});
 
 // Eyes and brows carry the expression (no mouths: the stickmen stay simple).
 // dx grows toward the facing side; the eyes sit at dx 1 and 3, row -1.
@@ -136,7 +145,8 @@ function figure(x, y, o, t) {
     : o.sitting ? [[x - 8, y], [x + 8, y]] : [[x - 4, y], [x + 4, y]];
   let armL = o.lifted ? [x - 7, sh - 6] : [x - 6, y - 11];
   let armR = o.armless ? [x + 3, sh + 4] : o.lifted ? [x + 7, sh - 6] : [x + 6, y - 11];
-  const P = FIG_POSES[o.pose];
+  // a blended pose (combat) wins over a named one; both are facing-relative
+  const P = o.poseData || FIG_POSES[o.pose];
   if (P) {
     const fx = (dx) => x + dx * f;
     const front = [fx(P.front[0]), sh + P.front[1]], back = [fx(P.back[0]), sh + P.back[1]];
@@ -151,7 +161,7 @@ function figure(x, y, o, t) {
   }
   // the hand that holds things: the leading arm in a pose, else the free one
   const hand = P ? (o.armless ? armL : f > 0 ? armR : armL) : o.armless ? armL : f > 0 ? armR : armL;
-  for (const [col, extra] of [[FIG.edge, 1], [FIG.body, 0]]) {
+  for (const [col, extra] of o.flash ? [['#ffffff', 1], ['#ffd0d0', 0]] : [[FIG.edge, 1], [FIG.body, 0]]) {
     const th = 2 + extra * 2;
     disc(hx, hy, 5 + extra, col);
     line(x, hy + 4, x, hip, col, th);

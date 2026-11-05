@@ -89,7 +89,12 @@ function handle(st) {
   }
   if (st.actors) {
     for (const k in st.actors) {
-      if (st.actors[k] === null) delete G.actors[k]; else G.actors[k] = st.actors[k];
+      if (st.actors[k] === null) { delete G.actors[k]; continue; }
+      // copy, so walking never edits the scene data (replays start in place),
+      // and keep the pose blend so limbs glide into the new pose
+      const prev = G.actors[k], next = { ...st.actors[k] };
+      if (prev) for (const f of ['_pNow', '_pName', '_pFrom', '_pStart', '_pMs']) next[f] = prev[f];
+      G.actors[k] = next;
     }
     return false;
   }
@@ -387,6 +392,41 @@ function drawAlerts(t) {
   }
 }
 
+// ---------- Pose blending ----------
+// Limbs glide from the previous pose to the new one instead of snapping;
+// fast moves (strikes) blend quickly, everything else eases in more softly.
+// Combat figures stand in a breathing guard stance and slump when staggered.
+const FAST_POSES = { strike: 45, slam: 60, follow: 70 };
+function blendPose(a, now, t) {
+  if (a.lifted || a.sitting) { a._pNow = null; return; }
+  const want = a.pose || (a.combat ? (a.stag ? 'slump' : 'ready') : null);
+  if (!want && !a._pNow) return;
+  if (a._pName !== want) {
+    a._pFrom = a._pNow || FIG_NEUTRAL;
+    a._pName = want; a._pStart = now;
+    a._pMs = FAST_POSES[want] || 120;
+  }
+  const k = Math.min(1, (now - a._pStart) / a._pMs);
+  const e = 1 - Math.pow(1 - k, 3);
+  const P = lerpPose(a._pFrom, FIG_POSES[want] || FIG_NEUTRAL, e);
+  if (want === 'ready' || want === 'slump') {
+    const br = Math.sin(t / 520 + a.x) * (want === 'slump' ? 1.2 : 0.8);
+    P.front[1] += br; P.back[1] += br;
+  }
+  if (!want && k >= 1) { a._pNow = null; a._pName = null; return; }
+  a._pNow = P;
+}
+
+// ---------- Combat camera ----------
+// CB.cam = { z, x, y }: zoom z around world point (x, y), shown at screen (160, 100).
+function camOn() {
+  const c = CB.cam;
+  if (!c || (c.z === 1 && c.x === 160 && c.y === 100)) return false;
+  ctx.save();
+  ctx.translate(160, 100); ctx.scale(c.z, c.z); ctx.translate(-c.x, -c.y);
+  return true;
+}
+
 // ---------- Render ----------
 const hintEl = $('hint');
 function render(t) {
@@ -401,6 +441,7 @@ function render(t) {
   if (G.mode === 'hub') {
     drawHub(t);
   } else {
+    const cam = G.mode === 'combat' && camOn();
     drawWide(() => (BG[G.s.bg] || BG.black)(G.s, t), G.s.bg);
     const order = G.mode === 'combat'
       ? Object.keys(G.actors).sort((a, b) => G.actors[a].y - G.actors[b].y)
@@ -410,7 +451,9 @@ function render(t) {
       if (!a) continue;
       const talk = G.s.typing && G.s.speaker === id;
       const enemyDraw = { corrupted, machine: egoMachine, operator }[a.kind];
-      const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk }, t));
+      if (!enemyDraw) blendPose(a, now, t);
+      const flash = (a.flashUntil || 0) > now;
+      const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk, flash, poseData: a._pNow }, t));
       // combat animation offsets: ox/oy move, tilt rotates and sq squashes around the feet
       const posed = () => {
         if (!a.ox && !a.oy && !a.tilt && !a.sq) return base();
@@ -429,8 +472,14 @@ function render(t) {
       }
       ctx.globalAlpha = fade;
       posed();
+      if (flash && enemyDraw) {
+        // brighten the enemy for a frame or two when it is hit
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.65; posed();
+        ctx.globalCompositeOperation = 'source-over';
+      }
       ctx.globalAlpha = 1;
     }
+    if (cam) ctx.restore();
     drawDarkness(G.s, t);
     drawEmotes(t);
     drawAlerts(t);
@@ -445,6 +494,7 @@ function render(t) {
     else { ctx.globalAlpha = Math.min(1, k * 1.2); rect(-OX, 0, VW, H, G.flash.color); ctx.globalAlpha = 1; }
   }
 
+  const animCam = CB.active && CB.anims.length > 0 && camOn();
   if (CB.active && CB.anims.length > 0) {
     CB.anims = CB.anims.filter(a => {
       const elapsed = now - a.start;
@@ -479,6 +529,7 @@ function render(t) {
       return true;
     });
   }
+  if (animCam) ctx.restore();
 
   if (G.fadeAnim) {
     const k = Math.min(1, (now - G.fadeAnim.start) / G.fadeAnim.ms);

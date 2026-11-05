@@ -116,7 +116,12 @@ const CB = {
   allies: [], enemies: [], all: [], dice: [],
   sel: null, view: null, hits: [], mouse: null,
   animating: false, anims: [], fx: [], parts: [], instant: false,
+  cam: { z: 1, x: 160, y: 100 },
 };
+const CAM_HOME = { z: 1, x: 160, y: 100 };
+const camTo = (to, ms = 300) => tween(CB.cam, to, ms, easeInOut);
+// frame a zoomed shot low enough that the ally's health plate stays above the panel
+const camY = (...us) => Math.max(...us.filter(u => u.team === 'ally').map(u => u.by)) - 4;
 
 const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const alive = (u) => u.hp > 0;
@@ -164,6 +169,7 @@ function startCombatTest(enemyId = 'corrupted') {
   hideAllOverlays();
   G.s = { bg: COMBAT_UNITS[enemyId].bg }; G.actors = {}; G.fade = 0;
   CB.active = true; CB.turn = 0; CB.anims = []; CB.fx = []; CB.parts = []; CB.view = null; CB.animating = false;
+  CB.cam = { ...CAM_HOME };
   Music.play(MUSIC_FOR[enemyId]);
   CB.enemyId = enemyId;
   CB.allies = [makeUnit(COMBAT_UNITS.lobelto), makeUnit(COMBAT_UNITS.gonza)];
@@ -171,7 +177,7 @@ function startCombatTest(enemyId = 'corrupted') {
   CB.all = [...CB.allies, ...CB.enemies];
   for (const u of CB.all) {
     G.actors[u.id] = {
-      x: u.bx, y: u.by, face: u.team === 'ally' ? 1 : -1, scale: u.scale,
+      x: u.bx, y: u.by, face: u.team === 'ally' ? 1 : -1, scale: u.scale, combat: true,
       hat: u.hat, armless: u.armless, bandaged: u.bandaged, kind: u.kind,
     };
   }
@@ -431,6 +437,9 @@ function headPos(u) {
 // ---------------------------------------------------------------------
 const easeOut = (k) => 1 - (1 - k) * (1 - k);
 const easeIn = (k) => k * k;
+const easeInOut = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2);
+// overshoots a little and settles: gives landings and returns some elasticity
+const easeOutBack = (k) => { const c = 1.6; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
 
 // Animates numeric fields of `obj` (ox, oy, tilt, sq...) toward `to`.
 function tween(obj, to, ms, ease = easeOut) {
@@ -596,6 +605,7 @@ async function dashTo(u, x, ms, back) {
   const dir = Math.sign(x - a.x);
   if (CB.instant) { a.x = x; return; }
   a.pose = back ? null : 'run';
+  a.walking = 'run';
   dust(u, 5, dir);
   const lean = tween(a, { tilt: (back ? -0.06 : 0.14) * dir * (a.face || 1) * (a.face || 1) }, 90);
   const trail = setInterval(() => {
@@ -604,9 +614,10 @@ async function dashTo(u, x, ms, back) {
   await Promise.all([lean, animateSlide(u.id, x, ms)]);
   clearInterval(trail);
   a.ghosts = null;
+  a.walking = false;
   dust(u, back ? 3 : 7, -dir);
-  if (!back) { a.pose = 'brace'; await tween(a, { tilt: -0.05 * dir, sq: 0.06 }, 70); }
-  await tween(a, { tilt: 0, sq: 0 }, 110);
+  if (!back) { a.pose = 'brace'; await tween(a, { tilt: -0.07 * dir, sq: 0.08 }, 80); }
+  await tween(a, { tilt: 0, sq: 0 }, 200, easeOutBack);
   a.pose = null;
 }
 
@@ -682,7 +693,7 @@ function settle(u) {
   a.atk = false;
   a.pose = null;
   a.ghosts = null;
-  return tween(a, { ox: 0, oy: 0, tilt: 0, sq: 0 }, 160);
+  return tween(a, { ox: 0, oy: 0, tilt: 0, sq: 0 }, 240, easeOutBack);
 }
 
 async function recoilAnim(T, from, dmg = 0) {
@@ -690,11 +701,12 @@ async function recoilAnim(T, from, dmg = 0) {
   if (!a) return;
   const dir = -dirTo(T, from), heavy = dmg >= 8;
   a.pose = 'hurt';
-  await tween(a, { ox: dir * (heavy ? 12 : 7), oy: heavy ? -4 : -1, tilt: -(heavy ? 0.24 : 0.14) * dir }, 70);
-  await tween(a, { oy: 0 }, 70, easeIn);
+  a.flashUntil = performance.now() + 90;
+  await tween(a, { ox: dir * (heavy ? 12 : 7), oy: heavy ? -4 : -1, tilt: -(heavy ? 0.24 : 0.14) * dir, sq: -0.06 }, 70);
+  await tween(a, { oy: 0, sq: 0.08 }, 80, easeIn);
   if (heavy) dust(T, 5, -dir);
-  await tween(a, { ox: 0, tilt: 0 }, 200);
   a.pose = null;
+  await tween(a, { ox: 0, tilt: 0, sq: 0 }, 320, easeOutBack);
 }
 
 async function dodgeAnim(u, from) {
@@ -796,6 +808,11 @@ async function applyHit(T, dmg, stats, from, type) {
     SFX.play('block');
   }
   const dealt = dealDamage(T, dmg - soaked);
+  if (dealt >= 8 && !CB.instant) {
+    // heavy hit: the camera kicks in a touch and eases back
+    const z = CB.cam.z;
+    tween(CB.cam, { z: z + 0.06 }, 50).then(() => tween(CB.cam, { z }, 220));
+  }
   if (!dealt && soaked) { spawnAnim('text', p.x, p.y - 4, 'BLOQUEADO', '#9ac0ff', 800); bark(T, 'block', 0.5); }
   if (stats) stats[from.team] += dealt;
   await wait(70);
@@ -833,7 +850,8 @@ async function doClash(ad, ed) {
   const sa = side(ad), se = side(ed);
   const stats = { ally: 0, enemy: 0 };
   CB.view = { left: sa, right: se };
-  await Promise.all([dashTo(A, 150, 300), dashTo(E, 182, 300)]);
+  await Promise.all([dashTo(A, 150, 300), dashTo(E, 182, 300),
+    camTo({ z: 1.25, x: 166, y: camY(A, E) }, 340)]);
   spawnAnim('text', 166, 44, '¡CHOQUE!', '#ffd060', 800, { big: true });
   bark(A, 'attack', 0.6);
   bark(E, 'attack', 0.4);
@@ -885,7 +903,7 @@ async function doClash(ad, ed) {
   }
   A.shield = 0;
   E.shield = 0;
-  await Promise.all([dashTo(A, A.bx, 280, true), dashTo(E, E.bx, 280, true)]);
+  await Promise.all([dashTo(A, A.bx, 280, true), dashTo(E, E.bx, 280, true), camTo(CAM_HOME, 320)]);
 }
 
 async function doOneSided(d, T) {
@@ -893,11 +911,11 @@ async function doOneSided(d, T) {
   const def = { unit: T, page: null, i: 0, roll: null };
   CB.view = d.unit.team === 'ally' ? { left: s, right: def } : { left: def, right: s };
   const tx = T.team === 'ally' ? T.bx + (d.unit.kind ? 30 : 20) : T.bx - (T.kind ? 30 : 20);
-  await dashTo(d.unit, tx, 300);
+  await Promise.all([dashTo(d.unit, tx, 300), camTo({ z: 1.18, x: (tx + T.bx) / 2, y: camY(d.unit, T) }, 340)]);
   bark(d.unit, 'attack', 0.5);
   await wait(150);
   await leftovers(s, T, null);
-  await dashTo(d.unit, d.unit.bx, 280, true);
+  await Promise.all([dashTo(d.unit, d.unit.bx, 280, true), camTo(CAM_HOME, 320)]);
 }
 
 // Remaining attack and counter dice hit unopposed; block and evade leftovers are discarded.
@@ -1499,15 +1517,18 @@ function refreshActors() {
     a.blind = u.staggered;
     a.rage = u.hp < u.maxHp * 0.3;
     a.rebooting = u.rebooting;
+    a.stag = u.staggered;
   }
 }
 
 function drawCombatHUD(t) {
   if (!CB.active) return;
   refreshActors();
+  const cam = camOn();          // effects and ally plates live in the world, so they follow the camera
   drawFx();
   CB.hits = [];
   for (const u of CB.allies) if (alive(u)) allyPlate(u, t);
+  if (cam) ctx.restore();
   for (const u of CB.enemies) if (alive(u)) enemyPlate(u, t);
   if (CB.phase === 'select') {
     const focus = focusUnit();
