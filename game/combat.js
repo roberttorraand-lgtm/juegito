@@ -13,6 +13,9 @@
 //    evade            → if it ties or beats the attack, no damage at all
 //    counter          → takes the hit, then strikes back unopposed
 //  Stagger damage is 25% of the HP damage dealt, rounded up.
+//  Hands hold at most 4 pages (the free defensive page does not count).
+//  Gonza's gun dice ([type, min, max, 'gun']) spend one of his 12 bullets;
+//  with none left they still clash but deal no damage.
 // =====================================================================
 const DIE = {
   slash:   { col: '#e85a3a', off: true,  name: 'Corte' },
@@ -33,7 +36,9 @@ const DIE_ICON = {
 const kindOf = (t) => (t === 'block' || t === 'evade' || t === 'counter' ? t : 'off');
 
 const SKILL_POOL = { 1: 3, 2: 2, 3: 1 };
-const HAND_START = 2, HAND_MAX = 8;
+// HAND_MAX counts normal pages only; the free defensive page never takes a slot
+const HAND_START = 2, HAND_MAX = 4;
+const AMMO_MAX = 12;
 const LIGHT_START = 3, LIGHT_CAP = 6;
 const ST_RATIO = 0.25;
 const drawsForTurn = (turn) => 1 + Math.min(2, Math.floor(turn / 4));
@@ -46,6 +51,10 @@ const TIER = {
   P: { label: '+', col: '#ffb040', cost: 0 },
 };
 const costOf = (page) => (TIER[page.tier] ? TIER[page.tier].cost : 0);
+const handCount = (u) => u.hand.filter(c => c.page !== u.defense).length;
+// a die written as [type, min, max, 'gun'] fires a bullet
+const isGun = (die) => die[3] === 'gun';
+const pageShots = (page) => page.dice.filter(isGun).length;
 
 // Enemies with `pattern` play those page indexes in order, one row per turn;
 // enemies without it pick their pages at random.
@@ -58,17 +67,19 @@ const COMBAT_UNITS = {
       { name: 'Cabezazo táctico', tier: 2, dice: [['blunt', 5, 8], ['blunt', 3, 5]] },
       { name: 'Ataque a ciegas', tier: 3, dice: [['blunt', 6, 9], ['blunt', 4, 7]] },
     ],
-    defense: { name: 'Esquivar y gritar', tier: 0, dice: [['evade', 3, 7], ['counter', 2, 5]] },
+    defense: { name: 'Esquivar y gritar', tier: 0, dice: [['evade', 3, 6], ['counter', 2, 5]] },
   },
   gonza: {
     id: 'gonza', name: 'GONZA', team: 'ally', maxHp: 65, maxSt: 16, speed: [3, 7], nDice: 1,
     hat: 'cap', bx: 92, by: 114, scale: 0.85,
     pages: [
       { name: 'Patada lateral', tier: 1, dice: [['blunt', 3, 6], ['blunt', 3, 5]] },
+      { name: 'Disparo nervioso', tier: 1, dice: [['pierce', 4, 8, 'gun']] },
       { name: 'Combo callejero', tier: 2, dice: [['blunt', 3, 5], ['blunt', 3, 5], ['blunt', 3, 5]] },
-      { name: 'Furia callejera', tier: 3, dice: [['blunt', 6, 10], ['blunt', 5, 8]] },
+      { name: 'Ráfaga temblorosa', tier: 3, dice: [['pierce', 4, 7, 'gun'], ['pierce', 4, 7, 'gun'], ['blunt', 4, 7]] },
     ],
-    defense: { name: 'Guardia firme', tier: 0, dice: [['block', 4, 8], ['counter', 3, 5]] },
+    defense: { name: 'Guardia firme', tier: 0, dice: [['block', 4, 7], ['counter', 3, 5]] },
+    gun: true,
   },
   // Distortion boss: three pages a turn, no pattern at all
   corrupted: {
@@ -108,6 +119,27 @@ const COMBAT_UNITS = {
       { name: 'Sobrecarga', dice: [['pierce', 5, 9], ['counter', 4, 7]] },
     ],
   },
+  // Episode 2: corpses moved by the Disconnected Operator's cables
+  skel: {
+    id: 'skel', name: 'ESQUELETO CABLEADO', tag: 'TETH?', tagCol: '#2a5aa0', team: 'enemy', maxHp: 30, maxSt: 11, speed: [2, 5], nDice: 1,
+    kind: 'cableskel', bg: 'corridor', height: 44, bx: 250, by: 108, scale: 0.9,
+    pages: [
+      { name: 'Golpe de hueso', dice: [['blunt', 3, 6], ['blunt', 2, 4]] },
+      { name: 'Latigazo de cable', dice: [['slash', 3, 6]] },
+      { name: 'Chispazo', dice: [['pierce', 3, 6]] },
+      { name: 'Costillar', dice: [['block', 3, 6], ['blunt', 2, 4]] },
+    ],
+  },
+};
+// What each fight puts on stage. Story fights use these through { combat: id }.
+const COMBAT_SETS = {
+  corrupted: { enemies: ['corrupted'] },
+  machine: { enemies: ['machine'] },
+  operator: { enemies: ['operator'] },
+  tut_skeletons: {
+    name: 'Esqueletos cableados', enemies: ['skel', 'skel'], bg: 'corridor', music: 'battle_teth', tutorial: true,
+    defeat: 'Los cables chisporrotean, se sueltan y los huesos caen al suelo.',
+  },
 };
 const FORGOTTEN_PIECE = { name: 'Pieza olvidada', tier: 'P', dice: [['pierce', 4, 8], ['pierce', 2, 5]] };
 
@@ -139,6 +171,7 @@ function shuffle(a) {
 function makeUnit(t) {
   const u = { ...t, hp: t.maxHp, st: t.maxSt, staggered: false, staggerTurns: 0, shield: 0 };
   if (t.team === 'ally') {
+    if (t.gun) u.ammo = AMMO_MAX;
     u.pool = [];
     u.hand = [];
     u.light = LIGHT_START;
@@ -152,7 +185,7 @@ function makeUnit(t) {
 // Rotation bag: Skill I/II/III held 3/2/1 times, rebuilt and reshuffled when empty.
 function drawPages(u, n) {
   let drawn = 0;
-  while (drawn < n && u.hand.length < HAND_MAX) {
+  while (drawn < n && handCount(u) < HAND_MAX) {
     if (!u.pool.length) u.pool = shuffle(u.pages.flatMap(p => Array.from({ length: SKILL_POOL[p.tier] }, () => ({ page: p }))));
     u.hand.push(u.pool.pop());
     drawn++;
@@ -163,24 +196,44 @@ function drawPages(u, n) {
 // ---------------------------------------------------------------------
 //  Turn flow
 // ---------------------------------------------------------------------
-function startCombatTest(enemyId = 'corrupted') {
+function startCombatTest(id = 'corrupted') { startCombat({ id, ...COMBAT_SETS[id] }); }
+
+// cfg: { id, enemies: [unit ids], bg, music, defeat, tutorial, story, ammo }
+function startCombat(cfg) {
   G.mode = 'combat';
   ui.hub.classList.add('hidden');
   hideAllOverlays();
-  G.s = { bg: COMBAT_UNITS[enemyId].bg }; G.actors = {}; G.fade = 0;
+  const first = COMBAT_UNITS[cfg.enemies[0]];
+  G.s = { bg: cfg.bg || first.bg }; G.actors = {}; G.fade = 0;
   CB.active = true; CB.turn = 0; CB.anims = []; CB.fx = []; CB.parts = []; CB.view = null; CB.animating = false;
   CB.cam = { ...CAM_HOME };
-  Music.play(MUSIC_FOR[enemyId]);
-  CB.enemyId = enemyId;
+  CB.cfg = cfg;
+  CB.enemyId = cfg.id;
+  CB.tips = {};
+  Music.play(cfg.music || MUSIC_FOR[cfg.enemies[0]]);
   CB.allies = [makeUnit(COMBAT_UNITS.lobelto), makeUnit(COMBAT_UNITS.gonza)];
-  CB.enemies = [makeUnit(COMBAT_UNITS[enemyId])];
+  const gonza = CB.allies[1];
+  if (cfg.ammo != null) gonza.ammo = cfg.ammo;
+  // several copies of one enemy get their own ids, names and places
+  const n = cfg.enemies.length;
+  CB.enemies = cfg.enemies.map((eid, i) => {
+    const u = makeUnit(COMBAT_UNITS[eid]);
+    if (n > 1) {
+      u.id = `${eid}_${i}`;
+      u.name = `${u.name} ${'ABCD'[i]}`;
+      u.bx = 300 - (n - i) * 52 + 6;
+      u.by = u.by + (i % 2 ? 6 : -2);
+    }
+    return u;
+  });
   CB.all = [...CB.allies, ...CB.enemies];
   for (const u of CB.all) {
     G.actors[u.id] = {
       x: u.bx, y: u.by, face: u.team === 'ally' ? 1 : -1, scale: u.scale, combat: true,
-      hat: u.hat, armless: u.armless, bandaged: u.bandaged, kind: u.kind,
+      hat: u.hat, armless: u.armless, bandaged: u.bandaged, kind: u.kind, item: u.gun ? 'pistol' : null, seed: CB.all.indexOf(u),
     };
   }
+  CB.tut = cfg.tutorial ? { i: 0 } : null;
   ui.combatUI.classList.remove('hidden');
   newTurn();
   renderCombatUI();
@@ -228,6 +281,7 @@ function newTurn() {
   }
   CB.sel = allyDice().find(d => canAct(d.unit)) || null;
   spawnAnim('text', 160, 72, `TURNO ${CB.turn}`, '#e8c060', 1200, { big: true });
+  CB.turnStart = performance.now();
   SFX.play('turn');
 }
 
@@ -285,7 +339,7 @@ function defenseButton(u) {
   if (onDie) { unassign(onDie); SFX.play('select'); return; }
   let card = u.hand.find(c => c.page === u.defense);
   if (!card) {
-    if (u.defTurn === CB.turn || u.hand.length >= HAND_MAX) { SFX.play('error'); return; }
+    if (u.defTurn === CB.turn) { SFX.play('error'); return; }
     card = { page: u.defense };
     u.hand.push(card);
     u.defTurn = CB.turn;
@@ -310,6 +364,9 @@ function checkEnd() {
 
 async function combatExecute() {
   if (CB.animating || CB.phase !== 'select') return;
+  if (tutBlocking()) return;
+  const ts = tutStep();
+  if (ts && ts.start) advanceTut();
   CB.animating = true;
   CB.phase = 'resolve';
   SFX.play('confirm');
@@ -362,7 +419,7 @@ function endTurn() {
   for (const e of CB.enemies) {
     e.rebooting = false;
     if (!e.givesPieces || !alive(e) || Math.random() >= e.givesPieces) continue;
-    const takers = CB.allies.filter(u => alive(u) && u.hand.length < HAND_MAX);
+    const takers = CB.allies.filter(u => alive(u) && handCount(u) < HAND_MAX);
     if (!takers.length) continue;
     const u = takers[rnd(0, takers.length - 1)];
     u.hand.push({ page: FORGOTTEN_PIECE });
@@ -536,6 +593,22 @@ const FX_DRAW = {
     if (k < 0.25) disc(f.x, f.y, Math.round(6 * (1 - k * 4)) + 1, '#ffffff');
     ctx.globalAlpha = 1;
   },
+  // pistol flash at the muzzle
+  muzzle(f, k) {
+    ctx.globalAlpha = Math.max(0, 1 - k);
+    light(f.x, f.y, 10 * (1 - k) + 2, 6 * (1 - k) + 2, '#ffe08a', 0.8, 3);
+    star(Math.round(f.x + f.dir * 2), Math.round(f.y), '#ffffff');
+    rect(f.x + f.dir * 2, f.y, f.dir * 6 * (1 - k), 1, '#ffffff');
+    ctx.globalAlpha = 1;
+  },
+  // bullet trail to the target
+  tracer(f, k) {
+    ctx.globalAlpha = Math.max(0, 1 - k * 1.2);
+    line(f.x0, f.y0, f.x1, f.y1, '#ffe08a');
+    const m = Math.min(1, k * 3);
+    disc(f.x0 + (f.x1 - f.x0) * m, f.y0 + (f.y1 - f.y0) * m, 1, '#ffffff');
+    ctx.globalAlpha = 1;
+  },
   // hexagonal guard in front of a blocker
   hexShield(f, k) {
     const pulse = 1 + Math.sin(k * Math.PI * 6) * 0.06;
@@ -624,13 +697,31 @@ async function dashTo(u, x, ms, back) {
 const trail = (a, dir, n = 2) => { a.ghosts = Array.from({ length: n }, (_, i) => ({ dx: -dir * (6 + i * 6), a: 0.32 - i * 0.12 })); };
 
 // The attacker's swing for one die, ending at the moment of impact.
-async function strikeAnim(U, T, type) {
+async function strikeAnim(U, T, type, gun, dry) {
   const a = actorOf(U), dir = dirTo(U, T), c = chest(T);
   if (!a) return;
   a.atk = true;
-  const k = kindOf(type) === 'counter' ? 'counter' : type;
+  const k = gun ? 'gun' : kindOf(type) === 'counter' ? 'counter' : type;
   const r = T.kind ? 12 : 9;
-  if (k === 'counter') {
+  if (k === 'gun') {
+    // raise the pistol, a beat of aim, then the shot (or the dry click) and recoil
+    a.pose = 'aim';
+    await tween(a, { tilt: -0.04 * dir, sq: 0.04 }, 110);
+    await wait(90);
+    const s = (U.scale || 1) * (U.hat === 'cap' ? 0.86 : 1);
+    const hx = a.x + (a.ox || 0) + dir * 13 * s, hy = a.y - 21 * s;
+    if (dry) {
+      SFX.play('gun_click');
+      await tween(a, { ox: (a.ox || 0) - dir * 1 }, 60);
+    } else {
+      fx('muzzle', hx, hy, 110, { dir });
+      fx('tracer', 0, 0, 140, { x0: hx, y0: hy, x1: c.x, y1: c.y });
+      particles(hx, hy, 5, ['#fff6c0', '#ffd060'], 1.2, 0.02, 10);
+      SFX.play('gunshot');
+      G.flash = { color: '#fff4d0', start: performance.now(), ms: 50 };
+      await tween(a, { ox: (a.ox || 0) - dir * 4, tilt: -0.1 * dir }, 50);
+    }
+  } else if (k === 'counter') {
     // parry stance, then a fast riposte
     const p = chest(U);
     a.pose = 'guard';
@@ -786,6 +877,7 @@ function dealDamage(u, hpD) {
   } else if (!u.staggered && u.st <= 0) {
     u.staggered = true;
     u.staggerTurns = 2;
+    if (u.team === 'enemy') tip('stagger');
     spawnAnim('text', p.x, p.y - 10, 'ATURDIDO', '#ff4a5a', 1400, { big: true });
     SFX.play('stagger');
     bark(u, 'stagger');
@@ -797,9 +889,9 @@ function dealDamage(u, hpD) {
 }
 
 // A hit is soaked by the target's shield first; what is left reaches HP.
-async function applyHit(T, dmg, stats, from, type) {
+async function applyHit(T, dmg, stats, from, type, gun, dry) {
   if (!alive(T)) return;
-  await strikeAnim(from, T, type);
+  await strikeAnim(from, T, type, gun, dry);
   const p = headPos(T);
   const soaked = Math.min(T.shield, dmg);
   if (soaked) {
@@ -844,7 +936,19 @@ function rollFx(u, type, r) {
   SFX.play('dice', { roll: r });
 }
 
-function side(d) { return { unit: d.unit, page: d.page, i: 0, roll: null }; }
+function side(d) { return { unit: d.unit, page: d.page, i: 0, roll: null, dry: false }; }
+
+// A gun die spends one bullet when rolled; with the magazine empty it still
+// rolls (so it can win or lose the clash) but deals no damage.
+function fire(sd, die) {
+  sd.dry = false;
+  if (!isGun(die)) return;
+  const U = sd.unit;
+  if (U.ammo > 0) { U.ammo--; if (!U.ammo) tip('noammo'); return; }
+  sd.dry = true;
+  const p = headPos(U);
+  spawnAnim('text', p.x, p.y - 30, 'SIN BALAS', '#a0a0b0', 1000);
+}
 
 async function doClash(ad, ed) {
   const A = ad.unit, E = ed.unit;
@@ -862,6 +966,7 @@ async function doClash(ad, ed) {
   while (sa.i < qa.length && se.i < qe.length && canAct(A) && canAct(E)) {
     const [ta, a1, a2] = qa[sa.i], [te, e1, e2] = qe[se.i];
     sa.roll = rnd(a1, a2); se.roll = rnd(e1, e2);
+    fire(sa, qa[sa.i]); fire(se, qe[se.i]);
     rollFx(A, ta, sa.roll); rollFx(E, te, se.roll);
     await wait(380);
     const f = pairEffects(ta, sa.roll, te, se.roll);
@@ -878,9 +983,10 @@ async function doClash(ad, ed) {
     if (f.evade === 'a') await evadeFx(A, sa.roll, E);
     if (f.evade === 'b') await evadeFx(E, se.roll, A);
     for (const h of f.hits) {
-      const [T, from, die] = h.to === 'a' ? [A, E, te] : [E, A, ta];
+      const [T, from, die, sd, raw] = h.to === 'a' ? [A, E, te, se, qe[se.i]] : [E, A, ta, sa, qa[sa.i]];
       if (kindOf(die) === 'counter') spawnAnim('text', headPos(from).x, headPos(from).y - 22, 'CONTRAATAQUE', DIE.counter.col, 900);
-      await applyHit(T, h.dmg, stats, from, die);
+      const gun = raw && isGun(raw) && kindOf(die) === 'off';
+      await applyHit(T, gun && sd.dry ? 0 : h.dmg, stats, from, die, gun, gun && sd.dry);
     }
     const aa = actorOf(A), ae = actorOf(E);
     if (aa) aa.pose = null;
@@ -897,6 +1003,7 @@ async function doClash(ad, ed) {
   // Light goes to the ally if their side dealt more damage in this clash
   if (alive(A) && stats.ally > stats.enemy && A.light < A.maxLight) {
     A.light++;
+    tip('light');
     const p = headPos(A);
     spawnAnim('text', p.x, p.y - 26, '+1 LUZ', '#ffe08a', 1200, { big: true });
     particles(p.x, p.y - 20, 10, ['#ffe08a', '#ffffff'], 1.2, -0.02);
@@ -926,9 +1033,11 @@ async function leftovers(s, T, stats) {
     const [ty, a, b] = s.page.dice[s.i];
     if (DIE[ty].off) {
       s.roll = rnd(a, b);
+      fire(s, s.page.dice[s.i]);
       rollFx(U, ty, s.roll);
       await wait(300);
-      await applyHit(T, s.roll, stats, U, ty);
+      const gun = isGun(s.page.dice[s.i]);
+      await applyHit(T, s.dry ? 0 : s.roll, stats, U, ty, gun, s.dry);
       await wait(200);
     }
     s.roll = null;
@@ -983,7 +1092,7 @@ function autoAssign(mode) {
     if (!canAct(u) || !foes.length) continue;
     const taken = diceOf(u).filter(x => x.card).map(x => x.card);
     const options = u.hand.filter(c => !taken.includes(c));
-    const defFree = u.defTurn !== CB.turn && !u.hand.some(c => c.page === u.defense) && u.hand.length < HAND_MAX;
+    const defFree = u.defTurn !== CB.turn && !u.hand.some(c => c.page === u.defense);
     if (defFree) options.push({ page: u.defense, virtual: true });
     let best = null, bestScore = -Infinity;
     for (const card of options) {
@@ -1131,7 +1240,8 @@ function focusUnit() {
     const h = (u.kind ? u.height : 34) * s, hw = u.kind ? 24 : 9;
     if (m.x >= a.x - hw && m.x <= a.x + hw && m.y >= u.by - h - 4 && m.y <= u.by + 2) return { unit: u };
     if (u.team === 'ally' && m.x >= a.x - 16 && m.x < a.x + 16 && m.y >= u.by + 2 && m.y < u.by + 11) return { unit: u };
-    if (u.team === 'enemy' && m.x >= 200 && m.x < 304 && m.y >= 104 && m.y < 124) return { unit: u };
+    if (u.team === 'enemy' && CB.enemies.length === 1 && m.x >= 200 && m.x < 304 && m.y >= 104 && m.y < 124) return { unit: u };
+    if (u.team === 'enemy' && CB.enemies.length > 1 && m.x >= a.x - 18 && m.x < a.x + 18 && m.y >= u.by && m.y < u.by + 12) return { unit: u };
   }
   return null;
 }
@@ -1186,25 +1296,24 @@ function clashMark(x, y, t) {
   line(x + 3, y - 3, x - 3, y + 3, '#fff');
 }
 
-// Arrows are only drawn for the unit under the pointer: its own attacks and
-// the attacks aimed at it. Returns the dice involved so the rest can be dimmed.
+// Every attack shows its arrow. Each arrow gets its own lane over the top,
+// as far apart as the space allows, so every clash can be told apart.
+// Hovering (or tapping) a character brings its arrows forward and fades the rest.
 function drawArrows(t, focus) {
   const lit = new Set();
-  if (!focus) return lit;
-  const show = (a, b) => a.unit === focus.unit || b.unit === focus.unit;
   const list = [];
   for (const e of enemyDice()) {
-    if (!e.page || !e.target || !canAct(e.unit) || !show(e, e.target)) continue;
+    if (!e.page || !e.target || !canAct(e.unit)) continue;
     if (e.target.target === e && e.target.page) continue;
     list.push({ a: e, b: e.target, col: '#ff4050' });
   }
   for (const d of allyDice()) {
-    if (!d.page || !d.target || !canAct(d.unit) || !show(d, d.target)) continue;
+    if (!d.page || !d.target || !canAct(d.unit)) continue;
     list.push({ a: d, b: d.target, col: '#ffd060', both: d.target.target === d, clash: true });
   }
-  // Every arrow gets its own lane over the top: shorter arrows stay low,
-  // longer ones go higher, so they nest instead of crossing. Arrows sharing
-  // a token leave from spread-out points along its top edge.
+  if (!list.length) return lit;
+  const mine = (r) => !focus || r.a.unit === focus.unit || r.b.unit === focus.unit;
+  // shorter arrows stay low, longer ones go higher, so they nest instead of crossing
   list.sort((r1, r2) => Math.abs(tokenPos(r1.a).x - tokenPos(r1.b).x) - Math.abs(tokenPos(r2.a).x - tokenPos(r2.b).x));
   const ends = new Map(), used = new Map();
   for (const r of list) for (const d of [r.a, r.b]) ends.set(d, (ends.get(d) || 0) + 1);
@@ -1212,17 +1321,22 @@ function drawArrows(t, focus) {
     const n = ends.get(d), k = used.get(d) || 0;
     used.set(d, k + 1);
     const p = tokenPos(d);
-    return { x: p.x + (k - (n - 1) / 2) * Math.min(5, 10 / Math.max(1, n - 1)), y: p.y - 4 };
+    return { x: p.x + (k - (n - 1) / 2) * Math.min(6, 12 / Math.max(1, n - 1)), y: p.y - 4 };
   };
-  const roof = Math.min(...list.map(r => Math.min(tokenPos(r.a).y, tokenPos(r.b).y))) - 12;
-  const gap = Math.max(4, Math.min(9, (roof - 5) / Math.max(1, list.length - 1)));
-  list.forEach((r, i) => {
-    const p0 = point(r.a), p1 = point(r.b);
-    const m = arc(p0.x, p0.y, p1.x, p1.y, r.col, t, r.both, Math.max(4, roof - i * gap));
-    if (r.clash) clashMark(m[0], m[1], t);
-    lit.add(r.a); lit.add(r.b);
-  });
-  for (const d of CB.dice) if (d.unit === focus.unit) lit.add(d);
+  const roof = Math.min(...list.map(r => Math.min(tokenPos(r.a).y, tokenPos(r.b).y))) - 10;
+  const gap = Math.max(6, Math.min(14, (roof - 3) / Math.max(1, list.length - 1)));
+  const drawn = list.map((r, i) => ({ r, top: Math.max(4, roof - i * gap), p0: point(r.a), p1: point(r.b) }));
+  // faded ones first, highlighted ones on top
+  drawn.sort((x, y) => mine(x.r) - mine(y.r));
+  for (const { r, top, p0, p1 } of drawn) {
+    const on = mine(r);
+    ctx.globalAlpha = on ? 1 : 0.22;
+    const m = arc(p0.x, p0.y, p1.x, p1.y, r.col, t, r.both, top);
+    if (r.clash && on) clashMark(m[0], m[1], t);
+    ctx.globalAlpha = 1;
+    if (on && focus) { lit.add(r.a); lit.add(r.b); }
+  }
+  if (focus) for (const d of CB.dice) if (d.unit === focus.unit) lit.add(d);
   return lit;
 }
 
@@ -1281,6 +1395,13 @@ function tag(s, x, y, col, align) {
   txt(s, x, y, col, 8, align);
 }
 
+// bullets left: a small cartridge and the count
+function ammoBadge(x, y, n) {
+  const col = n ? '#e8c060' : '#6a6070';
+  rect(x, y - 4, 2, 4, col); rect(x, y - 5, 2, 1, n ? '#b08030' : '#4a4450');
+  txt(`${n}`, x + 4, y, n ? '#f0e0b0' : '#ff6a78', 8);
+}
+
 function shieldBar(x, y, v) {
   if (!v) return;
   const w = Math.min(30, v * 3);
@@ -1301,12 +1422,31 @@ function allyPlate(u, t) {
   rect(x - 15, y + 7, 30, 2, '#2a2410');
   rect(x - 15, y + 7, Math.round(30 * u.st / u.maxSt), 2, '#e8c040');
   txt(String(u.hp), x - 18, y + 10, '#ff8a3a', 10, 'right');
+  if (u.gun) ammoBadge(x + 18, y + 13, u.ammo);
   if (u.staggered) txt(`ATURD. ${u.staggerTurns - 1}T`, x + 18, y + 10, Math.floor(t / 400) % 2 ? '#ff4a5a' : '#8a2030', 8);
   else txt(`${u.st}/${u.maxSt}`, x + 18, y + 10, '#e8c040', 8);
   shieldBar(x - 15, y - 1, u.shield);
 }
 
+// compact plate under an enemy when several share the stage
+function enemyMiniPlate(u, t) {
+  const a = G.actors[u.id];
+  if (!a) return;
+  const x = Math.round(a.x), y = u.by;
+  rect(x - 17, y + 2, 34, 9, '#0a080e');
+  rect(x - 17, y + 2, 34, 1, '#5a1a24');
+  const hp = u.hp / u.maxHp;
+  rect(x - 16, y + 4, 32, 2, '#2a1418');
+  rect(x - 16, y + 4, Math.round(32 * hp), 2, '#e03040');
+  rect(x - 16, y + 7, 32, 2, '#2a2410');
+  rect(x - 16, y + 7, Math.round(32 * u.st / u.maxSt), 2, '#e8c040');
+  txt(String(u.hp), x + 19, y + 9, '#ff8a3a', 9);
+  txt(u.staggered ? `ATURD.` : `${u.st}`, x - 19, y + 9, u.staggered ? '#ff4a5a' : '#e8c040', 8, 'right');
+  shieldBar(x - 16, y - 2, u.shield);
+}
+
 function enemyPlate(u, t) {
+  if (CB.enemies.length > 1) return enemyMiniPlate(u, t);
   const x0 = 200, y0 = 108, w = 104, bw = 62;
   rect(x0, y0, w, 15, '#0a080e');
   rect(x0, y0, w, 1, '#5a1a24');
@@ -1373,6 +1513,7 @@ function selectPanel(t) {
       txt('DEF', cx - 7.5, pcy - 7.5, spent ? '#5a5a6a' : '#c8dcff', 7, 'center');
     }
     txt(String(u.hp), cx - 9, 179, '#ff8a3a', 9, 'center');
+    if (u.gun) ammoBadge(cx + 6, 131, u.ammo);
     if (dice[0]) speedBadge(cx + 11, 173, dice[0].speed);
   });
 
@@ -1433,10 +1574,12 @@ function drawHandCard(r, hv, d) {
   txt(tier.label, x + w - 2 - bw / 2, y + 2, '#16121a', 8, 'center');
   disc(x + w - 6, y + h - 6, 4, afford ? '#ffe08a' : '#5a5040');
   txt(String(costOf(pg)), x + w - 5.5, y + h - 3, '#2a1a00', 9, 'center');
-  pg.dice.forEach(([ty, a, b], k) => {
+  pg.dice.forEach((die, k) => {
+    const [ty, a, b] = die;
     const ry = y + h - 8 - (pg.dice.length - 1 - k) * 7;
     dieIcon(ty, x + 3, ry - 3);
     txt(`${a}-${b}`, x + 10, ry + 2, '#d8d0c0', 8);
+    if (isGun(die)) { rect(x + 25, ry - 3, 2, 4, d.unit.ammo ? '#e8c060' : '#6a6070'); rect(x + 25, ry - 4, 2, 1, '#b08030'); }
   });
   if (!afford || elsewhere) { ctx.globalAlpha = 0.55; rect(x, y, w, h, '#000'); ctx.globalAlpha = 1; }
   if (elsewhere) { rrect(x + 3, y + h / 2 - 5, w - 6, 9, '#2a2010', 2); txt('EN USO', x + w / 2, y + h / 2 + 2, '#ffd060', 8, 'center'); }
@@ -1499,7 +1642,7 @@ function tooltip() {
   }
   pg.dice.forEach(([ty, a, b], k) => {
     dieIcon(ty, x + 4, y + 12 + k * 9);
-    txt(`${a}-${b}  ${DIE[ty].name}`, x + 12, y + 17 + k * 9, '#e8e4dc', 8);
+    txt(`${a}-${b}  ${DIE[ty].name}${pg.dice[k][3] === 'gun' ? ' · 1 bala' : ''}`, x + 12, y + 17 + k * 9, '#e8e4dc', 8);
   });
 }
 
@@ -1535,7 +1678,110 @@ function drawCombatHUD(t) {
   topBar();
   if (CB.phase === 'select') selectPanel(t); else clashPanel();
   tooltip();
+  drawTutorial(t);
   cv.style.cursor = CB.hits.some(h => h.hot) ? 'pointer' : 'default';
+}
+
+// ---------------------------------------------------------------------
+//  Tutorial: guided steps for the first fight, plus one-time tips
+// ---------------------------------------------------------------------
+const bbox = (pts, pad = 0) => {
+  if (!pts.length) return null;
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+  const x0 = Math.min(...xs) - pad, y0 = Math.min(...ys) - pad;
+  return { x: x0, y: y0, w: Math.max(...xs) + pad - x0, h: Math.max(...ys) + pad - y0 };
+};
+const TUT_FOCUS = {
+  allyTokens: () => bbox(allyDice().map(tokenPos), 13),
+  enemyTokens: () => { const b = bbox(enemyDice().map(tokenPos), 12); return b && { ...b, h: b.h + 12 }; },
+  hand: () => ({ x: 87, y: 123, w: 164, h: 57 }),
+  light: () => ({ x: 2, y: 123, w: 80, h: 10 }),
+  arrows: () => ({ x: 20, y: 2, w: 280, h: 60 }),
+  gonza: () => ({ x: 41, y: 123, w: 40, h: 57 }),
+  portraits: () => ({ x: 4, y: 145, w: 76, h: 35 }),
+  gear: () => ({ x: 250, y: 124, w: 40, h: 56 }),
+  enemyPlates: () => bbox(CB.enemies.filter(alive).flatMap(u => [{ x: u.bx - 18, y: u.by }, { x: u.bx + 26, y: u.by + 12 }]), 2),
+};
+const TUT = [
+  { text: '¡Primer combate! Te enseño lo básico.' },
+  { focus: 'allyTokens', text: 'Estos hexágonos son las FICHAS DE VELOCIDAD. El número es la velocidad: quien tiene más, actúa antes. Lobelto tiene 2 fichas y Gonza 1.' },
+  { focus: 'enemyTokens', text: 'Los enemigos también tienen fichas. Debajo de cada una ves el rango de daño del ataque que preparan.' },
+  { focus: 'hand', text: 'Abajo está la MANO del personaje elegido. Cada PÁGINA tiene dados (corte, perforación, contundente...) y cuesta LUZ. Como mucho tendrás 4.' },
+  { focus: 'light', text: 'Los puntos amarillos son tu LUZ. Cada pocos turnos puedes guardar más, y ganar un choque te da +1.' },
+  { focus: 'hand', text: 'Toca una página para ponerla en la ficha marcada en amarillo.', until: () => allyDice().some(d => d.page) },
+  { focus: 'arrows', text: 'Las FLECHAS muestran quién ataca a quién. Si tu ficha y la del enemigo se apuntan entre sí, hay CHOQUE: los dos tiráis dados y gana el más alto.' },
+  { focus: 'enemyTokens', text: 'Toca una ficha enemiga para elegir a quién apuntas. Pasa el ratón (o toca) por un personaje para resaltar sus flechas.' },
+  { focus: 'gonza', text: () => `Gonza lleva una PISTOLA: cada dado con bala gasta 1 y le quedan ${CB.allies[1].ammo} de ${AMMO_MAX}. Sin balas, ese dado choca igual pero no hace daño.` },
+  { focus: 'portraits', text: 'El RETRATO es tu defensa: una vez por turno añade gratis una página para esquivar o bloquear.' },
+  { focus: 'gear', text: 'Cuando quieras, pulsa INICIAR (el engranaje) para resolver el turno.', start: true },
+  { turn: 2, focus: 'enemyPlates', text: 'Los golpes también bajan la barra amarilla. Si llega a 0, el enemigo queda ATURDIDO: no actúa y recibe el doble de daño.' },
+  { turn: 2, text: 'Cada turno robas páginas nuevas. ¡Ahora te toca a ti: acaba con ellos!' },
+];
+const TIPS = {
+  noammo: '¡Gonza se ha quedado sin balas! Sus disparos chocarán igual, pero sin hacer daño.',
+  stagger: '¡Enemigo ATURDIDO! Este turno no actúa y recibe el doble de daño.',
+  light: '+1 LUZ: la ganas al hacer más daño que el rival en un choque.',
+};
+// the current step, if it is showing right now
+function tutStep() {
+  if (!CB.tut || CB.phase !== 'select') return null;
+  const st = TUT[CB.tut.i];
+  if (!st) { CB.tut = null; return null; }
+  if (CB.turn < (st.turn || 1)) return null;
+  // let the "TURNO n" banner play out before a new turn's first message
+  if (CB.turnStart && performance.now() - CB.turnStart < 1100 && (CB.tut.i === 0 || st.turn)) return null;
+  return st;
+}
+// steps without a task wait for a click/Enter and block the board meanwhile
+const tutBlocking = () => { const st = tutStep(); return !!st && !st.until && !st.start; };
+function advanceTut() { if (CB.tut) { CB.tut.i++; CB.tut.at = performance.now(); SFX.play('select'); } }
+function tip(key) {
+  if (!CB.cfg || !(CB.cfg.tutorial || CB.cfg.tips) || CB.tips[key] || CB.instant) return;
+  CB.tips[key] = true;
+  CB.toast = { text: TIPS[key], start: performance.now() };
+}
+
+function drawTutorial(t) {
+  const st = tutStep();
+  if (st && st.until && st.until()) { advanceTut(); return; }
+  if (st) {
+    const f = st.focus && TUT_FOCUS[st.focus]();
+    // dim everything but the focus
+    ctx.globalAlpha = 0.55;
+    if (f) {
+      rect(-OX, 0, VW, f.y, '#000'); rect(-OX, f.y + f.h, VW, H - f.y - f.h, '#000');
+      rect(-OX, f.y, f.x + OX, f.h, '#000'); rect(f.x + f.w, f.y, VW - f.x - f.w, f.h, '#000');
+    } else rect(-OX, 0, VW, H, '#000');
+    ctx.globalAlpha = 1;
+    if (f) {
+      const pulse = Math.floor(t / 250) % 2;
+      const c = pulse ? '#ffd060' : '#c09040';
+      rect(f.x - 1, f.y - 1, f.w + 2, 1, c); rect(f.x - 1, f.y + f.h, f.w + 2, 1, c);
+      rect(f.x - 1, f.y - 1, 1, f.h + 2, c); rect(f.x + f.w, f.y - 1, 1, f.h + 2, c);
+    }
+    const lines = wrap(typeof st.text === 'function' ? st.text() : st.text, 236, 8);
+    const bh = 12 + lines.length * 8;
+    // explaining the stage → box over the bottom panel; explaining the panel → box at the top
+    const by = !f ? 60 : f.y >= 100 ? 6 : H - bh - 3;
+    rrect(36, by, 248, bh, '#100c14', 2);
+    rect(36, by, 248, 1, '#ffd060');
+    lines.forEach((ln, i) => txt(ln, 42, by + 9 + i * 8, '#f0e8d8', 8));
+    const hint = st.until || st.start ? '' : (IS_TOUCH ? 'Toca para seguir ▸' : 'Clic / Intro para seguir ▸');
+    if (hint) txt(hint, 280, by + bh - 3, Math.floor(t / 400) % 2 ? '#ffd060' : '#a08040', 7, 'right');
+    txt(`${CB.tut.i + 1}/${TUT.length}`, 40, by + bh - 3, '#6a6070', 7);
+  }
+  // one-time tips slide in at the top for a few seconds
+  const ts = CB.toast;
+  if (ts) {
+    const k = (performance.now() - ts.start) / 4200;
+    if (k >= 1) { CB.toast = null; return; }
+    const lines = wrap(ts.text, 220, 8), bh = 8 + lines.length * 8;
+    const y = 16 - (k < 0.06 ? (1 - k / 0.06) * 20 : k > 0.9 ? (k - 0.9) / 0.1 * 20 : 0);
+    ctx.globalAlpha = k > 0.9 ? (1 - k) / 0.1 : 1;
+    rrect(44, y, 232, bh, '#1a1408', 2); rect(44, y, 232, 1, '#ffd060');
+    lines.forEach((ln, i) => txt(ln, 50, y + 8 + i * 8, '#ffe8b0', 8));
+    ctx.globalAlpha = 1;
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -1550,6 +1796,7 @@ cv.addEventListener('click', (e) => {
   if (G.mode !== 'combat' || !CB.active || CB.phase !== 'select') return;
   const p = canvasToLogical(e.clientX, e.clientY);
   CB.mouse = p;
+  if (tutBlocking()) { advanceTut(); return; }
   for (let i = CB.hits.length - 1; i >= 0; i--) {
     const r = CB.hits[i];
     if (p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h) { SFX.init(); r.fn(); return; }
@@ -1559,16 +1806,24 @@ cv.addEventListener('click', (e) => {
 function renderCombatUI() {
   if (CB.phase !== 'done') { ui.combatUI.innerHTML = ''; return; }
   const won = CB.enemies.every(u => !alive(u));
+  const story = CB.cfg && CB.cfg.story;
+  const defeatText = (CB.cfg && CB.cfg.defeat) || CB.enemies[0].defeat || 'Los enemigos han caído.';
+  const gonza = CB.allies.find(u => u.gun);
+  const btns = story
+    ? (won ? '<button class="cb-result-btn" data-act="combat-continue">Continuar</button>'
+      : '<button class="cb-result-btn" data-act="combat-retry">Reintentar</button><button class="cb-result-btn" data-act="combat-exit">Salir al menú</button>')
+    : '<button class="cb-result-btn" data-act="combat-exit">Volver al Hub</button><button class="cb-result-btn" data-act="combat-retry">Reintentar</button>';
   ui.combatUI.innerHTML = `<div class="cb-result" style="border-color:${won ? 'var(--gold)' : '#ff3b4a'}">
     <div class="cb-result-title ${won ? 'win' : 'lose'}">${won ? 'VICTORIA' : 'DERROTA'}</div>
-    <div class="cb-result-sub">${won ? CB.enemies[0].defeat : 'Tu equipo ha sido derrotado...'}</div>
-    <div class="cb-result-stats">Turnos: ${CB.turn}</div>
+    <div class="cb-result-sub">${won ? defeatText : 'Tu equipo ha sido derrotado...'}</div>
+    <div class="cb-result-stats">Turnos: ${CB.turn}${gonza ? ` · Balas: ${gonza.ammo}/${AMMO_MAX}` : ''}</div>
     <div class="cb-result-stats">${CB.allies.map(u => `${u.name}: ${u.hp}/${u.maxHp} HP`).join(' · ')}</div>
-    <button class="cb-result-btn" data-act="combat-exit">Volver al Hub</button>
-    <button class="cb-result-btn" data-act="combat-retry">Reintentar</button>
+    ${btns}
   </div>`;
-  ui.combatUI.querySelector('[data-act="combat-exit"]').addEventListener('click', (e) => { e.stopPropagation(); endCombat(); });
-  ui.combatUI.querySelector('[data-act="combat-retry"]').addEventListener('click', (e) => { e.stopPropagation(); startCombatTest(CB.enemyId); });
+  const on = (act, fn) => { const b = ui.combatUI.querySelector(`[data-act="${act}"]`); if (b) b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); };
+  on('combat-exit', endCombat);
+  on('combat-retry', () => startCombat({ ...CB.cfg, tutorial: false, tips: CB.cfg.tutorial || CB.cfg.tips }));
+  on('combat-continue', () => { if (typeof storyAfterCombat === 'function') storyAfterCombat(); });
 }
 
 function spawnAnim(type, x, y, text, color, ms, extra) {

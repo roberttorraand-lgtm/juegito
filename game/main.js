@@ -100,12 +100,30 @@ function handle(st) {
       // copy, so walking never edits the scene data (replays start in place),
       // and keep the pose blend so limbs glide into the new pose
       const prev = G.actors[k], next = { ...st.actors[k] };
-      if (prev) for (const f of ['_pNow', '_pName', '_pFrom', '_pStart', '_pMs']) next[f] = prev[f];
+      if (prev) for (const f of ['_pNow', '_pName', '_pFrom', '_pStart', '_pMs', 'flashUntil']) next[f] = prev[f];
       G.actors[k] = next;
     }
     return false;
   }
   if (st.sfx) { SFX.play(st.sfx); return false; }
+  if (st.save) { SAVE.save(st.save); return false; }
+  if (st.hit) { const a = G.actors[st.hit]; if (a) a.flashUntil = now + 140; return false; }
+  if (st.voice) { SFX.voice(st.voice, st.kind || 'hurt'); return false; }
+  if ('doc' in st) {
+    // an abnormality file shown full screen; a click puts it away
+    G.s.doc = st.doc ? { id: st.doc, start: now } : null;
+    if (!st.doc) return false;
+    hideBox(); SFX.play('item');
+    G.waiting = 'doc';
+    return true;
+  }
+  if (st.combat) {
+    // a fight inside the story: the scene waits here and resumes on victory
+    hideBox();
+    G.storySave = { s: G.s, actors: G.actors };
+    startCombat({ id: st.combat, ...COMBAT_SETS[st.combat], story: true, ammo: SAVE.get('ammo', AMMO_MAX) });
+    return true;
+  }
   if (st.exprs) { for (const k in st.exprs) setExpr(k, st.exprs[k]); return false; }
   if (st.walk) return walkActors(st);
   if (st.fx === 'shake') { G.shakeUntil = now + st.ms; return false; }
@@ -220,6 +238,11 @@ function advance() {
     G.typing = null; G.waiting = null; G.s.speaker = null;
     return run();
   }
+  if (G.waiting === 'doc') {
+    G.s.doc = null; G.waiting = null;
+    SFX.play('select');
+    return run();
+  }
   if (G.waiting === 'card') {
     ui.card.classList.add('hidden');
     G.waiting = null;
@@ -237,7 +260,7 @@ function advance() {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'm' || e.key === 'M') { SFX.muted = !SFX.muted; Music.setVolume(); return; }
   if (e.key === 'h' || e.key === 'H') { ui.box.classList.toggle('dim'); return; }
-  if (e.key === 'Control') { if (!G.skip) { G.skip = true; if (G.waiting === 'text' || G.waiting === 'card') advance(); } return; }
+  if (e.key === 'Control') { if (!G.skip) { G.skip = true; if (G.waiting === 'text' || G.waiting === 'card' || G.waiting === 'doc') advance(); } return; }
   if (G.mode === 'hub') {
     if (G.hubView === 'main') {
       const enabled = getEnabledNavIndices();
@@ -291,7 +314,7 @@ document.addEventListener('keydown', (e) => {
   }
   if (G.mode === 'combat') {
     if (e.key === 'Escape' && !CB.animating) endCombat();
-    if (e.key === 'Enter') combatExecute();
+    if (e.key === 'Enter') { if (tutBlocking()) advanceTut(); else combatExecute(); }
     return;
   }
   if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) advance(); }
@@ -403,6 +426,97 @@ function drawAlerts(t) {
   }
 }
 
+// Back from a story fight: keep Gonza's bullets, restore the scene and go on.
+function storyAfterCombat() {
+  const sv = G.storySave;
+  if (!sv) { endCombat(); return; }
+  const gonza = CB.allies.find(u => u.gun);
+  if (gonza) SAVE.save({ ammo: gonza.ammo });
+  CB.active = false;
+  ui.combatUI.classList.add('hidden'); ui.combatUI.innerHTML = '';
+  cv.style.cursor = 'default';
+  G.mode = 'play'; G.s = sv.s; G.actors = sv.actors; G.storySave = null; G.fade = 0;
+  Music.play(MUSIC_FOR[G.s.bg]);
+  run();
+}
+
+// ---------- Abnormality documents ----------
+const DOCS = {
+  zayin: {
+    code: 'O-05-08', risk: 'ZAYIN', col: '#2a7a3a', name: 'E.G.O EXTRACTION MACHINE', state: 'Contenida', draw: 'machine',
+    text: 'Una máquina industrial de producción que transforma materiales en pequeños componentes de E.G.O. Parece inofensiva, aunque a veces la cinta transportadora entrega piezas que nadie recuerda haber fabricado.',
+  },
+  teth: {
+    code: 'T-01-98', risk: 'TETH', col: '#2a5aa0', name: 'THE DISCONNECTED OPERATOR', state: '??????', draw: 'operator', worn: true,
+    text: 'Una figura humanoide con una pantalla de ordenador por cabeza y extremidades hechas de cables. Ataca con latigazos y descargas, pero queda vulnerable cuando su sistema se reinicia.',
+  },
+};
+// the worn file loses most of its words, always the same ones
+const wornText = (s, keep) => s.split(' ').map((w, i) => (hash(i * 13 + 5) < keep ? w : '█'.repeat(Math.max(2, Math.min(7, w.length))))).join(' ');
+
+function drawDoc(d, t) {
+  const D = DOCS[d.id];
+  if (!D) return;
+  const k = Math.min(1, (performance.now() - d.start) / 260);
+  ctx.globalAlpha = 0.65 * k; rect(-OX, 0, VW, H, '#000'); ctx.globalAlpha = 1;
+  const px0 = 62, py0 = 12 + (1 - k) * 60, pw = 196, ph = 156;
+  ctx.save();
+  ctx.translate(160, py0 + ph / 2); ctx.rotate(D.worn ? 0.025 : -0.015); ctx.translate(-160, -(py0 + ph / 2));
+  rect(px0 + 3, py0 + 3, pw, ph, '#00000088');
+  rect(px0, py0, pw, ph, D.worn ? '#cfc4a2' : '#e8e0c8');
+  rect(px0, py0, pw, 1, '#f6f0dc'); rect(px0, py0 + ph - 1, pw, 1, '#a89c78');
+  // header
+  rect(px0 + 6, py0 + 6, pw - 12, 14, '#2a2620');
+  ctx.font = '7px VT323, monospace'; ctx.fillStyle = '#c8b890'; ctx.fillText('LOBOTOMY CORPORATION', px0 + 10, py0 + 12);
+  ctx.fillStyle = '#e8dcc0'; ctx.fillText('REGISTRO DE ANORMALIDAD', px0 + 10, py0 + 18);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#c8b890'; ctx.fillText(D.worn ? 'Nº ?? - ??' : 'Nº 01-14', px0 + pw - 10, py0 + 15); ctx.textAlign = 'left';
+  // portrait
+  const fx = px0 + 8, fy = py0 + 26, fw = 62, fh = 66;
+  rect(fx, fy, fw, fh, '#141416'); rect(fx, fy, fw, 1, '#3a3a40');
+  ctx.save(); ctx.beginPath(); ctx.rect(fx, fy, fw, fh); ctx.clip();
+  if (D.draw === 'machine') egoMachine(fx + fw / 2, fy + fh - 4, { scale: 0.62 }, t);
+  else operator(fx + fw / 2, fy + fh - 2, { scale: 0.66 }, t);
+  if (D.worn) {
+    // smeared, water-damaged photo
+    for (let i = 0; i < 26; i++) { ctx.globalAlpha = 0.5; rect(fx + hash(i + 3) * fw, fy + hash(i + 9) * fh, 4 + hash(i + 1) * 14, 2 + hash(i + 2) * 5, i % 3 ? '#2a2620' : '#8a7c5a'); }
+    ctx.globalAlpha = 0.35; rect(fx, fy, fw, fh, '#6a5a3a'); ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+  // data
+  const rx = fx + fw + 8;
+  const row = (label, val, y, col) => {
+    ctx.font = '7px VT323, monospace'; ctx.fillStyle = '#6a5e44'; ctx.fillText(label, rx, y);
+    ctx.font = '9px VT323, monospace'; ctx.fillStyle = col || '#2a2418'; ctx.fillText(val, rx, y + 9, pw - (rx - px0) - 8);
+  };
+  row('Código', D.code, py0 + 32);
+  ctx.font = '7px VT323, monospace'; ctx.fillStyle = '#6a5e44'; ctx.fillText('Nivel de riesgo', rx, py0 + 52);
+  rrect(rx, py0 + 54, 34, 10, D.col, 2);
+  ctx.font = '8px VT323, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = '#ffffff'; ctx.fillText(D.risk, rx + 17, py0 + 62); ctx.textAlign = 'left';
+  row('Nombre', D.worn ? wornText(D.name, 0.45) : D.name, py0 + 74);
+  row('Estado', D.state, py0 + 94, D.worn ? '#7a3020' : '#2a5a2a');
+  // description
+  rect(px0 + 8, py0 + 108, pw - 16, 1, '#a89c78');
+  ctx.font = '7px VT323, monospace'; ctx.fillStyle = '#6a5e44'; ctx.fillText('Descripción', px0 + 8, py0 + 116);
+  const body = D.worn ? wornText(D.text, 0.42) : D.text;
+  wrap(body, pw - 16, 8).slice(0, 4).forEach((ln, i) => {
+    ctx.font = '8px VT323, monospace'; ctx.fillStyle = '#2a2418'; ctx.fillText(ln, px0 + 8, py0 + 125 + i * 8);
+  });
+  if (D.worn) {
+    // stains and a torn corner
+    for (const [sx, sy, r] of [[px0 + 150, py0 + 40, 18], [px0 + 40, py0 + 128, 14], [px0 + 120, py0 + 136, 10]]) {
+      ctx.globalAlpha = 0.28; ellipse(sx, sy, r, r * 0.7, '#6a4a20'); ctx.globalAlpha = 0.15; ellipse(sx + 2, sy + 1, r * 0.6, r * 0.4, '#3a2410');
+    }
+    ctx.globalAlpha = 1;
+    poly([[px0 + pw - 26, py0 + ph], [px0 + pw, py0 + ph - 22], [px0 + pw, py0 + ph]], '#000000');
+  } else {
+    // a stamp
+    ctx.globalAlpha = 0.5; ring(px0 + pw - 30, py0 + 96, 12, '#2a7a3a', 1); ctx.globalAlpha = 1;
+    ctx.font = '7px VT323, monospace'; ctx.fillStyle = '#2a7a3a88'; ctx.textAlign = 'center'; ctx.fillText('L.CORP', px0 + pw - 30, py0 + 98); ctx.textAlign = 'left';
+  }
+  ctx.restore();
+  if (k >= 1 && Math.floor(t / 450) % 2) txt(IS_TOUCH ? 'Toca para continuar ▸' : 'Clic para continuar ▸', 314, 176, '#d8d0c0', 8, 'right');
+}
+
 // ---------- Pose blending ----------
 // Limbs glide from the previous pose to the new one instead of snapping;
 // fast moves (strikes) blend quickly, everything else eases in more softly.
@@ -442,7 +556,7 @@ function camOn() {
 const hintEl = $('hint');
 function render(t) {
   const now = performance.now();
-  const hintOn = G.mode !== 'hub' && G.mode !== 'combat';
+  const hintOn = G.mode !== 'hub' && G.mode !== 'combat' && !G.s.doc;
   if (hintOn !== G._hintOn) { G._hintOn = hintOn; hintEl.classList.toggle('hidden', !hintOn); }
   ctx.save();
   ctx.scale(SCALE, SCALE);
@@ -454,14 +568,16 @@ function render(t) {
   } else {
     const cam = G.mode === 'combat' && camOn();
     drawWide(() => (BG[G.s.bg] || BG.black)(G.s, t), G.s.bg);
+    // combat: back to front by depth; story: monsters behind, then Gonza, Lobelto in front
+    const STORY_ORDER = ['corrupted', 'skel1', 'skel2', 'gonza', 'lobelto'];
     const order = G.mode === 'combat'
       ? Object.keys(G.actors).sort((a, b) => G.actors[a].y - G.actors[b].y)
-      : ['corrupted', 'gonza', 'lobelto'];
+      : [...STORY_ORDER, ...Object.keys(G.actors).filter(k => !STORY_ORDER.includes(k))];
     for (const id of order) {
       const a = G.actors[id];
       if (!a) continue;
       const talk = G.s.typing && G.s.speaker === id;
-      const enemyDraw = { corrupted, machine: egoMachine, operator }[a.kind];
+      const enemyDraw = { corrupted, machine: egoMachine, operator, cableskel: cableSkel }[a.kind];
       if (!enemyDraw) blendPose(a, now, t);
       const flash = (a.flashUntil || 0) > now;
       const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk, flash, poseData: a._pNow }, t));
@@ -497,6 +613,7 @@ function render(t) {
     const r = G.s.rift;
     if (r) { r.w += (r.target - r.w) * 0.04; rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }
     postFX(G.s, t);
+    if (G.s.doc) drawDoc(G.s.doc, t);
     if (G.mode === 'combat') drawCombatHUD(t);
   }
   if (G.flash) {

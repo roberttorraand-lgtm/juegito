@@ -17,7 +17,7 @@ function hideAllOverlays() {
 function showHub() {
   G.mode = 'hub'; G.hubView = 'main'; G.s = {}; G.actors = {}; G.fade = 0;
   G.scene = null; G.steps = []; G.pendingScene = null;
-  G.runId++; G.waiting = null; G.skip = false; G.fadeAnim = null;
+  G.runId++; G.waiting = null; G.skip = false; G.fadeAnim = null; G.storySave = null;
   if (G.typing) { clearTimeout(G.typing.timer); G.typing = null; }
   G.hubNavSel = 0; G.hubTab = 'ventana'; G.mapSel = 0; G.mapModeSel = 0; G.chapter = null; G.epSel = null; G.mapHover = null;
   hideAllOverlays();
@@ -655,7 +655,7 @@ function episodeScenes(e) { return SCENES.filter(s => s.ep === e.ep); }
 function episodeEnemies(e) {
   const ids = new Set();
   for (const sc of episodeScenes(e)) for (const st of sc.steps) if (st.combat) ids.add(st.combat);
-  return [...ids].map(id => (COMBAT_UNITS[id] ? COMBAT_UNITS[id].name : id));
+  return [...ids].map(id => (COMBAT_SETS[id] && COMBAT_SETS[id].name) || (COMBAT_UNITS[id] ? COMBAT_UNITS[id].name : id));
 }
 function episodeOpen(e) { const sc = episodeScenes(e); return sc.length > 0 && isSceneUnlocked(sc[0]); }
 // The scene an episode starts from: the first unlocked one not done yet, else the first.

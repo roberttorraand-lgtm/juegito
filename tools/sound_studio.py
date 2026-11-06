@@ -412,6 +412,35 @@ def emote_shock():
     return norm(mix((0, hit), (0.06, ring_)), 0.5)
 
 
+# ---- Episode 2: the pistol and the cable skeletons
+def sfx_gunshot():
+    crack = np.tanh(4 * fft_filter(noise(0.12), 'hp', 900)) * env_ad(0.12, 0.0003, 9)
+    boom = osc('sine', sweep(180, 50, 0.25), 0.25) * env_ad(0.25, 0.001, 6) * 0.9
+    tail = fft_filter(noise(0.6), 'band', 1200, 0.6) * env_ad(0.6, 0.002, 6) * 0.25
+    return norm(reverb(mix((0, crack), (0, boom), (0.01, tail)), 0.9, 0.25))
+
+
+def sfx_gun_click():
+    a = fft_filter(noise(0.02), 'band', 3500, 2) * env_ad(0.02, 0.0005, 6)
+    b = metal(1800, 0.06) * 0.4
+    return norm(mix((0, a), (0.05, a * 0.7), (0.05, b)), 0.6)
+
+
+def sfx_spark():
+    d = 0.5
+    bursts = sum(fft_filter(noise(0.03), 'hp', 3000) * env_ad(0.03, 0.0005, 4) for _ in range(1))
+    out = mix(*[(st, bursts * (0.5 + RNG.random() * 0.5)) for st in np.sort(RNG.random(9) * (d - 0.05))])
+    hum = osc('square', 100, d, 0.5) * adsr(d, 0.01, 0.1, 0.3, 0.2) * 0.15
+    return norm(mix((0, out), (0, fft_filter(hum, 'lp', 800))), 0.7)
+
+
+def sfx_scrape():
+    d = 1.0
+    grind = swept(noise(d), 'band', 600, 1400, 3) * adsr(d, 0.1, 0.2, 0.8, 0.3)
+    bones = mix(*[(st, metal(900 + RNG.random() * 500, 0.12, (1, 2.3, 3.9)) * 0.3) for st in (0.1, 0.35, 0.6, 0.8)])
+    return norm(reverb(mix((0, grind * 0.6), (0, bones)), 1.0, 0.3), 0.8)
+
+
 SFX = {
     'clash': sfx_clash, 'slash': sfx_slash, 'pierce': sfx_pierce, 'blunt': sfx_blunt, 'block': sfx_block,
     'shield': sfx_shield, 'evade': sfx_evade, 'counter': sfx_counter, 'dice': sfx_dice, 'tie': sfx_tie,
@@ -421,6 +450,7 @@ SFX = {
     'scream': sfx_scream, 'thud': sfx_thud, 'rift': sfx_rift, 'gacha': sfx_gacha, 'disconnect': sfx_disconnect,
     'emote_vein': emote_vein, 'emote_sweat': emote_sweat, 'emote_gloom': emote_gloom, 'emote_sparkle': emote_sparkle,
     'emote_question': emote_question, 'emote_dots': emote_dots, 'emote_shock': emote_shock,
+    'gunshot': sfx_gunshot, 'gun_click': sfx_gun_click, 'spark': sfx_spark, 'scrape': sfx_scrape,
     'door': sfx_door, 'drip': sfx_drip, 'punch': sfx_punch, 'locker': sfx_locker, 'item': sfx_item,
     'blip_lobelto': lambda: blip('square', 150, 0.05, 0.5, 0.3 * osc('square', 300, 0.05, 0.25) * env_ad(0.05, 0.001, 4)),
     'blip_gonza': lambda: blip('square', 247, 0.042, 0.25),

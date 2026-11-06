@@ -1186,6 +1186,62 @@ BG.breakroom = (s, t) => {
   if (hash(Math.floor(t / 400)) > 0.3) rect(157, 97, 6, 1, '#6ae08a');
 };
 
+// Side view of the same corridor, for fights: wall, pipes, the break room
+// door, the Operator's cables along the ceiling and a wet metal floor.
+function drawCorridor() {
+  const fy = 96;
+  rect(0, 0, W, H, '#0e1012');
+  vgrad(0, 0, W, 14, ['#060708', '#0c0e10']);
+  vgrad(0, 14, W, fy - 14, ['#1a2023', '#1e2528', '#192023']);
+  for (let x = 8; x < W; x += 38) { rect(x, 14, 1, fy - 14, '#141a1c'); rect(x + 1, 14, 1, fy - 14, '#262e32'); }
+  rect(0, 58, W, 2, '#283034'); rect(0, 60, W, 1, '#121618');
+  for (let i = 0; i < 10; i++) dither(hash(i + 70) * W, 14, 4 + hash(i + 71) * 8, 20 + hash(i + 72) * 50, '#3a2414', 0.25);
+  // ceiling pipes
+  rect(0, 14, W, 5, '#2e3a3e'); rect(0, 14, W, 1, '#4a5a60'); rect(0, 18, W, 1, '#1a2226');
+  rect(0, 22, W, 3, '#283236'); rect(0, 22, W, 1, '#3e4a50');
+  for (let x = 20; x < W; x += 54) rect(x, 13, 3, 7, '#1c2428');
+  // break room door with its sign
+  rect(196, 38, 34, 58, '#3e4a50'); rect(198, 40, 30, 56, '#2a3236');
+  rect(198, 40, 30, 1, '#4e5c62'); rect(223, 66, 2, 6, '#7a8a90');
+  rect(194, 26, 38, 10, '#1a2a22'); rect(194, 26, 38, 1, '#3a5a4a');
+  pixText('DESCANSO', 197, 29, '#8ac0a0');
+  // a dead monitor bolted to the wall, its cable torn out
+  rect(70, 32, 22, 16, '#2a2a30'); rect(72, 34, 18, 12, '#0c100e'); line(81, 48, 84, 60, '#1c1c2a', 2);
+  // floor: grated metal, wet
+  rect(0, fy, W, H - fy, '#16191a');
+  rect(0, fy, W, 1, '#2e383c'); dither(0, fy + 1, W, 3, '#000', 0.4);
+  for (const y of [fy + 6, fy + 13, fy + 22, fy + 33, fy + 47, fy + 64]) rect(0, y, W, 1, '#101314');
+  for (let x = -40; x < W + 40; x += 22) line(x, fy, x - 30, H, '#121516');
+  for (const [px2, py, rx] of [[54, 128, 30], [180, 140, 40], [280, 118, 22]]) { ellipse(px2, py, rx, 3, '#101418'); shimmer(px2 - rx * 0.6, py - 2, rx * 1.2, 3, '#3a4a58', 0.22); }
+  // emergency lamps
+  for (const x of [40, 150, 284]) { rect(x, 30, 8, 5, '#2a1a14'); }
+}
+
+BG.corridor = (s, t) => {
+  blit(layer('corridor', drawCorridor));
+  for (const [x, k] of [[40, 1], [150, 2], [284, 3]]) {
+    const on = hash(Math.floor(t / 120) + k * 31) > 0.1;
+    rect(x + 1, 31, 6, 3, on ? '#ff7a3a' : '#4a2010');
+    if (on) light(x + 4, 40, 34, 26, '#ff6a30', 0.13, 3);
+  }
+  // the Operator's cables crawl along the ceiling and sag between the pipes
+  for (let i = 0; i < 4; i++) {
+    let x0 = -10, y0 = 25 + i * 2;
+    for (let x = 0; x <= W + 10; x += 10) {
+      const y = 26 + i * 2 + Math.abs(Math.sin(x / 47 + i * 1.3)) * (6 + i * 3) + Math.sin(t / 900 + i + x / 30) * 1.2;
+      line(x0, y0, x, y, '#14141e', 2); x0 = x; y0 = y;
+    }
+  }
+  const k = Math.floor(t / 70);
+  if (hash(k) < 0.2) { const sx = hash(k + 1) * W, sy = 28 + hash(k + 2) * 14; px(sx, sy, '#ffffff'); px(sx + 1, sy, '#7ab8ff'); px(sx, sy + 1, '#7ab8ff'); }
+  // drips from the pipes
+  for (const [x, ph] of [[64, 0], [232, 700], [126, 1300]]) {
+    const q = ((t + ph) % 1900) / 520;
+    if (q < 1) rect(x, 25 + q * q * 100, 1, 2, '#8ab4d0');
+    else if (q < 1.7) { ctx.globalAlpha = 0.5 * (1.7 - q); rect(x - (q - 1) * 8, 126, (q - 1) * 16 + 1, 1, '#5a7a90'); ctx.globalAlpha = 1; }
+  }
+};
+
 // =====================================================================
 //  DARKNESS — scenes with `dark` set are dimmed; the phone flashlight,
 //  lamps and screens cut light into it.
@@ -1294,6 +1350,7 @@ const POST = {
   reception: blitVignette,
   hallway: blitVignette,
   breakroom: blitVignette,
+  corridor: blitVignette,
   branch: (s, t) => { rain(t, 24, -OX, 0, VW, H, '#d8d8f8', 0.45, 0.75, 6, 9); blitVignette(); },
 };
 function postFX(s, t) { const f = POST[s.bg]; if (f) f(s, t); }

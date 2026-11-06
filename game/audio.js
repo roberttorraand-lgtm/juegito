@@ -16,6 +16,7 @@ const SOUND_FILES = {
     'stagger', 'ko', 'light', 'turn', 'reboot', 'victory', 'defeat',
     'select', 'confirm', 'error', 'alert',
     'scream', 'thud', 'rift', 'gacha', 'disconnect', 'door', 'drip', 'punch', 'locker', 'item',
+    'gunshot', 'gun_click', 'spark', 'scrape',
     'emote_vein', 'emote_sweat', 'emote_gloom', 'emote_sparkle', 'emote_question', 'emote_dots', 'emote_shock',
     'blip_lobelto', 'blip_gonza', 'blip_narr']),
   ...(CAN_OGG ? { hit: 'blunt.ogg', 'blip_¿¿??': 'blip_monster.ogg' } : {}),
@@ -25,7 +26,7 @@ const MUSIC_FILES = ogg(['hub', 'call', 'room', 'branch', 'lcorp', 'battle_zayin
 // which music key each place uses
 const MUSIC_FOR = {
   hub: 'hub', call: 'call', share: 'call', room: 'room', branch: 'branch',
-  reception: 'lcorp', hallway: 'lcorp', breakroom: 'lcorp',
+  reception: 'lcorp', hallway: 'lcorp', breakroom: 'lcorp', corridor: 'battle_teth', skel: 'battle_teth',
   corrupted: 'boss_distortion', machine: 'battle_zayin', operator: 'battle_teth',
 };
 
@@ -297,6 +298,7 @@ const RECIPES = {
 Object.assign(RECIPES, {
   emote_vein: RECIPES.error, emote_sweat: RECIPES.select, emote_gloom: RECIPES.tie, emote_sparkle: RECIPES.light,
   emote_question: RECIPES.select, emote_dots: RECIPES.select, emote_shock: RECIPES.alert,
+  gunshot: RECIPES.pierce, gun_click: RECIPES.select, spark: RECIPES.reboot, scrape: RECIPES.thud,
 });
 Object.assign(RECIPES, { punch: RECIPES.blunt, locker: RECIPES.block, door: RECIPES.thud, item: RECIPES.light, drip: RECIPES.select });
 

@@ -99,8 +99,21 @@ const note = (m) => { issues.push(m); console.log('ISSUE:', m); };
       const st = await ev(() => ({ mode: G.mode, w: G.waiting, idx: G.idx, sc: G.scene && G.scene.id }));
       if (st.mode === 'hub') break;
       if (st.mode === 'end' && st.w === 'card') { await shot('end_' + id); await p.keyboard.press('Enter'); await W(300); const s2 = await ev(() => ({ mode: G.mode, sc: G.scene && G.scene.id })); if (s2.mode !== 'end' && s2.sc !== id) { if (skip) await p.keyboard.up('Control'); return s2; } continue; }
+      if (await ev(() => G.mode === 'combat')) {
+        // a story fight: play it through (tutorial steps by click / Enter)
+        const ph = await ev(() => CB.phase);
+        if (ph === 'done') {
+          const won = await ev(() => CB.enemies.every(u => !alive(u)));
+          if (!won) note('story fight in ' + id + ' lost (bot), retrying');
+          await p.click(won ? '[data-act="combat-continue"]' : '[data-act="combat-retry"]'); await W(400);
+        } else if (ph === 'select') {
+          if (await ev(() => tutBlocking())) { if (MODE === 'mobile') await tap(160, 60); else await p.keyboard.press('Enter'); }
+          else { await ev(() => autoAssign('win')); if (skip) await p.keyboard.up('Control'); await p.keyboard.press('Enter'); if (skip) await p.keyboard.down('Control'); }
+        }
+        await W(250); stuck = 0; continue;
+      }
       if (st.idx === lastIdx) { if (++stuck > 120) { note(`scene ${id} stuck at step ${st.idx} waiting=${st.w}`); break; } } else { stuck = 0; lastIdx = st.idx; }
-      if (st.w === 'text' || st.w === 'card') { if (MODE === 'mobile') await tap(160, 90); else await p.keyboard.press('Enter'); }
+      if (st.w === 'text' || st.w === 'card' || st.w === 'doc') { if (MODE === 'mobile') await tap(160, 90); else await p.keyboard.press('Enter'); }
       await W(skip ? 40 : 110);
     }
     if (skip) await p.keyboard.up('Control');
@@ -125,8 +138,8 @@ const note = (m) => { issues.push(m); console.log('ISSUE:', m); };
   if (await ev(() => !document.getElementById('box').classList.contains('hidden'))) note('text box still visible in hub after Escape');
 
   // ---------- combat: full games against every enemy, UI driven ----------
-  for (const en of ['corrupted', 'machine', 'operator']) {
-    await ev(en => startCombatTest(en), en);
+  for (const en of ['tut_skeletons', 'corrupted', 'machine', 'operator']) {
+    await ev(en => { startCombatTest(en); CB.tut = null; }, en);
     await W(700);
     let turns = 0;
     while (turns < 25) {
@@ -150,7 +163,7 @@ const note = (m) => { issues.push(m); console.log('ISSUE:', m); };
         allyDice().forEach((d, i) => { if (d.page && foes.length) { CB.sel = d; targetDie(foes[i % foes.length]); } });
       }, turns);
       // sanity: no negative light, hand within limits
-      const bad = await ev(() => CB.allies.filter(u => u.light < 0 || u.hand.length > HAND_MAX || u.light > u.maxLight).map(u => `${u.id} light=${u.light}/${u.maxLight} hand=${u.hand.length}`));
+      const bad = await ev(() => CB.allies.filter(u => u.light < 0 || handCount(u) > HAND_MAX || u.light > u.maxLight).map(u => `${u.id} light=${u.light}/${u.maxLight} hand=${u.hand.length}`));
       if (bad.length) note(`${en} turn ${turns}: bad state ${bad.join(', ')}`);
       if (turns === 2) await shot('combat_select_' + en);
       if (MODE === 'mobile') { await tap(270, 152); } else await p.keyboard.press('Enter');

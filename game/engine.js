@@ -91,6 +91,9 @@ const FIG_POSES = {
   hold:   { front: [7, 1], back: [-5, 8], legs: [[-4, 0], [4, 0]] },
   search: { front: [8, -4], back: [6, 2], legs: [[-4, 0], [5, 0]] },
   ready:  { front: [7, 3], back: [4, 7], legs: [[-5, 0], [5, 0]] },
+  aim:    { front: [13, -1], back: [-4, 8], legs: [[-6, 0], [5, 0]] },
+  kick:   { front: [-6, 2], back: [5, 4], legs: [[-4, 0], [11, -7]] },
+  peek:   { front: [6, -2], back: [-5, 7], legs: [[-3, 0], [6, 0]] },
   slump:  { front: [3, 13], back: [-2, 13], legs: [[-6, 0], [3, 0]] },
 };
 // arms hanging, feet together: what "no pose" looks like, so poses can blend from it
@@ -267,6 +270,73 @@ function avatarHead(cx, cy, hat, t, dim, expr) {
     if (bl) { rect(e1 - 1, cy - 1, 3, 1, FIG.eye); rect(e2 - 1, cy - 1, 3, 1, FIG.eye); }
     else { rect(e1, cy - 2, 2, 2, FIG.eye); rect(e2, cy - 2, 2, 2, FIG.eye); }
   }
+}
+
+// ---- Cable skeleton: a corpse moved by the Disconnected Operator's cables ----
+// o: { scale, face, lying, pose: 'punch', atk, sparks }
+function cableSkel(x, y, o, t) {
+  const sc = o.scale || 1, f = o.face || -1;
+  ctx.save();
+  ctx.translate(x, y); ctx.scale(sc, sc);
+  const B = '#cfc9ac', S = '#8a8670', D = '#121216';
+  const C = '#2a3050', CH = '#5a6aa0', CG = '#7ab8ff';          // cable, its highlight, its glow
+  const tw = Math.round((hash(Math.floor(t / 90) + (o.seed || 0)) - 0.5) * 1.4);   // twitchy puppet motion
+  const punch = o.pose === 'punch' || o.atk;
+  const L = (x0, y0, x1, y1, c = B, w = 1) => line(x0 * f, y0, x1 * f, y1, c, w);
+  const cable = (pts, w = 2) => {
+    for (let i = 1; i < pts.length; i++) {
+      line(pts[i - 1][0] * f, pts[i - 1][1], pts[i][0] * f, pts[i][1], C, w);
+      px(pts[i][0] * f, pts[i][1] - 1, CH);
+    }
+  };
+  // two cables come down from the dark above and hold the body up like strings
+  [[-4, -33, 0], [3, -20, 1]].forEach(([jx, jy, i]) => {
+    const pts = [[jx, jy]];
+    for (let k = 1; k <= 9; k++) pts.push([jx + Math.sin(t / 700 + i * 2.1 + k * 0.6) * (k * 0.45) + (i ? 1 : -1) * k * 0.5, jy - k * 10]);
+    cable(pts);
+  });
+  // skull with a cold glow in the sockets
+  const hx = f * 1 + tw, hy = -40;
+  disc(hx, hy, 4, B);
+  rect(hx - 1 + f, hy - 1, 1, 2, D); rect(hx + 2 * f, hy - 1, 1, 2, D);
+  if (Math.floor(t / 300) % 7) { px(hx - 1 + f, hy - 1, '#7af0ff'); px(hx + 2 * f, hy - 1, '#7af0ff'); }
+  rect(hx - 2, hy + 3, 5, 2, S); px(hx - 1, hy + 4, D); px(hx + 1, hy + 4, D);
+  // spine, ribs and pelvis
+  L(0, -36, 0 + tw * 0.3, -17, S, 2);
+  for (let k = 0; k < 4; k++) { L(0, -33 + k * 3, -5, -31 + k * 3); L(0, -33 + k * 3, 5, -31 + k * 3); }
+  rect(-3, -17, 7, 3, B); px(f > 0 ? -1 : 1, -16, D);
+  // arms
+  let hand;
+  if (punch) { L(-4, -32, 7, -30); L(7, -30, 15, -29); rect(15 * f - 1, -30, 3, 3, B); hand = [15, -29]; }
+  else { L(-4, -32, 6, -24); L(6, -24, 8, -16); hand = [8, -16]; }
+  L(4, -32, -4, -24); L(-4, -24, -5, -16);
+  // legs
+  if (o.pose === 'kick') { L(-2, -15, -4, -8); L(-4, -8, -5, 0); L(2, -15, 8, -12); L(8, -12, 13, -10); }
+  else { L(-2, -15, -3, -8); L(-3, -8, -4, 0); L(2, -15, 4, -8); L(4, -8, 4, 0); }
+  rect(-6 * f - 1, -1, 3, 1, B); rect(4 * f - 1, -1, 3, 1, B);
+  // cables wound round the bones: a zig-zag down the spine, coils on an arm and a thigh
+  cable([[-3, -35], [3, -32], [-3, -28], [3, -24], [-2, -20], [1, -17]]);
+  const arm = punch ? [[1, -31], [4, -30], [6, -31], [9, -30], [11, -30]] : [[1, -29], [4, -27], [3, -25], [6, -23], [5, -21]];
+  cable(arm, 1);
+  cable([[3, -13], [1, -11], [4, -10], [2, -8]], 1);
+  // a loose cable end hangs from the wrist, its torn tip glowing and spitting sparks
+  const sw = Math.sin(t / 500 + (o.seed || 0)) * 2;
+  const end = [hand[0] + 2 + sw, hand[1] + 10];
+  cable([hand, [hand[0] + 1 + sw * 0.4, hand[1] + 5], end], 1);
+  const glow = Math.floor(t / 120 + (o.seed || 0)) % 5;
+  px(end[0] * f, end[1], glow ? CG : '#ffffff');
+  if (o.sparks !== false) {
+    for (let i = 0; i < 3; i++) {
+      const k = Math.floor(t / 70) * 3 + i * 11 + (o.seed || 0) * 7;
+      if (hash(k) > 0.5) continue;
+      const sx = end[0] * f + (hash(k + 2) - 0.5) * 6, sy = end[1] + (hash(k + 3) - 0.3) * 6;
+      px(sx, sy, '#ffffff'); px(sx + 1, sy, CG); px(sx, sy - 1, '#ffe08a');
+    }
+    // and now and then a spark runs along the spine cable
+    const k2 = Math.floor(t / 90) + (o.seed || 0) * 5;
+    if (hash(k2) < 0.3) { const yy = -34 + hash(k2 + 1) * 16; px((hash(k2 + 2) - 0.5) * 5 * f, yy, '#ffffff'); px((hash(k2 + 2) - 0.5) * 5 * f + 1, yy, CG); }
+  }
+  ctx.restore();
 }
 
 // ---- Corrupted E.G.O. employee (detailed) ----
