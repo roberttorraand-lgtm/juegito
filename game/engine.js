@@ -198,7 +198,14 @@ function figure(x, y, o, t) {
     rect(hand[0] - 1, hand[1] - 3, 3, 4, '#2a2a38');
     px(hand[0] + (f > 0 ? 1 : -1), hand[1] - 3, '#f0f4ff');
   }
-  if (o.item === 'pistol') {
+  if (o.ego) {
+    // E.G.O weapon held out in the leading hand, with a faint glow
+    const [gx, gy] = hand;
+    light(gx + f * 3, gy - 3, 6, 6, o.ego.col, 0.18, 2);
+    ctx.save(); ctx.translate(gx + f * 3, gy - 3); if (f < 0) ctx.scale(-1, 1);
+    egoIcon(o.ego.kind, 0, 0, 0.75, o.ego.col);
+    ctx.restore();
+  } else if (o.item === 'pistol') {
     // small low-calibre pistol held by the grip, barrel pointing forward
     const [gx, gy] = hand, d = f > 0 ? 1 : -1;
     rect(gx - (d > 0 ? 0 : 1), gy - 1, 2, 3, '#3a3a44');             // grip

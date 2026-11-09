@@ -49,8 +49,9 @@ const TIER = {
   2: { label: 'II', col: '#e87a30', cost: 2 },
   3: { label: 'III', col: '#e03040', cost: 3 },
   P: { label: '+', col: '#ffb040', cost: 0 },
+  E: { label: 'E.G.O', col: '#e03040', cost: 0 },
 };
-const costOf = (page) => (TIER[page.tier] ? TIER[page.tier].cost : 0);
+const costOf = (page) => (page.ego ? RISK[page.ego.risk].light : TIER[page.tier] ? TIER[page.tier].cost : 0);
 const handCount = (u) => u.hand.filter(c => c.page !== u.defense).length;
 // a die written as [type, min, max, 'gun'] fires a bullet
 const isGun = (die) => die[3] === 'gun';
@@ -172,6 +173,10 @@ function makeUnit(t) {
   const u = { ...t, hp: t.maxHp, st: t.maxSt, staggered: false, staggerTurns: 0, shield: 0 };
   if (t.team === 'ally') {
     if (t.gun) u.ammo = AMMO_MAX;
+    // the equipped E.G.O weapon: a one-use ultimate
+    const eq = typeof W$ !== 'undefined' && EGO_BY_ID[W$.equip()[t.id]];
+    u.ego = eq ? egoPage(eq) : null;
+    u.egoUsed = false;
     u.pool = [];
     u.hand = [];
     u.light = LIGHT_START;
@@ -351,6 +356,27 @@ function defenseButton(u) {
   SFX.play('select');
 }
 
+// The portrait's E.G.O button: puts the ultimate on a die (the selected one
+// if it is this character's, else a free one); pressing again takes it off.
+function egoButton(u) {
+  if (CB.phase !== 'select' || !canAct(u) || !u.ego) return;
+  const onDie = diceOf(u).find(x => x.card && x.card.page === u.ego);
+  if (onDie) { unassign(onDie); SFX.play('select'); return; }
+  if (u.egoUsed) { SFX.play('error'); return; }
+  const d = (CB.sel && CB.sel.unit === u) ? CB.sel : diceOf(u).find(x => !x.card) || diceOf(u)[0];
+  if (!d) return;
+  const card = { page: u.ego };
+  if (!canAfford(d, card)) {
+    SFX.play('error');
+    const p = headPos(u);
+    spawnAnim('text', p.x, p.y - 20, `Luz insuficiente (${costOf(u.ego)})`, '#ffe08a', 1000);
+    return;
+  }
+  CB.sel = d;
+  assignCard(d, card);
+  SFX.play('light');
+}
+
 function targetDie(e) {
   const d = CB.sel;
   if (!d || !canAct(e.unit)) return;
@@ -373,6 +399,7 @@ async function combatExecute() {
 
   for (const d of allyDice()) {
     if (d.card) d.unit.hand = d.unit.hand.filter(c => c !== d.card);
+    if (d.page && d.page.ego) d.unit.egoUsed = true;
   }
 
   const acts = CB.dice
@@ -593,6 +620,18 @@ const FX_DRAW = {
     if (k < 0.25) disc(f.x, f.y, Math.round(6 * (1 - k * 4)) + 1, '#ffffff');
     ctx.globalAlpha = 1;
   },
+  // E.G.O ultimate name card across the screen
+  egoBanner(f, k) {
+    const a = k < 0.12 ? k / 0.12 : k > 0.8 ? (1 - k) / 0.2 : 1;
+    ctx.globalAlpha = a * 0.85;
+    rect(-OX, f.y - 11, VW, 22, '#08060c');
+    ctx.globalAlpha = a;
+    rect(-OX, f.y - 11, VW, 1, f.col); rect(-OX, f.y + 10, VW, 1, f.col);
+    const slide = (1 - Math.min(1, k * 5)) * 40;
+    txt('E.G.O', f.x - 60 - slide, f.y + 3, f.col, 9, 'center');
+    txt(f.name.toUpperCase(), f.x + 10 + slide, f.y + 4, '#ffffff', 12, 'center');
+    ctx.globalAlpha = 1;
+  },
   // pistol flash at the muzzle
   muzzle(f, k) {
     ctx.globalAlpha = Math.max(0, 1 - k);
@@ -651,12 +690,18 @@ const FX_DRAW = {
   },
 };
 
+// screen-space effects are drawn outside the camera (fixed on screen)
+const FX_SCREEN = new Set(['egoBanner']);
+function drawScreenFx() {
+  const now = performance.now();
+  for (const f of CB.fx) if (FX_SCREEN.has(f.type)) { const k = (now - f.start) / f.ms; if (k >= 0 && k < 1) FX_DRAW[f.type](f, k); }
+}
 function drawFx() {
   const now = performance.now();
   CB.fx = CB.fx.filter(f => {
     const k = (now - f.start) / f.ms;
     if (k >= 1) return false;
-    if (k >= 0) FX_DRAW[f.type](f, k);
+    if (k >= 0 && !FX_SCREEN.has(f.type)) FX_DRAW[f.type](f, k);
     return true;
   });
   CB.parts = CB.parts.filter(p => {
@@ -955,6 +1000,7 @@ async function doClash(ad, ed) {
   const sa = side(ad), se = side(ed);
   const stats = { ally: 0, enemy: 0 };
   CB.view = { left: sa, right: se };
+  if (ad.page.ego) await egoFlair(A, ad.page.ego);
   await Promise.all([dashTo(A, 150, 300), dashTo(E, 182, 300),
     camTo({ z: 1.25, x: 166, y: camY(A, E) }, 340)]);
   spawnAnim('text', 166, 44, '¡CHOQUE!', '#ffd060', 800, { big: true });
@@ -1012,18 +1058,45 @@ async function doClash(ad, ed) {
   A.shield = 0;
   E.shield = 0;
   await Promise.all([dashTo(A, A.bx, 280, true), dashTo(E, E.bx, 280, true), camTo(CAM_HOME, 320)]);
+  egoDone(A);
 }
 
 async function doOneSided(d, T) {
   const s = side(d);
   const def = { unit: T, page: null, i: 0, roll: null };
   CB.view = d.unit.team === 'ally' ? { left: s, right: def } : { left: def, right: s };
+  if (d.page.ego) await egoFlair(d.unit, d.page.ego);
   const tx = T.team === 'ally' ? T.bx + (d.unit.kind ? 30 : 20) : T.bx - (T.kind ? 30 : 20);
   await Promise.all([dashTo(d.unit, tx, 300), camTo({ z: 1.18, x: (tx + T.bx) / 2, y: camY(d.unit, T) }, 340)]);
   bark(d.unit, 'attack', 0.5);
   await wait(150);
   await leftovers(s, T, null);
   await Promise.all([dashTo(d.unit, d.unit.bx, 280, true), camTo(CAM_HOME, 320)]);
+  egoDone(d.unit);
+}
+
+// The ultimate's entrance: the camera closes in, the screen takes the
+// weapon's risk colour, its name is announced and the weapon appears in hand.
+async function egoFlair(U, w) {
+  const a = actorOf(U);
+  if (!a || CB.instant) return;
+  const col = egoCol(w), p = headPos(U);
+  a.egoSave = a.item; a.item = null;
+  a.ego = { kind: w.kind, col };
+  a.pose = 'hold';
+  SFX.play(w.risk === 'ALEPH' ? 'aleph' : 'rare');
+  await camTo({ z: 1.45, x: a.x + 30, y: p.y + 16 }, 260);
+  G.flash = { color: col, start: performance.now(), ms: 320 };
+  fx('egoBanner', 160, 52, 1300, { name: w.name, risk: w.risk, col });
+  particles(chest(U).x, chest(U).y, 18, [col, '#ffffff'], 1.6, -0.02, 30);
+  if (RISK_ORDER.indexOf(w.risk) >= 3) shake(350);
+  bark(U, 'attack');
+  await wait(900);
+}
+function egoDone(U) {
+  const a = actorOf(U);
+  if (!a || !a.ego) return;
+  a.ego = null; a.item = a.egoSave || null; a.pose = null;
 }
 
 // Remaining attack and counter dice hit unopposed; block and evade leftovers are discarded.
@@ -1514,6 +1587,14 @@ function selectPanel(t) {
     }
     txt(String(u.hp), cx - 9, 179, '#ff8a3a', 9, 'center');
     if (u.gun) ammoBadge(cx + 6, 131, u.ammo);
+    if (u.ego && ok) {
+      const on = dice.some(x => x.card && x.card.page === u.ego), w = u.ego.ego;
+      const col = u.egoUsed ? '#2a2a34' : on ? '#ffffff' : egoCol(w);
+      hitArea(cx + 1, pcy - 14, 16, 9, () => egoButton(u), { page: u.ego });
+      if (on || (!u.egoUsed && u.light >= costOf(u.ego))) light(cx + 9, pcy - 10, 10, 6, egoCol(w), 0.25 + 0.1 * Math.sin(t / 180), 2);
+      rrect(cx + 1, pcy - 13, 16, 7, col, 2);
+      txt(u.egoUsed ? 'USADO' : 'EGO', cx + 9, pcy - 7.5, u.egoUsed ? '#5a5a6a' : on ? '#16121a' : '#ffffff', 7, 'center');
+    }
     if (dice[0]) speedBadge(cx + 11, 173, dice[0].speed);
   });
 
@@ -1637,8 +1718,8 @@ function tooltip() {
   rect(x, y + bh - 1, bw, 1, '#3a2418');
   txt(pg.name, x + 4, y + 9, '#ffd060', 9);
   if (pg.tier != null) {
-    const tl = { 0: 'Defensa', P: 'Extra' }[pg.tier] || `Hab. ${TIER[pg.tier].label}`;
-    txt(`${tl} · Luz ${costOf(pg)}`, x + bw - 4, y + 9, TIER[pg.tier].col, 8, 'right');
+    const tl = pg.ego ? `E.G.O ${pg.ego.risk}` : { 0: 'Defensa', P: 'Extra' }[pg.tier] || `Hab. ${TIER[pg.tier].label}`;
+    txt(`${tl} · Luz ${costOf(pg)}`, x + bw - 4, y + 9, pg.ego ? egoCol(pg.ego) : TIER[pg.tier].col, 8, 'right');
   }
   pg.dice.forEach(([ty, a, b], k) => {
     dieIcon(ty, x + 4, y + 12 + k * 9);
@@ -1669,6 +1750,7 @@ function drawCombatHUD(t) {
   CB.hits = [];
   for (const u of CB.allies) if (alive(u)) allyPlate(u, t);
   if (cam) ctx.restore();
+  drawScreenFx();
   for (const u of CB.enemies) if (alive(u)) enemyPlate(u, t);
   if (CB.phase === 'select') {
     const focus = focusUnit();

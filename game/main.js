@@ -34,8 +34,13 @@ function isSceneUnlocked(sc) {
 
 function isSceneDone(sc) { return SAVE.get('done_' + sc.id, false); }
 
-// Init hub (hub.js defines showHub)
+// Init hub (hub.js defines showHub). Episodes finished before the market
+// existed still pay their Enkephalina once.
 showHub();
+{
+  const got = awardEpisodes();
+  if (got.length) G.notice = { text: `+${ENK_PER_EPISODE * got.length} Enkephalina por los episodios terminados`, start: performance.now() };
+}
 
 // ---------- Story runner ----------
 function run() {
@@ -61,7 +66,8 @@ function finishScene() {
     ui.cardSub.textContent = `Episodio ${sc.ep} en desarrollo`;
   } else {
     ui.cardTitle.textContent = 'FIN DEL EPISODIO ' + sc.ep;
-    ui.cardSub.textContent = 'Continuará...';
+    const got = awardEpisodes();
+    ui.cardSub.textContent = got.length ? `+${ENK_PER_EPISODE * got.length} Enkephalina · Continuará...` : 'Continuará...';
   }
   ui.card.classList.remove('hidden');
   G.mode = 'end'; G.waiting = 'card';
@@ -280,7 +286,9 @@ document.addEventListener('keydown', (e) => {
         }
       } else if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        if (G.hubTab === 'mapa' && !G.chapter) openChapter(CHAPTERS[0].num);
+        if (G.pull) pullClick();
+        else if (G.hubTab === 'mercado' || G.hubTab === 'pecadores') { /* mouse / touch only */ }
+        else if (G.hubTab === 'mapa' && !G.chapter) openChapter(CHAPTERS[0].num);
         else if (G.hubTab === 'mapa' && G.epSel) playEpisode(G.epSel);
         else if (G.hubTab !== 'mapa') {
           activateNavBtn(HUB_NAV[G.hubNavSel].id);
@@ -307,6 +315,9 @@ document.addEventListener('keydown', (e) => {
       if (G.hubView === 'confirm') hideConfirm();
       else if (G.hubView === 'levels') hideLevels();
       else if (G.hubView === 'settings') hideSettings();
+      else if (G.pull) pullClick();
+      else if (G.hubTab === 'mercado') { activateNavBtn('mapa'); }
+      else if (G.hubTab === 'pecadores') { activateNavBtn('ventana'); }
       else if (G.hubTab === 'mapa' && G.chapter) closeChapter();
       else if (G.hubTab === 'mapa') { G.hubTab = 'ventana'; SFX.play('select'); }
     }
@@ -547,8 +558,12 @@ function blendPose(a, now, t) {
 function camOn() {
   const c = CB.cam;
   if (!c || (c.z === 1 && c.x === 160 && c.y === 100)) return false;
+  // keep the view inside the scene so nothing outside it is ever uncovered
+  const z = Math.max(1, c.z);
+  const x = Math.min(W + OX - (W + OX - 160) / z, Math.max(-OX + (160 + OX) / z, c.x));
+  const y = Math.min(H - (H - 100) / z, Math.max(100 / z, c.y));
   ctx.save();
-  ctx.translate(160, 100); ctx.scale(c.z, c.z); ctx.translate(-c.x, -c.y);
+  ctx.translate(160, 100); ctx.scale(z, z); ctx.translate(-x, -y);
   return true;
 }
 

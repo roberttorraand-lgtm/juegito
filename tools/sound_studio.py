@@ -441,6 +441,26 @@ def sfx_scrape():
     return norm(reverb(mix((0, grind * 0.6), (0, bones)), 1.0, 0.3), 0.8)
 
 
+# ---- black market
+def sfx_coins():
+    clink = lambda f: metal(f, 0.25, (1, 2.4, 3.9, 5.6)) * 0.6
+    return norm(mix((0, clink(2400)), (0.06, clink(2900)), (0.13, clink(2600)), (0.2, clink(3300))), 0.6)
+
+
+def sfx_rare():
+    notes = [(0, 72), (0.07, 76), (0.14, 79), (0.21, 84)]
+    shine = mix(*[(st, instrument('bell', m, 0.6, 1)) for st, m in notes])
+    swell = fft_filter(noise(0.6), 'hp', 5000) * adsr(0.6, 0.2, 0.1, 0.6, 0.3) * 0.15
+    return norm(reverb(mix((0, shine), (0, swell)), 1.4, 0.35), 0.75)
+
+
+def sfx_aleph():
+    boom = np.tanh(2 * osc('sine', sweep(90, 35, 1.4), 1.4)) * env_ad(1.4, 0.002, 3)
+    choir = sum(instrument('choir', m, 1.8, 1) for m in (57, 64, 69, 72))
+    bells = mix(*[(st, instrument('bell', m, 1.0, 0.8)) for st, m in [(0.1, 81), (0.25, 84), (0.4, 88), (0.55, 93)]])
+    return norm(reverb(mix((0, boom), (0.05, choir * 0.5), (0, bells * 0.6)), 2.4, 0.4), 0.9)
+
+
 SFX = {
     'clash': sfx_clash, 'slash': sfx_slash, 'pierce': sfx_pierce, 'blunt': sfx_blunt, 'block': sfx_block,
     'shield': sfx_shield, 'evade': sfx_evade, 'counter': sfx_counter, 'dice': sfx_dice, 'tie': sfx_tie,
@@ -451,6 +471,7 @@ SFX = {
     'emote_vein': emote_vein, 'emote_sweat': emote_sweat, 'emote_gloom': emote_gloom, 'emote_sparkle': emote_sparkle,
     'emote_question': emote_question, 'emote_dots': emote_dots, 'emote_shock': emote_shock,
     'gunshot': sfx_gunshot, 'gun_click': sfx_gun_click, 'spark': sfx_spark, 'scrape': sfx_scrape,
+    'coins': sfx_coins, 'rare': sfx_rare, 'aleph': sfx_aleph,
     'door': sfx_door, 'drip': sfx_drip, 'punch': sfx_punch, 'locker': sfx_locker, 'item': sfx_item,
     'blip_lobelto': lambda: blip('square', 150, 0.05, 0.5, 0.3 * osc('square', 300, 0.05, 0.25) * env_ad(0.05, 0.001, 4)),
     'blip_gonza': lambda: blip('square', 247, 0.042, 0.25),
@@ -743,6 +764,21 @@ SONGS = {
             {'type': 'notes', 'inst': 'strings', 'vol': 0.12, 'notes': [
                 (32, 4, 66), (36, 4, 67), (40, 4, 64), (44, 4, 65),
                 (48, 4, 66), (52, 4, 62), (56, 4, 64), (60, 4, 65)]},
+        ],
+    },
+    # Black market in the District D backstreets: slow, shady and a bit smug.
+    'market': {
+        'bpm': 82, 'seed': 91, 'scale': scale_of('A', MIN), 'verb': 1.6, 'mix': 0.3,
+        'prog': ['Am7', 'Am7', 'Dm7', 'Dm7', 'Am7', 'Am7', 'E7', 'E7'] * 2,
+        'layers': [
+            {'type': 'rain', 'vol': 0.02},
+            {'type': 'bass', 'inst': 'bass', 'oct': 33, 'vol': 0.32,
+             'pattern': [(0, 0.9, 0), (1, 0.9, 7), (2, 0.9, 10), (3, 0.6, 12), (3.67, 0.3, 11)]},
+            {'type': 'chords', 'inst': 'sq25', 'oct': 57, 'vol': 0.035, 'hits': [(0.67, 0.3), (2.67, 0.3)]},
+            {'type': 'drums', 'vols': {'k': 0.35, 's': 0.18, 'h': 0.08, 'r': 0.06},
+             'bars': ['k..h..s.k.rh..s.', 'k..h..s...rhk.s.']},
+            {'type': 'melody', 'inst': 'bell', 'low': 69, 'high': 84, 'vol': 0.1, 'from': 4, 'rest': 0.35,
+             'rhythm': [(0, 0.67), (0.67, 0.33), (1, 1), (2.67, 0.33), (3, 1), (4.67, 0.33), (5, 1.5), (6.67, 1.33)]},
         ],
     },
     # ZAYIN — E.G.O Extraction Machine, inside a containment cell of the

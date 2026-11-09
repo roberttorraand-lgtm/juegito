@@ -403,7 +403,7 @@ document.querySelectorAll('.hub-btn').forEach(b => {
 // ---------- Hub: Limbus-style metallic frame ----------
 const HUB_NAV = [
   { id: 'ventana', label: 'Ventana', icon: '◫', enabled: true },
-  { id: 'pecadores', label: 'Pecadores', icon: '☻', enabled: false },
+  { id: 'pecadores', label: 'Pecadores', icon: '☻', enabled: true },
   { id: 'mapa', label: 'Mapa', icon: '◈', enabled: true },
   { id: 'teatro', label: 'Teatro', icon: '♠', enabled: false },
   { id: 'ajustes', label: 'Ajustes', icon: '⚙', enabled: true },
@@ -441,7 +441,7 @@ function drawNavBar(t) {
   HUB_NAV.forEach((nav, i) => {
     const { x: bx, w: btnW } = getNavBtnBounds()[i];
     const sel = G.hubNavSel === i;
-    const active = (G.hubTab === nav.id);
+    const active = G.hubTab === nav.id || (G.hubTab === 'mercado' && nav.id === 'mapa');
 
     if (!nav.enabled) {
       rect(bx, NAV_Y + 4, btnW, 14, '#0e0c14');
@@ -481,13 +481,13 @@ function getNavBtnBounds() {
 function drawHub(t) {
   rect(-OX, 0, VW, H, '#050407');
 
-  if (G.hubTab === 'mapa') {
-    drawMap(t);
-  } else {
-    drawVentana(t);
-  }
+  if (G.hubTab === 'mapa') drawMap(t);
+  else if (G.hubTab === 'mercado') drawMarket(t);
+  else if (G.hubTab === 'pecadores') drawPecadores(t);
+  else drawVentana(t);
 
-  drawNavBar(t);
+  if (!G.pull) drawNavBar(t);
+  drawHubNotice(t);
 }
 
 const CONTINUE_BTN = { x: 80, y: 99, w: 56, h: 11 };
@@ -543,6 +543,8 @@ function drawVentana(t) {
   const doneCount = SCENES.filter(s => isSceneDone(s)).length;
   ctx.fillText(`${doneCount}/${SCENES.length} escenas en total`, cx + 10, cy + 82);
   const epScenes = episodeScenes(curEp), epDone = epScenes.filter(isSceneDone).length;
+  rect(cx, cy + ch + 4, cw, 12, '#0c0a14'); rect(cx, cy + ch + 4, cw, 1, '#2a1810');
+  drawWallet(cx + 6, cy + ch + 7);
   if (nextScene) {
     // quick way back into the story without going through the map
     const hv = G.ventHover;
@@ -666,9 +668,7 @@ function episodeNextScene(e) {
 
 const MAP_MODES = [
   { id: 'historia', label: 'Historia', icon: '▶', enabled: true },
-  { id: 'combate', label: 'vs Empleado', icon: '⚔', enabled: true, enemy: 'corrupted' },
-  { id: 'combate2', label: 'vs E.G.O Machine', icon: '⚔', enabled: true, enemy: 'machine' },
-  { id: 'combate3', label: 'vs Operator', icon: '⚔', enabled: true, enemy: 'operator' },
+  { id: 'mercado', label: 'Mercado negro', icon: '$', enabled: true },
 ];
 
 function drawMap(t) {
@@ -966,6 +966,13 @@ cv.addEventListener('click', (e) => {
     }
   }
 
+  if (G.hubTab === 'mercado' || G.hubTab === 'pecadores') {
+    if (G.pull) { pullClick(); return; }
+    G.hubMouse = { x, y };
+    const h = [...(G.hubHits || [])].reverse().find(r => hitTest(x, y, r.x, r.y, r.w - 0.01, r.h - 0.01));
+    if (h) h.fn();
+    return;
+  }
   if (G.hubTab === 'ventana' && hitTest(x, y, CONTINUE_BTN.x, CONTINUE_BTN.y, CONTINUE_BTN.w, CONTINUE_BTN.h)) { continueStory(); return; }
   if (G.hubTab === 'mapa') {
     MAP_MODES.forEach((mode, i) => {
@@ -973,7 +980,7 @@ cv.addEventListener('click', (e) => {
       if (hitTest(x, y, 12, my, 56, 24)) {
         G.mapModeSel = i;
         SFX.play('select');
-        if (mode.enemy) startCombatTest(mode.enemy);
+        if (mode.id === 'mercado') openMarket();
       }
     });
 
@@ -984,6 +991,10 @@ cv.addEventListener('click', (e) => {
 cv.addEventListener('mousemove', (e) => {
   if (G.mode !== 'hub' || G.hubView !== 'main') return;
   const { x, y } = canvasToLogical(e.clientX, e.clientY);
+  G.hubMouse = { x, y };
+  if (G.hubTab === 'mercado' || G.hubTab === 'pecadores') {
+    cv.style.cursor = (G.hubHits || []).some(r => hitTest(x, y, r.x, r.y, r.w - 0.01, r.h - 0.01)) ? 'pointer' : 'default';
+  }
   if (G.hubTab === 'ventana') {
     const hv = hitTest(x, y, CONTINUE_BTN.x, CONTINUE_BTN.y, CONTINUE_BTN.w, CONTINUE_BTN.h);
     if (hv && !G.ventHover) SFX.play('select');
@@ -1011,8 +1022,13 @@ cv.addEventListener('mousemove', (e) => {
 
 function activateNavBtn(id) {
   SFX.init(); SFX.play('select');
+  if (G.hubTab === 'mercado' && id !== 'mercado') Music.play(MUSIC_FOR.hub);
+  G.pull = null;
+  const ni = HUB_NAV.findIndex(n => n.id === id);
+  if (ni >= 0 && id !== 'ajustes') G.hubNavSel = ni;
   if (id === 'ventana') { G.hubTab = 'ventana'; }
   else if (id === 'mapa') { G.hubTab = 'mapa'; }
+  else if (id === 'pecadores') { G.hubTab = 'pecadores'; }
   else if (id === 'ajustes') { showSettings(); }
 }
 
