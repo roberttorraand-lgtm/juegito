@@ -459,6 +459,7 @@ function endTurn() {
     const won = CB.enemies.every(u => !alive(u));
     SFX.play(won ? 'victory' : 'defeat');
     if (won) { const u = CB.allies.find(alive); if (u) bark(u, 'win'); }
+    if (won && CB.cfg && CB.cfg.raid && !CB.instant) { W$.add(CB.cfg.raid); SAVE.save({ raid_wins: SAVE.get('raid_wins', 0) + 1 }); }
     renderCombatUI();
   } else {
     newTurn();
@@ -472,7 +473,10 @@ function endCombat() {
   ui.combatUI.innerHTML = '';
   cv.style.cursor = 'default';
   G.actors = {};
+  const raid = CB.cfg && CB.cfg.raid;
   showHub();
+  // back to the raid list after a raid fight
+  if (raid) { G.hubTab = 'mapa'; G.hubNavSel = HUB_NAV.findIndex(n => n.id === 'mapa'); G.mapModeSel = MAP_MODES.findIndex(m => m.id === 'raid'); }
 }
 
 // ---------------------------------------------------------------------
@@ -1851,6 +1855,7 @@ function renderCombatUI() {
     <div class="cb-result-title ${won ? 'win' : 'lose'}">${won ? 'VICTORIA' : 'DERROTA'}</div>
     <div class="cb-result-sub">${won ? defeatText : 'Tu equipo ha sido derrotado...'}</div>
     <div class="cb-result-stats">Turnos: ${CB.turn}${gonza ? ` · Balas: ${gonza.ammo}/${AMMO_MAX}` : ''}</div>
+    ${won && CB.cfg && CB.cfg.raid ? `<div class="cb-result-stats" style="color:#5ae0c0">+${CB.cfg.raid} Enkephalina</div>` : ''}
     <div class="cb-result-stats">${CB.allies.map(u => `${u.name}: ${u.hp}/${u.maxHp} HP`).join(' · ')}</div>
     ${btns}
   </div>`;

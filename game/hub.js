@@ -669,6 +669,7 @@ function episodeNextScene(e) {
 
 const MAP_MODES = [
   { id: 'historia', label: 'Historia', icon: '▶', enabled: true },
+  { id: 'raid', label: 'Mini raid', icon: '⚔', enabled: true },
 ];
 
 function drawMap(t) {
@@ -709,6 +710,8 @@ function drawMap(t) {
   rect(mx, my, mw, mh, '#0c0a14');
   rect(mx, my, mw, 1, '#4a3018');
   rect(mx, my, mw, 10, '#18141e');
+
+  if (MAP_MODES[G.mapModeSel] && MAP_MODES[G.mapModeSel].id === 'raid') { drawRaidPanel(t); return; }
 
   ctx.save();
   ctx.beginPath(); ctx.rect(mx, my + 10, mw, mh - 10); ctx.clip();
@@ -982,7 +985,11 @@ cv.addEventListener('click', (e) => {
         SFX.play('select');
       }
     });
-
+    if (MAP_MODES[G.mapModeSel].id === 'raid') {
+      const h = [...(G.hubHits || [])].reverse().find(r => hitTest(x, y, r.x, r.y, r.w - 0.01, r.h - 0.01));
+      if (h) h.fn();
+      return;
+    }
     mapClick(x, y);
   }
 });
@@ -991,7 +998,7 @@ cv.addEventListener('mousemove', (e) => {
   if (G.mode !== 'hub' || G.hubView !== 'main') return;
   const { x, y } = canvasToLogical(e.clientX, e.clientY);
   G.hubMouse = { x, y };
-  if (G.hubTab === 'mercado' || G.hubTab === 'pecadores') {
+  if (G.hubTab === 'mercado' || G.hubTab === 'pecadores' || (G.hubTab === 'mapa' && MAP_MODES[G.mapModeSel].id === 'raid')) {
     cv.style.cursor = (G.hubHits || []).some(r => hitTest(x, y, r.x, r.y, r.w - 0.01, r.h - 0.01)) ? 'pointer' : 'default';
   }
   if (G.hubTab === 'ventana') {

@@ -421,3 +421,40 @@ function drawHubNotice(t) {
   txt(N.text, 94, y + 10, '#c8fff0', 8);
   ctx.globalAlpha = 1;
 }
+
+// ---------------------------------------------------------------------
+//  Mini raid (testing): repeatable fights that pay Enkephalina
+// ---------------------------------------------------------------------
+const RAIDS = [
+  { set: 'tut_skeletons', name: 'Esqueletos cableados', place: 'Pasillo de la sucursal', reward: 150, skulls: 1 },
+  { set: 'machine', name: 'E.G.O Extraction Machine', place: 'Celda de contención', reward: 250, skulls: 2 },
+  { set: 'corrupted', name: 'Empleado distorsionado', place: 'Callejón del Distrito D', reward: 400, skulls: 3 },
+  { set: 'operator', name: 'The Disconnected Operator', place: 'Celda de contención', reward: 500, skulls: 4 },
+];
+function startRaid(r) {
+  SFX.play('confirm');
+  startCombat({ id: r.set, ...COMBAT_SETS[r.set], tutorial: false, raid: r.reward });
+}
+function drawRaidPanel(t) {
+  G.hubHits = [];
+  const { x: mx, y: my, w: mw, h: mh } = MAP_PANEL;
+  const x = mx, w = 312 - mx;
+  rect(x, my, w, mh, '#0c0a14'); rect(x, my, w, 1, '#4a3018');
+  rect(x, my, w, 12, '#18141e');
+  txt('MINI RAID · PRUEBAS', x + 6, my + 9, '#c09050', 9);
+  drawWallet(x + w - 74, my + 3);
+  txt('Combates repetibles que dan Enkephalina para el Gacha.', x + 6, my + 21, '#8a8070', 7);
+  RAIDS.forEach((r, i) => {
+    const y = my + 26 + i * 27, h = 24;
+    const hv = hubHit(x + 4, y, w - 8, h, () => startRaid(r));
+    rect(x + 4, y, w - 8, h, hv ? '#2a1420' : '#16121c');
+    rect(x + 4, y, 2, h, hv ? '#ff6a78' : '#c0283a');
+    txt(r.name, x + 10, y + 9, hv ? '#ffffff' : '#e8e4dc', 8);
+    txt(r.place, x + 10, y + 18, '#6a6070', 7);
+    for (let k = 0; k < 4; k++) txt('☠', x + 128 + k * 8, y + 15, k < r.skulls ? '#ff4a5a' : '#2a2430', 9, 'center');
+    rect(x + w - 66, y + 7, 4, 4, '#5ae0c0');
+    txt(`+${r.reward}`, x + w - 59, y + 12, '#c8fff0', 8);
+    txt(hv ? 'LUCHAR ▶' : '', x + w - 10, y + 20, '#ffd060', 7, 'right');
+  });
+  txt(`Victorias: ${SAVE.get('raid_wins', 0)}`, x + 6, my + mh - 4, '#5d5850', 7);
+}
