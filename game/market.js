@@ -392,9 +392,8 @@ function pullClick() {
 }
 
 // ---------------------------------------------------------------------
-//  Mejoras: one E.G.O weapon per character
+//  Mejoras: equipping (the screen itself lives in mejoras.js)
 // ---------------------------------------------------------------------
-const PEC = { sel: 'lobelto', hover: null };
 function equipWeapon(who, id) {
   const eq = { ...W$.equip() };
   if (id && eq[who] !== id && W$.free(id) <= 0) {
@@ -405,60 +404,6 @@ function equipWeapon(who, id) {
   if (id) eq[who] = id; else delete eq[who];
   SAVE.save({ ego_eq: eq });
   SFX.play(id ? 'confirm' : 'select');
-}
-
-function drawPecadores(t) {
-  G.hubHits = [];
-  drawWide(() => drawHubBackdrop(t), 'hub');
-  ctx.globalAlpha = 0.88; rect(-OX, 0, VW, NAV_Y, '#07050c'); ctx.globalAlpha = 1;
-  metalFrame(4, 4, W - 8, NAV_Y - 8);
-  const eq = W$.equip();
-  // ---- the two characters
-  [['lobelto', 'LOBELTO', LOB, 8], ['gonza', 'GONZA', GON, 78]].forEach(([id, name, base, x]) => {
-    const on = PEC.sel === id, w = EGO_BY_ID[eq[id]];
-    const hv = hubHit(x, 10, 66, 140, () => { PEC.sel = id; SFX.play('select'); });
-    rect(x, 10, 66, 140, on ? '#1a1220' : hv ? '#141018' : '#0e0c14');
-    rect(x, 10, 66, 1, on ? '#c0283a' : '#4a3018');
-    txt(name, x + 33, 20, on ? '#fff' : '#a09080', 9, 'center');
-    if (w) light(x + 33, 70, 26, 34, egoCol(w), 0.12, 3);
-    figure(x + 33, 100, { ...base, face: 1, scale: 2.2, armless: id === 'lobelto', bandaged: id === 'lobelto', pose: w ? 'hold' : null, ego: w ? { kind: w.kind, col: egoCol(w) } : null }, t);
-    rect(x + 4, 106, 58, 40, '#100c14'); rect(x + 4, 106, 58, 1, '#3a2418');
-    txt('ARMA E.G.O', x + 33, 113, '#8a6030', 7, 'center');
-    if (w) {
-      riskChip(w.risk, x + 19, 116, 28);
-      txtFit(w.name, x + 7, 131, '#f0e8d8', 8, 52);
-      txt(`Ultimate · Luz ${RISK[w.risk].light}`, x + 33, 140, '#ffe08a', 7, 'center');
-    } else txt('— vacía —', x + 33, 130, '#5a5660', 8, 'center');
-  });
-  // ---- weapons owned
-  const rx = 150, ry = 10, rw = 162;
-  rect(rx, ry, rw, 140, '#0e0c14'); rect(rx, ry, rw, 1, '#4a3018');
-  txt(`ARMAS E.G.O → ${PEC.sel === 'lobelto' ? 'LOBELTO' : 'GONZA'}`, rx + 4, ry + 9, '#ffe8b0', 8);
-  drawWallet(rx + 104, ry + 4);
-  const owned = EGO_WEAPONS.filter(w => W$.count(w.id));
-  if (!owned.length) {
-    ['No tienes armas E.G.O.', 'Consíguelas en el Gacha', '(pestaña de abajo).'].forEach((l, i) => txt(l, rx + rw / 2, ry + 40 + i * 9, '#8a8070', 8, 'center'));
-  }
-  PEC.hover = null;
-  owned.forEach((w, i) => {
-    const y = ry + 14 + i * 10;
-    const mine = eq[PEC.sel] === w.id;
-    const holder = Object.keys(eq).find(k => eq[k] === w.id && k !== PEC.sel);
-    const hv = hubHit(rx + 2, y, rw - 4, 9, () => equipWeapon(PEC.sel, mine ? null : w.id));
-    if (hv) PEC.hover = w;
-    rect(rx + 2, y, rw - 4, 9, mine ? '#3a1820' : hv ? '#241820' : i % 2 ? '#14101a' : '#18141e');
-    riskChip(w.risk, rx + 4, y + 1, 26);
-    txt(w.name, rx + 34, y + 7, mine ? '#fff' : '#e8e4dc', 8);
-    txt(mine ? 'EQUIPADA' : holder && W$.free(w.id) <= 0 ? `en ${holder === 'gonza' ? 'Gonza' : 'Lobelto'}` : `x${W$.count(w.id)}`, rx + rw - 6, y + 7, mine ? '#ffd060' : '#8a8070', 7, 'right');
-  });
-  // details of the hovered (or equipped) weapon
-  const d = PEC.hover || EGO_BY_ID[eq[PEC.sel]];
-  if (d) {
-    const by = ry + 104;
-    rect(rx + 2, by, rw - 4, 34, '#100c14'); rect(rx + 2, by, rw - 4, 1, egoCol(d));
-    d.dice.forEach(([ty, a, b], k) => { dieIcon(ty, rx + 6 + k * 30, by + 4); txt(`${a}-${b}`, rx + 13 + k * 30, by + 9, '#d8d0c0', 8); });
-    wrap(d.desc, rw - 10, 7).slice(0, 3).forEach((ln, i) => txt(ln, rx + 6, by + 18 + i * 6, '#a09080', 7));
-  }
 }
 
 // ---------------------------------------------------------------------
