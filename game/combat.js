@@ -869,6 +869,16 @@ function dealDamage(u, hpD) {
 async function applyHit(T, dmg, stats, from, type, gun, dry, chain) {
   if (!alive(T)) return;
   await strikeAnim(from, T, type, gun, dry);
+  const dealt = resolveHit(T, dmg, stats, from);
+  await wait(40);
+  // the target keeps reeling while the attacker already moves on
+  if (dealt && alive(T)) recoilAnim(T, from, dealt);
+  await settle(from, chain && alive(T));
+}
+
+// The damage part of a hit: the shield soaks first, the rest reaches HP.
+function resolveHit(T, dmg, stats, from) {
+  if (!alive(T)) return 0;
   const p = headPos(T);
   const soaked = Math.min(T.shield, dmg);
   if (soaked) {
@@ -885,10 +895,7 @@ async function applyHit(T, dmg, stats, from, type, gun, dry, chain) {
   }
   if (!dealt && soaked) { spawnAnim('text', p.x, p.y - 4, 'BLOQUEADO', '#9ac0ff', 800); bark(T, 'block', 0.5); }
   if (stats) stats[from.team] += dealt;
-  await wait(40);
-  // the target keeps reeling while the attacker already moves on
-  if (dealt && alive(T)) recoilAnim(T, from, dealt);
-  await settle(from, chain && alive(T));
+  return dealt;
 }
 
 function addShield(u, v, from) {
@@ -978,7 +985,10 @@ async function doClash(ad, ed) {
     if (!f.stayB) se.i++;
     sa.roll = null; se.roll = null;
   }
-  await leftovers(sa, E, stats);
+  // an E.G.O page that wins its clash plays the weapon's own finisher (cinema.js)
+  const egoWin = ad.page.ego && canAct(A) && alive(E) && (sa.i < qa.length || stats.ally > stats.enemy);
+  if (egoWin) await egoCinematic(sa, E, stats);
+  else await leftovers(sa, E, stats);
   await leftovers(se, A, stats);
 
   // Light goes to the ally if their side dealt more damage in this clash
@@ -1005,7 +1015,8 @@ async function doOneSided(d, T) {
   await Promise.all([dashTo(d.unit, tx, 300), camTo({ z: 1.5, x: (tx + T.bx) / 2, y: camY(d.unit, T) }, 340)]);
   bark(d.unit, 'attack', 0.5);
   await wait(70);
-  await leftovers(s, T, null);
+  if (d.page.ego && d.unit.team === 'ally') await egoCinematic(s, T, null);
+  else await leftovers(s, T, null);
   await Promise.all([dashTo(d.unit, d.unit.bx, 280, true), camTo(CAM_HOME, 320)]);
   egoDone(d.unit);
 }
@@ -1687,9 +1698,11 @@ function drawCombatHUD(t) {
   const cam = camOn();          // effects and ally plates live in the world, so they follow the camera
   drawFx();
   CB.hits = [];
-  for (const u of CB.allies) if (alive(u)) allyPlate(u, t);
+  if (!CB.cine) for (const u of CB.allies) if (alive(u)) allyPlate(u, t);
   if (cam) ctx.restore();
   drawScreenFx();
+  // during an E.G.O finisher the HUD steps aside for letterbox bars
+  if (CB.cine) { drawCineOverlay(t); return; }
   for (const u of CB.enemies) if (alive(u)) enemyPlate(u, t);
   if (CB.phase === 'select') {
     const focus = focusUnit();

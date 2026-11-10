@@ -584,6 +584,7 @@ function render(t) {
   } else {
     const cam = G.mode === 'combat' && camOn();
     drawWide(() => (BG[G.s.bg] || BG.black)(G.s, t), G.s.bg);
+    if (G.mode === 'combat' && CB.cine) cineBackdrop(t);
     // combat: back to front by depth; story: monsters behind, then Gonza, Lobelto in front
     const STORY_ORDER = ['corrupted', 'skel1', 'skel2', 'gonza', 'lobelto'];
     const order = G.mode === 'combat'
