@@ -139,7 +139,7 @@ function present(t) {
     vctx.fillStyle = 'rgba(0,0,0,0.7)';
     vctx.fillRect(x0 - 40 * s, F.y + 2 * s, 38 * s, 10 * s);
     vctx.font = `${9 * s}px VT323, monospace`;
-    vctx.fillStyle = fpsMeter.fps >= 50 ? '#3fbf6a' : fpsMeter.fps >= 30 ? '#e8c040' : '#ff4a5a';
+    vctx.fillStyle = fpsMeter.fps >= 55 ? (fpsMeter.fps >= 100 ? '#3af0ff' : '#3fbf6a') : fpsMeter.fps >= 30 ? '#e8c040' : '#ff4a5a';
     vctx.fillText(`${fpsMeter.fps} FPS`, x0 - 37 * s, F.y + 10 * s);
   }
 }

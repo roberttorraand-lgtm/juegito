@@ -570,7 +570,14 @@ function camOn() {
 
 // ---------- Render ----------
 const hintEl = $('hint');
+// Frame pacing: the loop runs at the display's own rate (60, 90, 120,
+// 144 Hz...) unless a cap is set. FRAME_DT is the time step of this frame
+// in 60 fps units, so per-frame motion keeps the same speed at any rate.
+let _lastFrame = 0, FRAME_DT = 1;
 function render(t) {
+  if (CFG.fpsCap && _lastFrame && t - _lastFrame < 1000 / CFG.fpsCap - 1.5) { requestAnimationFrame(render); return; }
+  FRAME_DT = _lastFrame ? Math.min(4, (t - _lastFrame) / (1000 / 60)) : 1;
+  _lastFrame = t;
   const now = performance.now();
   const hintOn = G.mode !== 'hub' && G.mode !== 'combat' && !G.s.doc;
   if (hintOn !== G._hintOn) { G._hintOn = hintOn; hintEl.classList.toggle('hidden', !hintOn); }
@@ -628,7 +635,7 @@ function render(t) {
     drawEmotes(t);
     drawAlerts(t);
     const r = G.s.rift;
-    if (r) { r.w += (r.target - r.w) * 0.04; rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }
+    if (r) { r.w += (r.target - r.w) * (1 - Math.pow(0.96, FRAME_DT)); rift(r.x, r.y, r.w, r.h + r.w * 0.6, t); }
     postFX(G.s, t);
     if (G.s.doc) drawDoc(G.s.doc, t);
     if (G.mode === 'combat') drawCombatHUD(t);

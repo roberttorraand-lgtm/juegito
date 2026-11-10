@@ -216,6 +216,7 @@ function showSettings(tab = 'audio', quiet = false) {
         ${toggle('grain', 'Grano de película')}
         ${toggle('scanlines', 'Líneas de escaneo (CRT)', 'Efecto retro de monitor antiguo')}
         ${toggle('impactFrames', 'Fotogramas de impacto', 'En los golpes más fuertes la imagen se invierte un instante, como en Limbus. Desactívalo si te molestan los destellos.')}
+        ${chips('fpsCap', 'Límite de FPS', [[0, 'Máximo'], [30, '30'], [60, '60'], [120, '120']], 'Máximo: tantos como dé tu pantalla (90, 120, 144 Hz...). Bájalo para ahorrar batería.')}
         ${toggle('fps', 'Mostrar FPS', 'Contador de imágenes por segundo en la esquina')}
         <div class="st-group">
           <div class="st-label">Pantalla completa</div>

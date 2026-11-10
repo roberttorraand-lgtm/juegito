@@ -714,11 +714,12 @@ function drawFx() {
     return true;
   });
   CB.parts = CB.parts.filter(p => {
-    p.x += p.vx; p.y += p.vy; p.vy += p.g; p.vx *= 0.97;
+    const dt = FRAME_DT;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= Math.pow(0.97, dt);
     ctx.globalAlpha = Math.max(0, p.life / p.max);
     if (p.len) line(p.x, p.y, p.x - p.vx * p.len, p.y - p.vy * p.len, p.col);
     else rect(p.x, p.y, 1, 1, p.col);
-    return --p.life > 0;
+    return (p.life -= dt) > 0;
   });
   ctx.globalAlpha = 1;
 }
