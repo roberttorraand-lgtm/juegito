@@ -406,7 +406,7 @@ const HUB_NAV = [
   { id: 'ventana', label: 'Ventana', icon: '◫', enabled: true },
   { id: 'pecadores', label: 'Mejoras', icon: '▲', enabled: true },
   { id: 'mapa', label: 'Mapa', icon: '◈', enabled: true },
-  { id: 'mercado', label: 'Mercado', icon: '$', enabled: true },
+  { id: 'mercado', label: 'Gacha', icon: '✦', enabled: true },
   { id: 'ajustes', label: 'Ajustes', icon: '⚙', enabled: true },
 ];
 const NAV_Y = 160, NAV_H = 20;

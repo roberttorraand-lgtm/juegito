@@ -437,7 +437,7 @@ function drawPecadores(t) {
   drawWallet(rx + 104, ry + 4);
   const owned = EGO_WEAPONS.filter(w => W$.count(w.id));
   if (!owned.length) {
-    ['No tienes armas E.G.O.', 'Consíguelas en el Mercado', '(pestaña de abajo).'].forEach((l, i) => txt(l, rx + rw / 2, ry + 40 + i * 9, '#8a8070', 8, 'center'));
+    ['No tienes armas E.G.O.', 'Consíguelas en el Gacha', '(pestaña de abajo).'].forEach((l, i) => txt(l, rx + rw / 2, ry + 40 + i * 9, '#8a8070', 8, 'center'));
   }
   PEC.hover = null;
   owned.forEach((w, i) => {
