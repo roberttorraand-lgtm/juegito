@@ -955,46 +955,52 @@ async function doClash(ad, ed) {
   await wait(160);
 
   const qa = ad.page.dice, qe = ed.page.dice;
-  while (sa.i < qa.length && se.i < qe.length && canAct(A) && canAct(E)) {
-    const [ta, a1, a2] = qa[sa.i], [te, e1, e2] = qe[se.i];
-    sa.roll = rnd(a1, a2); se.roll = rnd(e1, e2);
-    fire(sa, qa[sa.i]); fire(se, qe[se.i]);
-    rollFx(A, ta, sa.roll); rollFx(E, te, se.roll);
-    await wait(230);
-    const f = pairEffects(ta, sa.roll, te, se.roll);
-    // both pages meet in the middle unless one side is only defending
-    if (kindOf(ta) !== 'evade' && kindOf(te) !== 'evade' && (DIE[ta].off || DIE[te].off)) await clashCollide(A, E);
-    if (f.shieldA) addShield(A, f.shieldA, E);
-    if (f.shieldB) addShield(E, f.shieldB, A);
-    if ((f.shieldA || f.shieldB) && f.hits.length) await wait(380);
-    if (f.tie) {
-      const pa = headPos(A), pb = headPos(E);
-      spawnAnim('text', (pa.x + pb.x) / 2, Math.min(pa.y, pb.y) - 12, 'EMPATE', '#a39c90', 700);
-      SFX.play('tie');
+  if (ad.page.ego) {
+    // E.G.O: a pure clash with no damage; only a win plays the finisher,
+    // which deals all the damage. A loss lets the enemy's coins hit.
+    await egoClashLoop(A, E, sa, se);
+    if (sa.i < qa.length && canAct(A) && alive(E)) await egoCinematic(sa, E, stats);
+    else if (alive(A)) { const p = headPos(A); spawnAnim('text', p.x, p.y - 24, 'E.G.O ROTO', '#ff4a5a', 1100, { big: true }); SFX.play('stagger'); }
+    await leftovers(se, A, stats);
+  } else {
+    while (sa.i < qa.length && se.i < qe.length && canAct(A) && canAct(E)) {
+      const [ta, a1, a2] = qa[sa.i], [te, e1, e2] = qe[se.i];
+      sa.roll = rnd(a1, a2); se.roll = rnd(e1, e2);
+      fire(sa, qa[sa.i]); fire(se, qe[se.i]);
+      rollFx(A, ta, sa.roll); rollFx(E, te, se.roll);
+      await wait(230);
+      const f = pairEffects(ta, sa.roll, te, se.roll);
+      // both pages meet in the middle unless one side is only defending
+      if (kindOf(ta) !== 'evade' && kindOf(te) !== 'evade' && (DIE[ta].off || DIE[te].off)) await clashCollide(A, E);
+      if (f.shieldA) addShield(A, f.shieldA, E);
+      if (f.shieldB) addShield(E, f.shieldB, A);
+      if ((f.shieldA || f.shieldB) && f.hits.length) await wait(380);
+      if (f.tie) {
+        const pa = headPos(A), pb = headPos(E);
+        spawnAnim('text', (pa.x + pb.x) / 2, Math.min(pa.y, pb.y) - 12, 'EMPATE', '#a39c90', 700);
+        SFX.play('tie');
+      }
+      if (f.evade === 'a') { E._move = { page: se.page, i: se.i }; await evadeFx(A, sa.roll, E); }
+      if (f.evade === 'b') { A._move = { page: sa.page, i: sa.i }; await evadeFx(E, se.roll, A); }
+      for (const h of f.hits) {
+        const [T, from, die, sd, raw] = h.to === 'a' ? [A, E, te, se, qe[se.i]] : [E, A, ta, sa, qa[sa.i]];
+        if (kindOf(die) === 'counter') spawnAnim('text', headPos(from).x, headPos(from).y - 22, 'CONTRAATAQUE', DIE.counter.col, 900);
+        const gun = raw && isGun(raw) && kindOf(die) === 'off';
+        from._move = { page: sd.page, i: sd.i };
+        await applyHit(T, gun && sd.dry ? 0 : h.dmg, stats, from, die, gun, gun && sd.dry);
+      }
+      const aa = actorOf(A), ae = actorOf(E);
+      if (aa) aa.pose = null;
+      if (ae) ae.pose = null;
+      await Promise.all([settle(A), settle(E)]);
+      await wait(110);
+      if (!f.stayA) sa.i++;
+      if (!f.stayB) se.i++;
+      sa.roll = null; se.roll = null;
     }
-    if (f.evade === 'a') { E._move = { page: se.page, i: se.i }; await evadeFx(A, sa.roll, E); }
-    if (f.evade === 'b') { A._move = { page: sa.page, i: sa.i }; await evadeFx(E, se.roll, A); }
-    for (const h of f.hits) {
-      const [T, from, die, sd, raw] = h.to === 'a' ? [A, E, te, se, qe[se.i]] : [E, A, ta, sa, qa[sa.i]];
-      if (kindOf(die) === 'counter') spawnAnim('text', headPos(from).x, headPos(from).y - 22, 'CONTRAATAQUE', DIE.counter.col, 900);
-      const gun = raw && isGun(raw) && kindOf(die) === 'off';
-      from._move = { page: sd.page, i: sd.i };
-      await applyHit(T, gun && sd.dry ? 0 : h.dmg, stats, from, die, gun, gun && sd.dry);
-    }
-    const aa = actorOf(A), ae = actorOf(E);
-    if (aa) aa.pose = null;
-    if (ae) ae.pose = null;
-    await Promise.all([settle(A), settle(E)]);
-    await wait(110);
-    if (!f.stayA) sa.i++;
-    if (!f.stayB) se.i++;
-    sa.roll = null; se.roll = null;
+    await leftovers(sa, E, stats);
+    await leftovers(se, A, stats);
   }
-  // an E.G.O page that wins its clash plays the weapon's own finisher (cinema.js)
-  const egoWin = ad.page.ego && canAct(A) && alive(E) && (sa.i < qa.length || stats.ally > stats.enemy);
-  if (egoWin) await egoCinematic(sa, E, stats);
-  else await leftovers(sa, E, stats);
-  await leftovers(se, A, stats);
 
   // Light goes to the ally if their side dealt more damage in this clash
   if (alive(A) && stats.ally > stats.enemy && A.light < A.maxLight) {
@@ -1009,6 +1015,39 @@ async function doClash(ad, ed) {
   E.shield = 0;
   await Promise.all([dashTo(A, A.bx, 280, true), dashTo(E, E.bx, 280, true), camTo(CAM_HOME, 320)]);
   egoDone(A);
+}
+
+// E.G.O pages clash like Limbus skills: every exchange compares the two
+// rolls and breaks the loser's coin while the winner's coin stays for the
+// next one; nobody takes damage. Ties are rerolled (twice at most).
+async function egoClashLoop(A, E, sa, se) {
+  const qa = sa.page.dice, qe = se.page.dice;
+  let ties = 0;
+  while (sa.i < qa.length && se.i < qe.length && canAct(A) && canAct(E)) {
+    const [ta, a1, a2] = qa[sa.i], [te, e1, e2] = qe[se.i];
+    sa.roll = rnd(a1, a2); se.roll = rnd(e1, e2);
+    rollFx(A, ta, sa.roll); rollFx(E, te, se.roll);
+    await wait(200);
+    await clashCollide(A, E);
+    if (sa.roll === se.roll) {
+      const pa = headPos(A), pb = headPos(E);
+      spawnAnim('text', (pa.x + pb.x) / 2, Math.min(pa.y, pb.y) - 12, 'EMPATE', '#a39c90', 700);
+      SFX.play('tie');
+      if (++ties > 2) { sa.i++; se.i++; ties = 0; }
+    } else {
+      ties = 0;
+      const [L, W, ls] = sa.roll > se.roll ? [E, A, se] : [A, E, sa];
+      const p = headPos(L), la = actorOf(L);
+      fx('coinBreak', p.x, p.y - 14, 600, { col: L === A ? egoCol(sa.page.ego) : '#c0283a' });
+      spawnAnim('text', p.x, p.y - 26, 'MONEDA ROTA', L === A ? '#ff4a5a' : '#ffd060', 800);
+      SFX.play('stagger');
+      if (la) tween(la, { ox: (la.ox || 0) - dirTo(L, W) * 6, tilt: -0.1 * dirTo(L, W) }, 70).then(() => tween(la, { tilt: 0 }, 160));
+      ls.i++;
+    }
+    await Promise.all([settle(A), settle(E)]);
+    await wait(120);
+    sa.roll = null; se.roll = null;
+  }
 }
 
 async function doOneSided(d, T) {

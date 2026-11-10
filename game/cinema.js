@@ -1,12 +1,12 @@
 // =====================================================================
 //  CINEMA — E.G.O finishers.
 //
-//  When an E.G.O page wins its clash (or hits unopposed) the weapon's own
-//  finisher plays: letterbox bars, a darkened stage tinted with the risk
-//  colour, a close camera and a short sequence unique to each weapon.
-//  The page's remaining coins land at the finisher's hit marks; with no
-//  coins left (every coin was spent winning the exchanges) the finisher
-//  still lands one extra hit with the page's last attack die.
+//  An E.G.O page clashes without dealing damage (combat.js, egoClashLoop):
+//  each exchange breaks the loser's coin. If the E.G.O page ends the clash
+//  with coins left (or hits unopposed) the weapon's own finisher plays:
+//  letterbox bars, a darkened stage tinted with the risk colour, a close
+//  camera and a sequence unique to each weapon. All the damage happens
+//  here: the remaining coins land at the finisher's hit marks.
 // =====================================================================
 
 // ---------------------------------------------------------------------
@@ -163,6 +163,19 @@ Object.assign(FX_DRAW, {
 });
 // same word, fixed on screen (for titles the camera must not push out of view)
 FX_DRAW.title = FX_DRAW.onoma;
+// a clash coin snapping in two
+FX_DRAW.coinBreak = (f, k) => {
+  const d = k * 10, a = Math.max(0, 1 - k);
+  ctx.globalAlpha = a;
+  for (const s of [-1, 1]) {
+    ctx.save(); ctx.beginPath(); ctx.rect(s < 0 ? f.x - 8 + s * d : f.x + s * d, f.y - 8, 8, 16); ctx.clip();
+    ctx.translate(s * d, k * 6);
+    disc(f.x, f.y, 5, f.col); disc(f.x, f.y, 3, '#16121a'); px(f.x, f.y, f.col);
+    ctx.restore();
+  }
+  if (k < 0.2) light(f.x, f.y, 10, 10, '#ffffff', 0.6, 2);
+  ctx.globalAlpha = 1;
+};
 FX_SCREEN.add('bsod'); FX_SCREEN.add('bigX'); FX_SCREEN.add('title');
 
 // ---------------------------------------------------------------------
