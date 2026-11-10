@@ -1,10 +1,10 @@
 // =====================================================================
 //  MARKET — E.G.O weapons, the two currencies, the black market gacha
-//  and the Pecadores tab where each character equips one weapon.
+//  and the Mejoras tab where each character equips one weapon.
 //
 //  Enkephalina: earned by finishing an episode; pays for extractions.
 //  Ahn: earned by selling E.G.O weapons or exchanging Enkephalina; pays
-//  for the trader's shop.
+//  for future features (the shop is gone for now).
 //  An equipped E.G.O weapon is a one-use-per-fight ultimate that costs
 //  Light (more for higher risk levels).
 // =====================================================================
@@ -19,7 +19,6 @@ const RISK = {
 };
 const RISK_ORDER = ['ZAYIN', 'TETH', 'HE', 'WAW', 'ALEPH'];
 const PULL_COST = 100, ENK_PER_EPISODE = 1000, ENK_TO_AHN = 10, PITY = 80;
-const BULLET_PACK = { n: 3, price: 300 };
 
 // First batch, made up to test the gacha; replace freely.
 const EGO_WEAPONS = [
@@ -120,7 +119,7 @@ function extract(n) {
 }
 
 // ---------------------------------------------------------------------
-//  Selling and the shop
+//  Selling
 // ---------------------------------------------------------------------
 function sellWeapon(id) {
   const w = EGO_BY_ID[id];
@@ -138,23 +137,6 @@ function exchangeEnk() {
   SFX.play('coins');
   MK.say('sell');
 }
-const shopPrice = (w) => RISK[w.risk].sell * 3;
-const SHOP = () => [
-  ...EGO_WEAPONS.filter(w => w.risk !== 'ALEPH').map(w => ({ w, price: shopPrice(w) })),
-  { bullets: true, price: BULLET_PACK.price },
-];
-function buy(item) {
-  if (W$.ahn() < item.price) { SFX.play('error'); return; }
-  if (item.bullets) {
-    const a = SAVE.get('ammo', AMMO_MAX);
-    if (a >= AMMO_MAX) { SFX.play('error'); return; }
-    SAVE.save({ ammo: Math.min(AMMO_MAX, a + BULLET_PACK.n) });
-  } else W$.give(item.w.id);
-  W$.add(0, -item.price);
-  SFX.play('coins');
-  MK.say('buy');
-}
-
 // ---------------------------------------------------------------------
 //  Shared drawing
 // ---------------------------------------------------------------------
@@ -242,7 +224,7 @@ const MK = {
 
 function openMarket() {
   G.hubTab = 'mercado'; G.pull = null; MK.tab = 'extraer'; MK.say('hello');
-  G.hubNavSel = HUB_NAV.findIndex(n => n.id === 'mapa');
+  G.hubNavSel = HUB_NAV.findIndex(n => n.id === 'mercado');
   SFX.play('confirm');
   Music.play('market');
 }
@@ -288,18 +270,17 @@ function drawMarket(t) {
   const rx = 130, ry = 10, rw = 182, rh = 140;
   rect(rx, ry, rw, rh, '#0e0c14');
   rect(rx, ry, rw, 1, '#4a3018');
-  [['extraer', 'EXTRACCIÓN'], ['vender', 'VENDER'], ['tienda', 'TIENDA']].forEach(([id, label], i) => {
-    const bx = rx + 2 + i * 46, on = MK.tab === id;
-    const hv = hubHit(bx, ry + 2, 44, 11, () => { MK.tab = id; SFX.play('select'); });
-    rect(bx, ry + 2, 44, 11, on ? '#3a1820' : hv ? '#241820' : '#16121a');
-    if (on) rect(bx, ry + 12, 44, 1, '#c0283a');
-    txt(label, bx + 22, ry + 10, on ? '#fff' : '#a09080', 7, 'center');
+  [['extraer', 'EXTRACCIÓN'], ['vender', 'VENDER']].forEach(([id, label], i) => {
+    const bx = rx + 2 + i * 62, on = MK.tab === id;
+    const hv = hubHit(bx, ry + 2, 60, 11, () => { MK.tab = id; SFX.play('select'); });
+    rect(bx, ry + 2, 60, 11, on ? '#3a1820' : hv ? '#241820' : '#16121a');
+    if (on) rect(bx, ry + 12, 60, 1, '#c0283a');
+    txt(label, bx + 30, ry + 10, on ? '#fff' : '#a09080', 7, 'center');
   });
   drawWallet(rx + 141, ry + 4);
   const body = { x: rx + 4, y: ry + 17, w: rw - 8, h: rh - 21 };
   if (MK.tab === 'extraer') drawExtractTab(body, t);
-  else if (MK.tab === 'vender') drawSellTab(body, t);
-  else drawShopTab(body, t);
+  else drawSellTab(body, t);
 
   if (G.pull) drawPull(t);
 }
@@ -310,7 +291,7 @@ function drawExtractTab(b, t) {
   for (let i = 0; i < 6; i++) light(b.x + 20 + i * 26, b.y + 23, 14, 18, RISK[RISK_ORDER[i % 5]].col, 0.06, 2);
   txt('EXTRACCIÓN E.G.O', b.x + 6, b.y + 10, '#ffe8b0', 9);
   txt('Armas E.G.O de una sucursal abandonada.', b.x + 6, b.y + 19, '#a09080', 7);
-  txt('Equípalas en Pecadores: son tu ultimate.', b.x + 6, b.y + 27, '#a09080', 7);
+  txt('Equípalas en Mejoras: son tu ultimate.', b.x + 6, b.y + 27, '#a09080', 7);
   egoIcon('scythe', b.x + b.w - 18, b.y + 24, 1.6, RISK.ALEPH.col);
   // rates
   RISK_ORDER.forEach((k, i) => {
@@ -351,24 +332,6 @@ function drawSellTab(b, t) {
   txt(`Cambiar ${PULL_COST} Enkephalina`, b.x + 2, y + 6, '#c8fff0', 8);
   txt(`→ ${PULL_COST * ENK_TO_AHN} Ahn`, b.x + 2, y + 13, '#ffe8b0', 7);
   hubButton(b.x + b.w - 54, y, 52, 12, 'CAMBIAR', exchangeEnk, W$.enk() >= PULL_COST, '#a08030');
-}
-
-function drawShopTab(b, t) {
-  txt('Compra con Ahn.', b.x + 2, b.y + 7, '#a09080', 7);
-  SHOP().forEach((it, i) => {
-    const y = b.y + 11 + i * 10;
-    rect(b.x, y, b.w, 9, i % 2 ? '#14101a' : '#18141e');
-    if (it.bullets) {
-      rect(b.x + 4, y + 2, 2, 5, '#e8c060'); rect(b.x + 8, y + 2, 2, 5, '#e8c060'); rect(b.x + 12, y + 2, 2, 5, '#e8c060');
-      const a = SAVE.get('ammo', AMMO_MAX);
-      txt(`Balas x${BULLET_PACK.n} para Gonza (${a}/${AMMO_MAX})`, b.x + 32, y + 7, '#e8e4dc', 8);
-    } else {
-      riskChip(it.w.risk, b.x + 2, y + 1, 26);
-      txt(it.w.name, b.x + 32, y + 7, '#e8e4dc', 8);
-    }
-    const ok = W$.ahn() >= it.price && !(it.bullets && SAVE.get('ammo', AMMO_MAX) >= AMMO_MAX);
-    hubButton(b.x + b.w - 54, y + 1, 52, 8, `${it.price} Ahn`, () => buy(it), ok, '#a08030');
-  });
 }
 
 // ---- extraction reveal: the box shakes and glows in the colour of the best
@@ -429,7 +392,7 @@ function pullClick() {
 }
 
 // ---------------------------------------------------------------------
-//  Pecadores: one E.G.O weapon per character
+//  Mejoras: one E.G.O weapon per character
 // ---------------------------------------------------------------------
 const PEC = { sel: 'lobelto', hover: null };
 function equipWeapon(who, id) {
@@ -474,7 +437,7 @@ function drawPecadores(t) {
   drawWallet(rx + 104, ry + 4);
   const owned = EGO_WEAPONS.filter(w => W$.count(w.id));
   if (!owned.length) {
-    ['No tienes armas E.G.O.', 'Consíguelas en el Mercado negro', '(Mapa → Mercado negro).'].forEach((l, i) => txt(l, rx + rw / 2, ry + 40 + i * 9, '#8a8070', 8, 'center'));
+    ['No tienes armas E.G.O.', 'Consíguelas en el Mercado', '(pestaña de abajo).'].forEach((l, i) => txt(l, rx + rw / 2, ry + 40 + i * 9, '#8a8070', 8, 'center'));
   }
   PEC.hover = null;
   owned.forEach((w, i) => {

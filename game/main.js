@@ -316,7 +316,7 @@ document.addEventListener('keydown', (e) => {
       else if (G.hubView === 'levels') hideLevels();
       else if (G.hubView === 'settings') hideSettings();
       else if (G.pull) pullClick();
-      else if (G.hubTab === 'mercado') { activateNavBtn('mapa'); }
+      else if (G.hubTab === 'mercado') { activateNavBtn('ventana'); }
       else if (G.hubTab === 'pecadores') { activateNavBtn('ventana'); }
       else if (G.hubTab === 'mapa' && G.chapter) closeChapter();
       else if (G.hubTab === 'mapa') { G.hubTab = 'ventana'; SFX.play('select'); }
