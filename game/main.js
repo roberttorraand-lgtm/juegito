@@ -540,7 +540,8 @@ function blendPose(a, now, t) {
   if (a._pName !== want) {
     a._pFrom = a._pNow || FIG_NEUTRAL;
     a._pName = want; a._pStart = now;
-    a._pMs = FAST_POSES[want] || 120;
+    // combat moves snap their keyframes in (poseMs), like Limbus sprite frames
+    a._pMs = a.poseMs != null ? Math.max(1, a.poseMs) : FAST_POSES[want] || 120;
   }
   const k = Math.min(1, (now - a._pStart) / a._pMs);
   const e = 1 - Math.pow(1 - k, 3);
@@ -634,7 +635,7 @@ function render(t) {
   if (G.flash) {
     const k = 1 - (now - G.flash.start) / G.flash.ms;
     if (k <= 0) G.flash = null;
-    else { ctx.globalAlpha = Math.min(1, k * 1.2); rect(-OX, 0, VW, H, G.flash.color); ctx.globalAlpha = 1; }
+    else { ctx.globalAlpha = Math.min(1, k * 1.2) * (G.flash.a || 1); rect(-OX, 0, VW, H, G.flash.color); ctx.globalAlpha = 1; }
   }
 
   const animCam = CB.active && CB.anims.length > 0 && camOn();

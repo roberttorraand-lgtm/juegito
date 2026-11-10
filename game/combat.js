@@ -526,17 +526,22 @@ const easeInOut = (k) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2)
 const easeOutBack = (k) => { const c = 1.6; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
 
 // Animates numeric fields of `obj` (ox, oy, tilt, sq...) toward `to`.
+// A newer tween on the same field takes it over, so overlapping moves
+// (a recoil still settling while the next coin hits) never fight.
+let _tweenId = 0;
 function tween(obj, to, ms, ease = easeOut) {
   if (!obj) return Promise.resolve();
-  const from = {};
-  for (const k in to) from[k] = obj[k] || 0;
+  const from = {}, id = ++_tweenId;
+  const own = obj._tw || (obj._tw = {});
+  for (const k in to) { from[k] = obj[k] || 0; own[k] = id; }
   if (CB.instant || ms <= 0) { Object.assign(obj, to); return Promise.resolve(); }
   const start = performance.now();
   return new Promise(res => {
     const step = () => {
       const k = Math.min(1, (performance.now() - start) / ms), e = ease(k);
-      for (const p in to) obj[p] = from[p] + (to[p] - from[p]) * e;
-      if (k < 1) requestAnimationFrame(step); else res();
+      let mine = 0;
+      for (const p in to) if (own[p] === id) { obj[p] = from[p] + (to[p] - from[p]) * e; mine++; }
+      if (k < 1 && mine) requestAnimationFrame(step); else res();
     };
     step();
   });
@@ -707,7 +712,8 @@ function drawFx() {
   CB.parts = CB.parts.filter(p => {
     p.x += p.vx; p.y += p.vy; p.vy += p.g; p.vx *= 0.97;
     ctx.globalAlpha = Math.max(0, p.life / p.max);
-    rect(p.x, p.y, 1, 1, p.col);
+    if (p.len) line(p.x, p.y, p.x - p.vx * p.len, p.y - p.vy * p.len, p.col);
+    else rect(p.x, p.y, 1, 1, p.col);
     return --p.life > 0;
   });
   ctx.globalAlpha = 1;
@@ -734,113 +740,31 @@ async function dashTo(u, x, ms, back) {
   a.ghosts = null;
   a.walking = false;
   dust(u, back ? 3 : 7, -dir);
-  if (!back) { a.pose = 'brace'; await tween(a, { tilt: -0.07 * dir, sq: 0.08 }, 80); }
-  await tween(a, { tilt: 0, sq: 0 }, 200, easeOutBack);
+  if (!back) { a.pose = 'brace'; await tween(a, { tilt: -0.07 * dir, sq: 0.08 }, 60); }
+  await tween(a, { tilt: 0, sq: 0 }, back ? 200 : 110, easeOutBack);
   a.pose = null;
 }
 
 const trail = (a, dir, n = 2) => { a.ghosts = Array.from({ length: n }, (_, i) => ({ dx: -dir * (6 + i * 6), a: 0.32 - i * 0.12 })); };
 
 // The attacker's swing for one die, ending at the moment of impact.
-async function strikeAnim(U, T, type, gun, dry) {
-  const a = actorOf(U), dir = dirTo(U, T), c = chest(T);
-  if (!a) return;
-  a.atk = true;
-  const k = gun ? 'gun' : kindOf(type) === 'counter' ? 'counter' : type;
-  const r = T.kind ? 12 : 9;
-  if (k === 'gun') {
-    // raise the pistol, a beat of aim, then the shot (or the dry click) and recoil
-    a.pose = 'aim';
-    await tween(a, { tilt: -0.04 * dir, sq: 0.04 }, 110);
-    await wait(90);
-    const s = (U.scale || 1) * (U.hat === 'cap' ? 0.86 : 1);
-    const hx = a.x + (a.ox || 0) + dir * 13 * s, hy = a.y - 21 * s;
-    if (dry) {
-      SFX.play('gun_click');
-      await tween(a, { ox: (a.ox || 0) - dir * 1 }, 60);
-    } else {
-      fx('muzzle', hx, hy, 110, { dir });
-      fx('tracer', 0, 0, 140, { x0: hx, y0: hy, x1: c.x, y1: c.y });
-      particles(hx, hy, 5, ['#fff6c0', '#ffd060'], 1.2, 0.02, 10);
-      SFX.play('gunshot');
-      G.flash = { color: '#fff4d0', start: performance.now(), ms: 50 };
-      await tween(a, { ox: (a.ox || 0) - dir * 4, tilt: -0.1 * dir }, 50);
-    }
-  } else if (k === 'counter') {
-    // parry stance, then a fast riposte
-    const p = chest(U);
-    a.pose = 'guard';
-    fx('parry', p.x, p.y - 14, 500);
-    SFX.play('counter');
-    await tween(a, { ox: (a.ox || 0) - dir * 3, sq: 0.06 }, 90);
-    a.pose = 'strike';
-    trail(a, dir);
-    await tween(a, { ox: (a.ox || 0) + dir * 14, sq: 0, tilt: 0.1 * dir }, 60, easeIn);
-    a.ghosts = null;
-    fx('slash', c.x, c.y, 280, { dir, col: DIE.counter.col, r });
-    a.pose = 'follow';
-  } else if (k === 'blunt') {
-    // crouch, leap forward, slam down
-    a.pose = 'windup';
-    await tween(a, { sq: 0.12, ox: (a.ox || 0) - dir * 2 }, 80);
-    a.pose = 'slam';
-    await tween(a, { oy: -16, sq: -0.1, ox: (a.ox || 0) + dir * 6, tilt: -0.08 * dir }, 140);
-    a.pose = 'strike';
-    trail(a, dir);
-    await tween(a, { oy: 0, sq: 0.14, ox: (a.ox || 0) + dir * 6, tilt: 0.12 * dir }, 70, easeIn);
-    a.ghosts = null;
-    fx('shock', c.x, feet(T).y, 450, { col: DIE.blunt.col });
-    particles(c.x, c.y + 6, 8, ['#8a8090', '#5a5060', '#c8c0b0'], 1.2, 0.12);
-    dust(U, 6);
-    SFX.play('blunt');
-    shake(220);
-    tween(a, { sq: 0 }, 140);
-  } else if (k === 'pierce') {
-    // coil back low, then a long lunge with afterimages
-    a.pose = 'windup';
-    await tween(a, { ox: (a.ox || 0) - dir * 6, tilt: -0.1 * dir, sq: 0.08 }, 110);
-    a.pose = 'strike';
-    const p = chest(U);
-    trail(a, dir, 3);
-    fx('dash', p.x, p.y + 4, 200, { dir });
-    await tween(a, { ox: (a.ox || 0) + dir * 22, tilt: 0.1 * dir, sq: -0.04 }, 60, easeIn);
-    a.ghosts = null;
-    fx('pierce', 0, 0, 260, { x0: p.x + dir * 6, y0: p.y, x1: c.x + dir * 12, y1: c.y, col: DIE.pierce.col });
-    SFX.play('pierce');
-    dust(U, 4, dir);
-  } else {
-    // slash: small hop and raise, fast diagonal swing, follow-through
-    a.pose = 'windup';
-    await tween(a, { ox: (a.ox || 0) - dir * 4, oy: -3, tilt: -0.14 * dir }, 100);
-    a.pose = 'strike';
-    trail(a, dir);
-    await tween(a, { ox: (a.ox || 0) + dir * 14, oy: 0, tilt: 0.12 * dir }, 60, easeIn);
-    a.ghosts = null;
-    fx('slash', c.x, c.y, 280, { dir, col: DIE[type] ? DIE[type].col : '#ffffff', r });
-    SFX.play('slash');
-    a.pose = 'follow';
-  }
-}
+// The attacker's move for one coin, ending at the moment of impact (moves.js).
+async function strikeAnim(U, T, type, gun, dry) { return skillAnim(U, T, type, gun, dry); }
 
 // Return to the neutral stance after a move
-function settle(u) {
-  const a = actorOf(u);
-  if (!a) return Promise.resolve();
-  a.atk = false;
-  a.pose = null;
-  a.ghosts = null;
-  return tween(a, { ox: 0, oy: 0, tilt: 0, sq: 0 }, 240, easeOutBack);
-}
+function settle(u, chain) { return settleMove(u, chain); }
 
 async function recoilAnim(T, from, dmg = 0) {
   const a = actorOf(T);
   if (!a) return;
   const dir = -dirTo(T, from), heavy = dmg >= 8;
-  a.pose = 'hurt';
+  a.poseMs = 20;
+  a.pose = T.kind ? null : 'hurt';
   a.flashUntil = performance.now() + 90;
   await tween(a, { ox: dir * (heavy ? 12 : 7), oy: heavy ? -4 : -1, tilt: -(heavy ? 0.24 : 0.14) * dir, sq: -0.06 }, 70);
   await tween(a, { oy: 0, sq: 0.08 }, 80, easeIn);
-  if (heavy) dust(T, 5, -dir);
+  if (heavy) { dust(T, 5, -dir); if (!T.kind) { a.pose = 'land'; await wait(60); } }
+  a.poseMs = null;
   a.pose = null;
   await tween(a, { ox: 0, tilt: 0, sq: 0 }, 320, easeOutBack);
 }
@@ -873,18 +797,26 @@ async function guardAnim(u, from) {
 
 async function clashCollide(A, E) {
   const a = actorOf(A), e = actorOf(E);
-  if (a) a.pose = 'strike';
+  for (const [x, u] of [[a, A], [e, E]]) if (x) { x.poseMs = 20; x.pose = u.kind ? null : 'cock'; x.atk = true; }
+  await Promise.all([tween(a, { ox: -3, tilt: -0.08 }, 50), tween(e, { ox: 3, tilt: 0.08 }, 50)]);
+  for (const [x, u] of [[a, A], [e, E]]) if (x) { x.pose = u.kind ? (u.kind === 'cableskel' ? 'punch' : null) : 'cross'; }
+  trail(a, 1, 2); trail(e, -1, 2);
+  await Promise.all([tween(a, { ox: 9, tilt: 0.12 }, 45, easeIn), tween(e, { ox: -9, tilt: -0.12 }, 45, easeIn)]);
   const pa = chest(A), pe = chest(E);
-  await Promise.all([tween(a, { ox: 7, tilt: 0.08 }, 70, easeIn), tween(e, { ox: -7, tilt: -0.08 }, 70, easeIn)]);
   const mx = (pa.x + pe.x) / 2, my = Math.min(pa.y, pe.y) - 2;
   fx('clash', mx, my, 380);
-  particles(mx, my, 14, ['#ffd060', '#ffffff', '#ffb040'], 2);
+  fx('star', mx, my, 260, { r: 12, col: '#ffd060', rot: Math.random() * TAU, n: 10 });
+  fx('ring2', mx, my, 300, { r: 22, col: '#ffe8b0' });
+  sparks(mx, my, 8, ['#ffd060', '#ffffff', '#ffb040'], 1, 3);
+  sparks(mx, my, 8, ['#ffd060', '#ffffff', '#ffb040'], -1, 3);
   SFX.play('clash');
-  shake(120);
-  G.flash = { color: '#ffffff', start: performance.now(), ms: 70 };
-  await wait(90); // hit-stop
-  await Promise.all([tween(a, { ox: -5, tilt: -0.06 }, 120), tween(e, { ox: 5, tilt: 0.06 }, 120)]);
+  shake(150);
+  G.flash = { color: '#ffffff', start: performance.now(), ms: 60, a: 0.4 };
+  await wait(110); // hit-stop
+  a && (a.ghosts = null); e && (e.ghosts = null);
+  await Promise.all([tween(a, { ox: -6, tilt: -0.06 }, 130, easeOutBack), tween(e, { ox: 6, tilt: 0.06 }, 130, easeOutBack)]);
   dust(A, 3, 1); dust(E, 3, -1);
+  for (const x of [a, e]) if (x) { x.atk = false; x.pose = null; }
 }
 
 // A defeated unit topples over and fades out.
@@ -914,7 +846,7 @@ function dealDamage(u, hpD) {
   if (stD) spawnAnim('text', p.x + 12, p.y + 10, `-${stD}`, '#ffd060', 900);
   particles(c.x, c.y, Math.min(14, 4 + hpD), u.team === 'ally' ? ['#ff4a5a', '#ffffff'] : ['#ff6a3a', '#ffd060', '#ffffff'], 1.8);
   u._hurt = performance.now() + 300;
-  G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 120 };
+  G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 110, a: u.team === 'ally' ? 0.45 : 0.25 };
   if (u.hp <= 0) {
     spawnAnim('text', p.x, p.y - 10, 'K.O.', '#ff4a5a', 1400, { big: true });
     SFX.play('ko');
@@ -934,7 +866,7 @@ function dealDamage(u, hpD) {
 }
 
 // A hit is soaked by the target's shield first; what is left reaches HP.
-async function applyHit(T, dmg, stats, from, type, gun, dry) {
+async function applyHit(T, dmg, stats, from, type, gun, dry, chain) {
   if (!alive(T)) return;
   await strikeAnim(from, T, type, gun, dry);
   const p = headPos(T);
@@ -953,8 +885,10 @@ async function applyHit(T, dmg, stats, from, type, gun, dry) {
   }
   if (!dealt && soaked) { spawnAnim('text', p.x, p.y - 4, 'BLOQUEADO', '#9ac0ff', 800); bark(T, 'block', 0.5); }
   if (stats) stats[from.team] += dealt;
-  await wait(70);
-  await Promise.all([settle(from), dealt && alive(T) ? recoilAnim(T, from, dealt) : Promise.resolve()]);
+  await wait(40);
+  // the target keeps reeling while the attacker already moves on
+  if (dealt && alive(T)) recoilAnim(T, from, dealt);
+  await settle(from, chain && alive(T));
 }
 
 function addShield(u, v, from) {
@@ -1002,11 +936,11 @@ async function doClash(ad, ed) {
   CB.view = { left: sa, right: se };
   if (ad.page.ego) await egoFlair(A, ad.page.ego);
   await Promise.all([dashTo(A, 150, 300), dashTo(E, 182, 300),
-    camTo({ z: 1.25, x: 166, y: camY(A, E) }, 340)]);
+    camTo({ z: 1.55, x: 166, y: camY(A, E) }, 340)]);
   spawnAnim('text', 166, 44, '¡CHOQUE!', '#ffd060', 800, { big: true });
   bark(A, 'attack', 0.6);
   bark(E, 'attack', 0.4);
-  await wait(250);
+  await wait(160);
 
   const qa = ad.page.dice, qe = ed.page.dice;
   while (sa.i < qa.length && se.i < qe.length && canAct(A) && canAct(E)) {
@@ -1014,7 +948,7 @@ async function doClash(ad, ed) {
     sa.roll = rnd(a1, a2); se.roll = rnd(e1, e2);
     fire(sa, qa[sa.i]); fire(se, qe[se.i]);
     rollFx(A, ta, sa.roll); rollFx(E, te, se.roll);
-    await wait(380);
+    await wait(230);
     const f = pairEffects(ta, sa.roll, te, se.roll);
     // both pages meet in the middle unless one side is only defending
     if (kindOf(ta) !== 'evade' && kindOf(te) !== 'evade' && (DIE[ta].off || DIE[te].off)) await clashCollide(A, E);
@@ -1026,19 +960,20 @@ async function doClash(ad, ed) {
       spawnAnim('text', (pa.x + pb.x) / 2, Math.min(pa.y, pb.y) - 12, 'EMPATE', '#a39c90', 700);
       SFX.play('tie');
     }
-    if (f.evade === 'a') await evadeFx(A, sa.roll, E);
-    if (f.evade === 'b') await evadeFx(E, se.roll, A);
+    if (f.evade === 'a') { E._move = { page: se.page, i: se.i }; await evadeFx(A, sa.roll, E); }
+    if (f.evade === 'b') { A._move = { page: sa.page, i: sa.i }; await evadeFx(E, se.roll, A); }
     for (const h of f.hits) {
       const [T, from, die, sd, raw] = h.to === 'a' ? [A, E, te, se, qe[se.i]] : [E, A, ta, sa, qa[sa.i]];
       if (kindOf(die) === 'counter') spawnAnim('text', headPos(from).x, headPos(from).y - 22, 'CONTRAATAQUE', DIE.counter.col, 900);
       const gun = raw && isGun(raw) && kindOf(die) === 'off';
+      from._move = { page: sd.page, i: sd.i };
       await applyHit(T, gun && sd.dry ? 0 : h.dmg, stats, from, die, gun, gun && sd.dry);
     }
     const aa = actorOf(A), ae = actorOf(E);
     if (aa) aa.pose = null;
     if (ae) ae.pose = null;
     await Promise.all([settle(A), settle(E)]);
-    await wait(250);
+    await wait(110);
     if (!f.stayA) sa.i++;
     if (!f.stayB) se.i++;
     sa.roll = null; se.roll = null;
@@ -1067,9 +1002,9 @@ async function doOneSided(d, T) {
   CB.view = d.unit.team === 'ally' ? { left: s, right: def } : { left: def, right: s };
   if (d.page.ego) await egoFlair(d.unit, d.page.ego);
   const tx = T.team === 'ally' ? T.bx + (d.unit.kind ? 30 : 20) : T.bx - (T.kind ? 30 : 20);
-  await Promise.all([dashTo(d.unit, tx, 300), camTo({ z: 1.18, x: (tx + T.bx) / 2, y: camY(d.unit, T) }, 340)]);
+  await Promise.all([dashTo(d.unit, tx, 300), camTo({ z: 1.5, x: (tx + T.bx) / 2, y: camY(d.unit, T) }, 340)]);
   bark(d.unit, 'attack', 0.5);
-  await wait(150);
+  await wait(70);
   await leftovers(s, T, null);
   await Promise.all([dashTo(d.unit, d.unit.bx, 280, true), camTo(CAM_HOME, 320)]);
   egoDone(d.unit);
@@ -1086,8 +1021,10 @@ async function egoFlair(U, w) {
   a.pose = 'hold';
   SFX.play(w.risk === 'ALEPH' ? 'aleph' : 'rare');
   await camTo({ z: 1.45, x: a.x + 30, y: p.y + 16 }, 260);
-  G.flash = { color: col, start: performance.now(), ms: 320 };
+  G.flash = { color: col, start: performance.now(), ms: 320, a: 0.6 };
   fx('egoBanner', 160, 52, 1300, { name: w.name, risk: w.risk, col });
+  fx('focus', 160, 0, 1200, { col, cy: 52 });
+  if (RISK_ORDER.indexOf(w.risk) >= 2 && CFG.impactFrames) fx('invert', 160, 0, 90, { col });
   particles(chest(U).x, chest(U).y, 18, [col, '#ffffff'], 1.6, -0.02, 30);
   if (RISK_ORDER.indexOf(w.risk) >= 3) shake(350);
   bark(U, 'attack');
@@ -1108,10 +1045,12 @@ async function leftovers(s, T, stats) {
       s.roll = rnd(a, b);
       fire(s, s.page.dice[s.i]);
       rollFx(U, ty, s.roll);
-      await wait(300);
+      await wait(150);
       const gun = isGun(s.page.dice[s.i]);
-      await applyHit(T, s.dry ? 0 : s.roll, stats, U, ty, gun, s.dry);
-      await wait(200);
+      U._move = { page: s.page, i: s.i };
+      const more = s.page.dice.slice(s.i + 1).some(([t]) => DIE[t].off);
+      await applyHit(T, s.dry ? 0 : s.roll, stats, U, ty, gun, s.dry, more);
+      if (!more) await wait(60);
     }
     s.roll = null;
     s.i++;

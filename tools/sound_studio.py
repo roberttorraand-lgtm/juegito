@@ -461,6 +461,12 @@ def sfx_aleph():
     return norm(reverb(mix((0, boom), (0.05, choir * 0.5), (0, bells * 0.6)), 2.4, 0.4), 0.9)
 
 
+def sfx_whoosh():
+    d = 0.22
+    w = swept(noise(d), 'band', 500, 2600, 2.5) * adsr(d, 0.06, 0.05, 0.7, 0.12)
+    return norm(w, 0.55)
+
+
 SFX = {
     'clash': sfx_clash, 'slash': sfx_slash, 'pierce': sfx_pierce, 'blunt': sfx_blunt, 'block': sfx_block,
     'shield': sfx_shield, 'evade': sfx_evade, 'counter': sfx_counter, 'dice': sfx_dice, 'tie': sfx_tie,
@@ -471,7 +477,7 @@ SFX = {
     'emote_vein': emote_vein, 'emote_sweat': emote_sweat, 'emote_gloom': emote_gloom, 'emote_sparkle': emote_sparkle,
     'emote_question': emote_question, 'emote_dots': emote_dots, 'emote_shock': emote_shock,
     'gunshot': sfx_gunshot, 'gun_click': sfx_gun_click, 'spark': sfx_spark, 'scrape': sfx_scrape,
-    'coins': sfx_coins, 'rare': sfx_rare, 'aleph': sfx_aleph,
+    'whoosh': sfx_whoosh, 'coins': sfx_coins, 'rare': sfx_rare, 'aleph': sfx_aleph,
     'door': sfx_door, 'drip': sfx_drip, 'punch': sfx_punch, 'locker': sfx_locker, 'item': sfx_item,
     'blip_lobelto': lambda: blip('square', 150, 0.05, 0.5, 0.3 * osc('square', 300, 0.05, 0.25) * env_ad(0.05, 0.001, 4)),
     'blip_gonza': lambda: blip('square', 247, 0.042, 0.25),

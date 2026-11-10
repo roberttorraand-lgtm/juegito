@@ -215,6 +215,7 @@ function showSettings(tab = 'audio', quiet = false) {
         ${toggle('grade', 'Corrección de color', 'Más contraste y saturación, estilo cine')}
         ${toggle('grain', 'Grano de película')}
         ${toggle('scanlines', 'Líneas de escaneo (CRT)', 'Efecto retro de monitor antiguo')}
+        ${toggle('impactFrames', 'Fotogramas de impacto', 'En los golpes más fuertes la imagen se invierte un instante, como en Limbus. Desactívalo si te molestan los destellos.')}
         ${toggle('fps', 'Mostrar FPS', 'Contador de imágenes por segundo en la esquina')}
         <div class="st-group">
           <div class="st-label">Pantalla completa</div>

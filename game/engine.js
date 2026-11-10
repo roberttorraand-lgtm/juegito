@@ -95,10 +95,39 @@ const FIG_POSES = {
   kick:   { front: [-6, 2], back: [5, 4], legs: [[-4, 0], [11, -7]] },
   peek:   { front: [6, -2], back: [-5, 7], legs: [[-3, 0], [6, 0]] },
   slump:  { front: [3, 13], back: [-2, 13], legs: [[-6, 0], [3, 0]] },
+  // ---- combat keyframes (Limbus-style snapped poses). lean: upper body
+  // forward (+) or back (-) in px; crouch: how far the body drops.
+  coil:      { front: [-9, 3], back: [-7, 6], legs: [[-8, 0], [6, 0]], lean: -3, crouch: 3 },
+  cock:      { front: [-6, -9], back: [-8, 2], legs: [[-6, 0], [5, 0]], lean: -2 },
+  jab:       { front: [13, -2], back: [2, 4], legs: [[-6, 0], [7, 0]], lean: 2 },
+  cross:     { front: [14, 0], back: [-8, 4], legs: [[-9, 0], [8, 0]], lean: 5, crouch: 1 },
+  hook:      { front: [9, -6], back: [-6, 6], legs: [[-7, 0], [6, 0]], lean: 3 },
+  uppercut:  { front: [8, -14], back: [-6, 5], legs: [[-4, 0], [6, -2]], lean: 2 },
+  overhead:  { front: [0, -15], back: [-3, -14], legs: [[-5, 0], [5, 0]], lean: -3 },
+  smash:     { front: [11, 11], back: [9, 11], legs: [[-9, 0], [9, 0]], lean: 6, crouch: 6 },
+  slashUp:   { front: [9, -13], back: [-7, 4], legs: [[-7, 0], [7, 0]], lean: 2 },
+  slashDown: { front: [10, 11], back: [-7, 2], legs: [[-9, 0], [9, 0]], lean: 5, crouch: 4 },
+  sweep:     { front: [14, 2], back: [-9, 0], legs: [[-9, 0], [9, 0]], lean: 3, crouch: 2 },
+  spin:      { front: [-13, 0], back: [11, 0], legs: [[-5, 0], [5, 0]], lean: 0 },
+  lunge:     { front: [15, 0], back: [-10, -2], legs: [[-12, 0], [10, 0]], lean: 7, crouch: 4 },
+  air:       { front: [5, -9], back: [-7, -6], legs: [[-3, -5], [6, -3]] },
+  land:      { front: [8, 6], back: [-7, 6], legs: [[-9, 0], [9, 0]], lean: 2, crouch: 6 },
+  butWind:   { front: [-6, 7], back: [-8, 5], legs: [[-5, 0], [7, 0]], lean: -5 },
+  butt:      { front: [-7, 7], back: [-9, 4], legs: [[-10, 0], [6, 0]], lean: 8, crouch: 2 },
+  knee:      { front: [4, 2], back: [-7, 4], legs: [[-4, 0], [4, -8]], lean: -2 },
+  sidekick:  { front: [-6, 0], back: [6, 3], legs: [[-5, 0], [14, -9]], lean: -5 },
+  roundhouse:{ front: [-7, -3], back: [6, 0], legs: [[-3, 0], [12, -15]], lean: -6 },
+  hipfire:   { front: [12, 4], back: [-4, 8], legs: [[-6, 0], [6, 0]], lean: 1 },
+  kickback:  { front: [9, -7], back: [-5, 7], legs: [[-7, 0], [5, 0]], lean: -3 },
+  parry:     { front: [8, -8], back: [5, -2], legs: [[-7, 0], [5, 0]], lean: -2, crouch: 2 },
+  flail:     { front: [-11, -10], back: [9, 6], legs: [[-6, 0], [7, 0]], lean: 1 },
+  flail2:    { front: [12, -9], back: [-9, 7], legs: [[-7, 0], [6, 0]], lean: 2 },
 };
 // arms hanging, feet together: what "no pose" looks like, so poses can blend from it
 const FIG_NEUTRAL = { front: [6, 9], back: [-6, 9], legs: [[-4, 0], [4, 0]] };
 const lerpPose = (A, B, k) => ({
+  lean: (A.lean || 0) + ((B.lean || 0) - (A.lean || 0)) * k,
+  crouch: (A.crouch || 0) + ((B.crouch || 0) - (A.crouch || 0)) * k,
   front: [A.front[0] + (B.front[0] - A.front[0]) * k, A.front[1] + (B.front[1] - A.front[1]) * k],
   back: [A.back[0] + (B.back[0] - A.back[0]) * k, A.back[1] + (B.back[1] - A.back[1]) * k],
   legs: A.legs.map((l, i) => [l[0] + (B.legs[i][0] - l[0]) * k, l[1] + (B.legs[i][1] - l[1]) * k]),
@@ -141,18 +170,20 @@ function figure(x, y, o, t) {
   if (o.shake) x += Math.round(Math.sin(t / 25) * 1.2);
   y += bob;
   const nod = o.nod ? Math.round(Math.abs(Math.sin(t / 70)) * 2) : 0;
-  const hx = x, hy = y - 27 + nod;
-  const sh = y - 20, hip = y - 10;
+  // a blended pose (combat) wins over a named one; both are facing-relative
+  const P = o.poseData || FIG_POSES[o.pose];
+  const lean = P ? Math.round(P.lean || 0) : 0, cr = P ? Math.round(P.crouch || 0) : 0;
+  const hx = x + lean * f, hy = y - 27 + nod + cr;
+  const sx = x + Math.round(lean * 0.8) * f;              // shoulder
+  const sh = y - 20 + cr, hip = y - 10 + Math.round(cr * 0.7);
   let legs = o.lifted
     ? [[x - 2, y + 1], [x + 3, y + 2]]
     : o.sitting ? [[x - 8, y], [x + 8, y]] : [[x - 4, y], [x + 4, y]];
   let armL = o.lifted ? [x - 7, sh - 6] : [x - 6, y - 11];
-  let armR = o.armless ? [x + 3, sh + 4] : o.lifted ? [x + 7, sh - 6] : [x + 6, y - 11];
-  // a blended pose (combat) wins over a named one; both are facing-relative
-  const P = o.poseData || FIG_POSES[o.pose];
+  let armR = o.armless ? [sx + 3, sh + 4] : o.lifted ? [x + 7, sh - 6] : [x + 6, y - 11];
   if (P) {
     const fx = (dx) => x + dx * f;
-    const front = [fx(P.front[0]), sh + P.front[1]], back = [fx(P.back[0]), sh + P.back[1]];
+    const front = [sx + P.front[0] * f, sh + P.front[1]], back = [sx + P.back[0] * f, sh + P.back[1]];
     // the arm on the facing side leads; with one arm missing, the other one does the move
     if (o.armless) armL = front;
     else if (f > 0) { armR = front; armL = back; } else { armL = front; armR = back; }
@@ -167,9 +198,9 @@ function figure(x, y, o, t) {
   for (const [col, extra] of o.flash ? [['#ffffff', 1], ['#ffd0d0', 0]] : [[FIG.edge, 1], [FIG.body, 0]]) {
     const th = 2 + extra * 2;
     disc(hx, hy, 5 + extra, col);
-    line(x, hy + 4, x, hip, col, th);
-    line(x, sh, armL[0], armL[1], col, th);
-    line(x, sh, armR[0], armR[1], col, th);
+    line(hx, hy + 4, x, hip, col, th);
+    line(sx, sh, armL[0], armL[1], col, th);
+    line(sx, sh, armR[0], armR[1], col, th);
     for (const l of legs) line(x, hip, l[0], l[1], col, th);
   }
   // mirrored helpers: dx is measured toward the facing direction
