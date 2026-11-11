@@ -32,6 +32,10 @@ const note = (m) => { issues.push(m); console.log('ISSUE:', m); };
   const sweep = async () => { for (let i = 0; i < 30; i++) { const [x, y] = await toPx(-10 + (i * 37) % 340, 8 + (i * 53) % 170); await p.mouse.move(x, y); await W(15); } };
   await ev(() => localStorage.clear());
   await p.reload(); await W(900);
+  // title screen: any key / tap goes to the hub
+  if (!(await ev(() => G.mode === 'title'))) note('game did not start on the title screen');
+  await p.keyboard.press('Enter'); await W(700);
+  if (!(await ev(() => G.mode === 'hub'))) note('title screen did not lead to the hub');
 
   // ---------- hub + nav + keyboard ----------
   await tap(160, 170); // first interaction
@@ -62,6 +66,7 @@ const note = (m) => { issues.push(m); console.log('ISSUE:', m); };
   }
   const cfg1 = await ev(() => JSON.stringify(CFG));
   await p.reload(); await W(900);
+  await p.keyboard.press('Enter'); await W(700);
   const cfg2 = await ev(() => JSON.stringify(CFG));
   if (cfg1 !== cfg2) note('settings not persisted after reload: ' + cfg1 + ' vs ' + cfg2);
   // presets + display modes
