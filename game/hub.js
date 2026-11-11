@@ -164,7 +164,7 @@ function showSettings(tab = 'audio', quiet = false) {
       ${tabBtn('video', 'Video')}
       ${tabBtn('datos', 'Datos')}
       <button class="st-back" data-hub="back">← Volver</button>
-      <div class="st-version">v0.2 — Episodios I y II</div>
+      <div class="st-version">v0.3 — Episodios I y II</div>
     </div>
     <div class="st-main">
       <div ${panel('audio')}>
@@ -233,6 +233,16 @@ function showSettings(tab = 'audio', quiet = false) {
         </div>
       </div>
       <div ${panel('datos')}>
+        <div class="st-group">
+          <div class="st-label">Copiar partida a otro dispositivo</div>
+          <div class="st-hint">Exporta tu progreso como un código y pégalo en el móvil, el PC o el navegador para continuar allí.</div>
+          <textarea class="st-code" spellcheck="false" placeholder="Pega aquí un código de partida…"></textarea>
+          <div class="st-chips">
+            <button class="st-chip" data-act="export">Exportar</button>
+            <button class="st-chip" data-act="import">Importar</button>
+          </div>
+          <div class="st-hint st-code-msg"></div>
+        </div>
         <div class="st-group">
           <div class="st-label">Borrar datos guardados</div>
           <div class="st-hint">Elimina todo el progreso y ajustes. Esta acción no se puede deshacer.</div>
@@ -345,6 +355,37 @@ function bindSettingsEvents() {
     if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
     else document.exitFullscreen();
   });
+
+  // save code: the whole save as base64 JSON, tagged so a wrong paste is caught
+  const codeEl = ui.settings.querySelector('.st-code'), msg = ui.settings.querySelector('.st-code-msg');
+  const say = (m, ok) => { if (msg) { msg.textContent = m; msg.style.color = ok ? '#3fbf6a' : '#ff6a78'; } };
+  const exp = ui.settings.querySelector('[data-act="export"]');
+  if (exp) exp.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const code = 'DE1:' + btoa(unescape(encodeURIComponent(JSON.stringify(SAVE._data))));
+    codeEl.value = code; codeEl.select();
+    const done = () => say('Código copiado. Pégalo en el otro dispositivo (Ajustes → Datos → Importar).', true);
+    if (navigator.clipboard) navigator.clipboard.writeText(code).then(done, () => say('Selecciona el código y cópialo.', true)); else say('Selecciona el código y cópialo.', true);
+    SFX.play('confirm');
+  });
+  const imp = ui.settings.querySelector('[data-act="import"]');
+  if (imp) imp.addEventListener('click', (e) => {
+    e.stopPropagation();
+    try {
+      const raw = codeEl.value.trim();
+      if (!raw.startsWith('DE1:')) throw new Error('bad');
+      const data = JSON.parse(decodeURIComponent(escape(atob(raw.slice(4)))));
+      if (!data || typeof data !== 'object') throw new Error('bad');
+      localStorage.setItem(SAVE._key, JSON.stringify(data));
+      SAVE.load();
+      for (const k in CFG_DEFAULTS) CFG[k] = SAVE.get('cfg_' + k, CFG_DEFAULTS[k]);
+      resizeCanvas(); applyTextSize();
+      say('Partida cargada.', true);
+      SFX.play('confirm');
+    } catch (err) { say('Ese código no es válido.', false); SFX.play('error'); }
+  });
+  if (codeEl) codeEl.addEventListener('click', (e) => e.stopPropagation());
+  if (codeEl) codeEl.addEventListener('keydown', (e) => e.stopPropagation());
 
   const clearBtn = ui.settings.querySelector('[data-act="cleardata"]');
   if (clearBtn) {
@@ -618,7 +659,7 @@ function drawVentana(t) {
   disc(16, 110, 3, light2);
   ctx.font = '7px VT323, monospace';
   ctx.fillStyle = '#4a3018'; ctx.fillText('DIST.EXT', 12, 125);
-  ctx.fillText('v0.2', 22, 133);
+  ctx.fillText('v0.3', 22, 133);
   ctx.fillText('EP.I-II', 18, 141);
 
   for (let i = 0; i < 8; i++) {

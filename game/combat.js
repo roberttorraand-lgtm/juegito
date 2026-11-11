@@ -1750,6 +1750,34 @@ function topBar() {
   rect(3, 3, 46, 11, '#0a080e');
   rect(3, 3, 46, 1, '#8a6030');
   txt(`TURNO ${CB.turn}`, 26, 12, '#e8c060', 9, 'center');
+  if (CB.phase !== 'select') return;
+  // rules and keys at a glance
+  const x = W + OX - 16, hv = hitArea(x, 3, 13, 11, () => { CB.help = !CB.help; SFX.play('select'); });
+  rect(x, 3, 13, 11, hv || CB.help ? '#3a1820' : '#0a080e'); rect(x, 3, 13, 1, '#8a6030');
+  txt('?', x + 6.5, 12, '#ffd060', 9, 'center');
+}
+
+const HELP = [
+  ['FICHAS', 'Cada hexágono es un dado de velocidad: el más rápido actúa antes.'],
+  ['PÁGINAS', 'Pon una página en una ficha; cuesta Luz (puntos amarillos). Mano: 4 máx.'],
+  ['CHOQUE', 'Si tu ficha apunta a una ficha enemiga con página, chocan dado a dado: gana el más alto. El % es tu probabilidad de ganar.'],
+  ['DADOS', 'Corte, perforación y contundente atacan. Bloqueo da escudo, esquiva anula si iguala o supera, contraataque devuelve el golpe.'],
+  ['ATURDIR', 'Los golpes bajan la barra amarilla; a 0 el objetivo no actúa y recibe el doble.'],
+  ['E.G.O', 'Una vez por combate. Choca sin daño: si gana, su animación hace todo el daño.'],
+  ['TECLAS', '1-4 páginas · Tab siguiente ficha · Q defensa · E E.G.O · A auto · Espacio iniciar'],
+];
+function drawHelp(t) {
+  ctx.globalAlpha = 0.85; rect(-OX, 0, VW, H, '#05040a'); ctx.globalAlpha = 1;
+  const x = 30, y = 14, w = 260, h = 152;
+  rrect(x, y, w, h, '#100c14', 3); rect(x, y, w, 1, '#ffd060');
+  txt('CÓMO SE JUEGA', x + w / 2, y + 11, '#ffd060', 10, 'center');
+  let yy = y + 22;
+  for (const [k, v] of HELP) {
+    txt(k, x + 6, yy, '#ff8a5a', 8);
+    wrap(v, w - 58, 7).forEach((ln, i) => txt(ln, x + 52, yy + i * 7, '#d8d0c0', 7));
+    yy += Math.max(1, wrap(v, w - 58, 7).length) * 7 + 5;
+  }
+  txt(IS_TOUCH ? 'Toca para cerrar' : 'Clic o ? para cerrar', x + w / 2, y + h - 4, '#8a8070', 7, 'center');
 }
 
 function tooltip() {
@@ -1813,6 +1841,7 @@ function drawCombatHUD(t) {
   if (CB.phase === 'select') selectPanel(t); else clashPanel();
   tooltip();
   drawTutorial(t);
+  if (CB.help && CB.phase === 'select') drawHelp(t);
   cv.style.cursor = CB.hits.some(h => h.hot) ? 'pointer' : 'default';
 }
 
@@ -1820,6 +1849,8 @@ function drawCombatHUD(t) {
 //  Keyboard: 1-4 pages, Tab next speed die, Q defense, E E.G.O, A auto
 // ---------------------------------------------------------------------
 function combatKey(e) {
+  if (e.key === '?' || e.key === 'F1') { e.preventDefault(); CB.help = !CB.help; SFX.play('select'); return; }
+  if (CB.help) { if (e.key === 'Escape') CB.help = false; return; }
   if (CB.phase !== 'select' || tutBlocking()) return;
   const d = CB.sel, u = d && d.unit;
   if (/^[1-8]$/.test(e.key) && u) { const c = u.hand[+e.key - 1]; if (c) toggleCard(c); }
@@ -1946,6 +1977,7 @@ cv.addEventListener('click', (e) => {
   if (G.mode !== 'combat' || !CB.active || CB.phase !== 'select') return;
   const p = canvasToLogical(e.clientX, e.clientY);
   CB.mouse = p;
+  if (CB.help) { CB.help = false; SFX.play('select'); return; }
   if (tutBlocking()) { advanceTut(); return; }
   for (let i = CB.hits.length - 1; i >= 0; i--) {
     const r = CB.hits[i];

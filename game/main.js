@@ -412,6 +412,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (G.mode === 'combat') {
+    if (CB.help) { combatKey(e); return; }
     if (e.key === 'Escape' && !CB.animating) endCombat();
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (tutBlocking()) advanceTut(); else combatExecute(); }
     combatKey(e);

@@ -325,3 +325,6 @@ body.big-text #name { font-size: 3cqw; }
 .cb-result-grid b { display: block; font-size: 2.4cqw; color: #e8e4dc; font-weight: normal; }
 .cb-rank { position: absolute; top: 1.5cqw; right: 2.5cqw; font-size: 7cqw; transform: rotate(-8deg); text-shadow: 0 0 2cqw currentColor; animation: rankin .5s cubic-bezier(.2,1.6,.4,1); }
 @keyframes rankin { from { transform: scale(3) rotate(-20deg); opacity: 0; } to { transform: scale(1) rotate(-8deg); opacity: 1; } }
+
+.st-code { width: 100%; height: 6cqw; margin: .6cqw 0; font: inherit; font-size: 1.4cqw; color: #c8c0b0;
+  background: #0a0810; border: .2cqw solid #3a2418; resize: none; padding: .4cqw; box-sizing: border-box; }
