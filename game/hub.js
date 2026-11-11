@@ -28,7 +28,7 @@ function showHub() {
   const un = SAVE.get('pending_unlock');
   if (un) {
     SAVE.save({ pending_unlock: null });
-    G.notice = { text: `¡Desbloqueado: ${un === 'gacha' ? 'Gacha (extracción E.G.O)' : 'Taller'}!`, start: performance.now() };
+    G.notice = { text: `¡Desbloqueado: ${un === 'gacha' ? 'Gacha (extracción E.G.O)' : 'Workshop'}!`, start: performance.now() };
   }
 }
 
@@ -238,7 +238,7 @@ function showSettings(tab = 'audio', quiet = false) {
         </div>
       </div>
       <div ${panel('datos')}>
-        ${toggle('devUnlock', 'Modo pruebas', 'Desbloquea el Gacha y el Taller antes de llegar a ellos en la historia')}
+        ${toggle('devUnlock', 'Modo pruebas', 'Desbloquea el Gacha y el Workshop antes de llegar a ellos en la historia')}
         <div class="st-group">
           <div class="st-label">Copiar partida a otro dispositivo</div>
           <div class="st-hint">Exporta tu progreso como un código y pégalo en el móvil, el PC o el navegador para continuar allí.</div>
@@ -465,7 +465,7 @@ const HUB_NAV = [
   { id: 'pecadores', label: 'Mejoras', icon: '▲', enabled: true },
   { id: 'mapa', label: 'Mapa', icon: '◈', enabled: true },
   { id: 'mercado', label: 'Gacha', icon: '✦', enabled: true, lock: 'gacha' },
-  { id: 'taller', label: 'Taller', icon: '⚒', enabled: true, lock: 'taller' },
+  { id: 'taller', label: 'Workshop', icon: '⚒', enabled: true, lock: 'taller' },
   { id: 'ajustes', label: 'Ajustes', icon: '⚙', enabled: true },
 ];
 const NAV_Y = 160, NAV_H = 20;

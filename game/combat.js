@@ -941,6 +941,8 @@ async function evadeFx(u, roll, from) {
 
 function rollFx(u, type, r) {
   const p = headPos(u);
+  // a coin tossed up, spinning, before the roll shows
+  if (!CB.instant) fx('coinToss', p.x, p.y - 10, 420, { col: DIE[type].col });
   spawnAnim('text', p.x, p.y - 14, String(r), DIE[type].col, 800, { big: true });
   SFX.play('dice', { roll: r });
 }
@@ -968,6 +970,7 @@ async function doClash(ad, ed) {
   await Promise.all([dashTo(A, 150, 300), dashTo(E, 182, 300),
     camTo({ z: 1.55, x: 166, y: camY(A, E) }, 340)]);
   spawnAnim('text', 166, 44, '¡CHOQUE!', '#ffd060', 800, { big: true });
+  skillBanner(A, ad.page, 0); skillBanner(E, ed.page, 1);
   bark(A, 'attack', 0.6);
   bark(E, 'attack', 0.4);
   await wait(160);
@@ -1074,6 +1077,7 @@ async function doOneSided(d, T) {
   const def = { unit: T, page: null, i: 0, roll: null };
   CB.view = d.unit.team === 'ally' ? { left: s, right: def } : { left: def, right: s };
   if (d.page.ego) await egoFlair(d.unit, d.page.ego);
+  skillBanner(d.unit, d.page, 0);
   const tx = T.team === 'ally' ? T.bx + (d.unit.kind ? 30 : 20) : T.bx - (T.kind ? 30 : 20);
   await Promise.all([dashTo(d.unit, tx, 300), camTo({ z: 1.5, x: (tx + T.bx) / 2, y: camY(d.unit, T) }, 340)]);
   bark(d.unit, 'attack', 0.5);

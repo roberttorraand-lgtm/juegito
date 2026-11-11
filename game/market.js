@@ -15,7 +15,7 @@
 const unlocked = (k) => !!(SAVE.get('unlock_' + k) || CFG.devUnlock);
 const LOCK_TEXT = {
   gacha: 'Bloqueado: se desbloquea al usar la máquina E.G.O en la historia',
-  taller: 'Bloqueado: el taller se desbloquea al avanzar en la historia',
+  taller: 'Bloqueado: el Workshop se desbloquea al avanzar en la historia',
 };
 
 // Risk levels double as gacha rarities.
@@ -493,26 +493,30 @@ function drawRaidPanel(t) {
 }
 
 // ---------------------------------------------------------------------
-//  Workshop (taller): where the Ahn from selling E.G.O weapons will be
-//  spent. Unlocked by the story; its contents come later.
+//  Workshop: unlocked by the story. What it will hold (designed later):
+//  selling E.G.O weapons for Ahn, buying and upgrading equipment with Ahn,
+//  and special bullets with effects for Gonza.
 // ---------------------------------------------------------------------
+const WORKSHOP_PLAN = [
+  ['VENDER ARMAS E.G.O', 'Cambia las armas E.G.O que no uses por Ahn.'],
+  ['EQUIPAMIENTO', 'Compra equipamiento para las ranuras de Mejoras.'],
+  ['MEJORAR', 'Sube de nivel el equipamiento que ya tienes.'],
+  ['BALAS ESPECIALES', 'Munición con efectos para la pistola de Gonza.'],
+];
 function drawTaller(t) {
   G.hubHits = [];
   drawWide(() => drawHubBackdrop(t), 'hub');
   ctx.globalAlpha = 0.88; rect(-OX, 0, VW, NAV_Y, '#07050c'); ctx.globalAlpha = 1;
   metalFrame(4, 4, W - 8, NAV_Y - 8);
-  rect(8, 10, W - 16, 140, '#0e0c14'); rect(8, 10, W - 16, 1, '#4a3018');
-  txt('TALLER', 16, 22, '#ffd060', 11);
+  lbTitle('WORKSHOP', 14, 22, 12, LB.goldHi, 120);
   drawWallet(240, 14);
-  // a workbench with tools
-  const bx = 70, by = 104;
-  rect(bx, by, 180, 6, '#5a4030'); rect(bx, by, 180, 1, '#8a6a4a');
-  rect(bx + 6, by + 6, 6, 30, '#3a2a20'); rect(bx + 168, by + 6, 6, 30, '#3a2a20');
-  egoIcon('hammer', bx + 40, by - 8, 1.4, '#8a8a96');
-  egoIcon('spear', bx + 90, by - 8, 1.4, '#8a8a96');
-  rect(bx + 120, by - 14, 30, 14, '#2a2a30'); rect(bx + 122, by - 12, 26, 10, '#0c100e');
-  if (Math.floor(t / 500) % 2) rect(bx + 124, by - 10, 8, 1, '#5ae0c0');
-  light(160, 60, 90, 40, '#ffb040', 0.08, 4);
-  txt('Mejora tus armas E.G.O con los Ahn que ganes al venderlas.', 160, 50, '#d8d0c0', 8, 'center');
-  txt('PRÓXIMAMENTE', 160, 70, '#8a6030', 10, 'center');
+  WORKSHOP_PLAN.forEach(([title, desc], i) => {
+    const x = 14 + (i % 2) * 150, y = 34 + Math.floor(i / 2) * 50;
+    lbPanel(x, y, 142, 44, { accent: i % 2 ? LB.red : LB.gold });
+    lbNum(title, x + 6, y + 13, LB.goldHi, 9);
+    wrap(desc, 130, 7).forEach((ln, k) => txt(ln, x + 6, y + 23 + k * 7, LB.mute, 7));
+    lbSkew(x + 84, y + 32, 54, 9, '#0c0a09', LB.line, 3);
+    txt('PRÓXIMAMENTE', x + 111, y + 39, LB.dim, 7, 'center');
+  });
+  txt('Los Ahn se ganan vendiendo armas E.G.O.', 160, 142, LB.mute, 7, 'center');
 }
