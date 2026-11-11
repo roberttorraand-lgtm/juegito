@@ -320,3 +320,8 @@ body.big-text #name { font-size: 3cqw; }
 #backlog-list .bl { margin-bottom: 1.2cqw; }
 #backlog-list .bl b { color: #ffd060; display: block; font-weight: normal; font-size: 1.8cqw; }
 #backlog-list .bl.narr { color: #b9b2a6; font-style: italic; }
+
+.cb-result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6cqw 3cqw; font-size: 1.5cqw; color: #8a8070; margin: .6cqw 0; }
+.cb-result-grid b { display: block; font-size: 2.4cqw; color: #e8e4dc; font-weight: normal; }
+.cb-rank { position: absolute; top: 1.5cqw; right: 2.5cqw; font-size: 7cqw; transform: rotate(-8deg); text-shadow: 0 0 2cqw currentColor; animation: rankin .5s cubic-bezier(.2,1.6,.4,1); }
+@keyframes rankin { from { transform: scale(3) rotate(-20deg); opacity: 0; } to { transform: scale(1) rotate(-8deg); opacity: 1; } }

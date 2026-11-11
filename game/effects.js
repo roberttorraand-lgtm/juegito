@@ -91,7 +91,11 @@ function present(t) {
   const scaled = F.w !== scene.width || F.h !== scene.height;
   vctx.save();
   vctx.globalCompositeOperation = 'copy';
-  vctx.filter = CFG.grade ? 'contrast(1.1) saturate(1.2) brightness(1.04)' : 'none';
+  // colour grading runs as a CSS filter on the canvas: the compositor does it
+  // on the GPU, far cheaper than a canvas filter on every frame
+  const grade = CFG.grade ? 'contrast(1.1) saturate(1.2) brightness(1.04)' : '';
+  if (cv.style.filter !== grade) cv.style.filter = grade;
+  vctx.filter = 'none';
   vctx.imageSmoothingEnabled = scaled;
   vctx.imageSmoothingQuality = 'high';
   if (F.x || F.y) { vctx.fillStyle = '#000'; vctx.fillRect(0, 0, cv.width, cv.height); vctx.globalCompositeOperation = 'source-over'; }

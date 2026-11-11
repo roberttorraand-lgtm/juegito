@@ -224,6 +224,7 @@ function startCombat(cfg) {
   CB.cfg = cfg;
   CB.enemyId = cfg.id;
   CB.tips = {};
+  CB.stats = { dealt: 0, taken: 0, maxHit: 0, clashWon: 0, clashLost: 0 };
   Music.play(cfg.music || MUSIC_FOR[cfg.enemies[0]]);
   CB.allies = [makeUnit(COMBAT_UNITS.lobelto), makeUnit(COMBAT_UNITS.gonza)];
   const gonza = CB.allies[1];
@@ -913,6 +914,10 @@ function resolveHit(T, dmg, stats, from) {
   }
   if (!dealt && soaked) { spawnAnim('text', p.x, p.y - 4, 'BLOQUEADO', '#9ac0ff', 800); bark(T, 'block', 0.5); }
   if (stats) stats[from.team] += dealt;
+  if (CB.stats) {
+    if (from.team === 'ally') { CB.stats.dealt += dealt; CB.stats.maxHit = Math.max(CB.stats.maxHit, dealt); }
+    else CB.stats.taken += dealt;
+  }
   return dealt;
 }
 
@@ -1016,6 +1021,7 @@ async function doClash(ad, ed) {
   }
 
   // Light goes to the ally if their side dealt more damage in this clash
+  if (CB.stats && stats.ally !== stats.enemy) CB.stats[stats.ally > stats.enemy ? 'clashWon' : 'clashLost']++;
   if (alive(A) && stats.ally > stats.enemy && A.light < A.maxLight) {
     A.light++;
     tip('light');
@@ -1947,6 +1953,14 @@ cv.addEventListener('click', (e) => {
   }
 });
 
+// a grade for the fight: fewer turns and more health left score higher
+function combatRank() {
+  const hp = CB.allies.reduce((s, u) => s + Math.max(0, u.hp), 0) / CB.allies.reduce((s, u) => s + u.maxHp, 0);
+  const score = hp * 60 + Math.max(0, 40 - (CB.turn - 3) * 6);
+  const [rank, col] = score >= 85 ? ['S', '#ffd060'] : score >= 65 ? ['A', '#ff8a3a'] : score >= 45 ? ['B', '#5ab0ff'] : ['C', '#a39c90'];
+  return { rank, col };
+}
+
 function renderCombatUI() {
   if (CB.phase !== 'done') { ui.combatUI.innerHTML = ''; return; }
   const won = CB.enemies.every(u => !alive(u));
@@ -1963,6 +1977,11 @@ function renderCombatUI() {
     <div class="cb-result-stats">Turnos: ${CB.turn}${gonza ? ` · Balas: ${gonza.ammo}/${AMMO_MAX}` : ''}</div>
     ${won && CB.cfg && CB.cfg.raid ? `<div class="cb-result-stats" style="color:#5ae0c0">+${CB.cfg.raid} Enkephalina</div>` : ''}
     <div class="cb-result-stats">${CB.allies.map(u => `${u.name}: ${u.hp}/${u.maxHp} HP`).join(' · ')}</div>
+    ${CB.stats ? `<div class="cb-result-grid">
+      <div><b>${CB.stats.dealt}</b>daño hecho</div><div><b>${CB.stats.taken}</b>daño recibido</div>
+      <div><b>${CB.stats.maxHit}</b>golpe máximo</div><div><b>${CB.stats.clashWon}/${CB.stats.clashWon + CB.stats.clashLost}</b>choques ganados</div>
+    </div>` : ''}
+    ${won ? (() => { const r = combatRank(); return `<div class="cb-rank" style="color:${r.col}">${r.rank}</div>`; })() : ''}
     ${btns}
   </div>`;
   const on = (act, fn) => { const b = ui.combatUI.querySelector(`[data-act="${act}"]`); if (b) b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); };

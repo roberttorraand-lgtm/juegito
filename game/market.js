@@ -111,7 +111,8 @@ function extract(n) {
     W$.give(w.id);
     out.push({ w, isNew });
   }
-  SAVE.save({ pity, pulls: SAVE.get('pulls', 0) + n });
+  const log = [...out.map(r => ({ id: r.w.id, at: Date.now() })).reverse(), ...SAVE.get('pull_log', [])].slice(0, 60);
+  SAVE.save({ pity, pulls: SAVE.get('pulls', 0) + n, pull_log: log });
   const best = out.reduce((b, r) => Math.max(b, RISK_ORDER.indexOf(r.w.risk)), 0);
   G.pull = { out, start: performance.now(), best: RISK_ORDER[best], shown: 0 };
   SFX.play('gacha');
@@ -270,19 +271,39 @@ function drawMarket(t) {
   const rx = 130, ry = 10, rw = 182, rh = 140;
   rect(rx, ry, rw, rh, '#0e0c14');
   rect(rx, ry, rw, 1, '#4a3018');
-  [['extraer', 'EXTRACCIÓN'], ['vender', 'VENDER']].forEach(([id, label], i) => {
-    const bx = rx + 2 + i * 62, on = MK.tab === id;
-    const hv = hubHit(bx, ry + 2, 60, 11, () => { MK.tab = id; SFX.play('select'); });
-    rect(bx, ry + 2, 60, 11, on ? '#3a1820' : hv ? '#241820' : '#16121a');
-    if (on) rect(bx, ry + 12, 60, 1, '#c0283a');
-    txt(label, bx + 30, ry + 10, on ? '#fff' : '#a09080', 7, 'center');
+  [['extraer', 'EXTRACCIÓN'], ['vender', 'VENDER'], ['historial', 'HISTORIAL']].forEach(([id, label], i) => {
+    const bx = rx + 2 + i * 45, on = MK.tab === id;
+    const hv = hubHit(bx, ry + 2, 44, 11, () => { MK.tab = id; SFX.play('select'); });
+    rect(bx, ry + 2, 44, 11, on ? '#3a1820' : hv ? '#241820' : '#16121a');
+    if (on) rect(bx, ry + 12, 44, 1, '#c0283a');
+    txt(label, bx + 22, ry + 10, on ? '#fff' : '#a09080', 7, 'center');
   });
   drawWallet(rx + 141, ry + 4);
   const body = { x: rx + 4, y: ry + 17, w: rw - 8, h: rh - 21 };
   if (MK.tab === 'extraer') drawExtractTab(body, t);
+  else if (MK.tab === 'historial') drawHistoryTab(body, t);
   else drawSellTab(body, t);
 
   if (G.pull) drawPull(t);
+}
+
+// last extractions, newest first, plus how much of the collection is owned
+function drawHistoryTab(b, t) {
+  const log = SAVE.get('pull_log', []);
+  const owned = EGO_WEAPONS.filter(w => W$.count(w.id)).length;
+  txt(`Colección: ${owned}/${EGO_WEAPONS.length} armas · ${SAVE.get('pulls', 0)} extracciones`, b.x + 2, b.y + 7, '#c8b0e8', 7);
+  rect(b.x + 2, b.y + 9, b.w - 4, 2, '#2a1830'); rect(b.x + 2, b.y + 9, Math.round((b.w - 4) * owned / EGO_WEAPONS.length), 2, RISK.WAW.col);
+  if (!log.length) { txt('Aún no has extraído nada.', b.x + b.w / 2, b.y + 50, '#6a6070', 8, 'center'); return; }
+  log.slice(0, 20).forEach((e, i) => {
+    const w = EGO_BY_ID[e.id];
+    if (!w) return;
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = b.x + col * (b.w / 2), y = b.y + 14 + row * 10;
+    rect(x, y, b.w / 2 - 2, 9, row % 2 ? '#14101a' : '#18141e');
+    rect(x, y, 2, 9, egoCol(w));
+    txtFit(w.name, x + 5, y + 7, RISK_ORDER.indexOf(w.risk) >= 3 ? egoCol(w) : '#e8e4dc', 7, b.w / 2 - 30);
+    txt(w.risk, x + b.w / 2 - 4, y + 7, egoCol(w), 6, 'right');
+  });
 }
 
 function drawExtractTab(b, t) {
