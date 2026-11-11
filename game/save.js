@@ -32,7 +32,7 @@ const QUALITY = {
 };
 // Phones and tablets fill the whole screen by default
 const IS_TOUCH = window.matchMedia('(pointer: coarse)').matches;
-const CFG_DEFAULTS = { sfxVol: 80, musicVol: 60, textSpeed: 'normal', scanlines: false, fps: false, fpsCap: 0, impactFrames: true, fill: IS_TOUCH, quality: 'alta', ...QUALITY.alta };
+const CFG_DEFAULTS = { sfxVol: 80, musicVol: 60, textSpeed: 'normal', scanlines: false, fps: false, fpsCap: 0, impactFrames: true, combatSpeed: 1, difficulty: 'normal', shakeFx: true, textSize: 'normal', clashOdds: true, fill: IS_TOUCH, quality: 'alta', ...QUALITY.alta };
 
 const CFG = {
   persist(key, val) { this[key] = val; SAVE.save({ ['cfg_' + key]: val }); },

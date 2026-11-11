@@ -18,6 +18,8 @@ function showHub() {
   G.mode = 'hub'; G.hubView = 'main'; G.s = {}; G.actors = {}; G.fade = 0;
   G.scene = null; G.steps = []; G.pendingScene = null;
   G.runId++; G.waiting = null; G.skip = false; G.fadeAnim = null; G.storySave = null;
+  if (typeof toggleBacklog === 'function' && !$('backlog').classList.contains('hidden')) $('backlog').classList.add('hidden');
+  const sk = document.querySelector('[data-box="skip"]'); if (sk) sk.classList.remove('on');
   if (G.typing) { clearTimeout(G.typing.timer); G.typing = null; }
   G.hubNavSel = 0; G.hubTab = 'ventana'; G.mapSel = 0; G.mapModeSel = 0; G.chapter = null; G.epSel = null; G.mapHover = null;
   hideAllOverlays();
@@ -107,7 +109,7 @@ function hideConfirm() {
 }
 
 function startScene(sc) {
-  G.runId++; G.fadeAnim = null;
+  G.runId++; G.fadeAnim = null; G.log = [];
   if (G.typing) { clearTimeout(G.typing.timer); G.typing = null; }
   G.mode = 'play'; G.scene = sc; G.steps = sc.steps; G.idx = 0; G.waiting = null;
   G.s = { bg: 'black' }; G.actors = {}; G.fade = 1;
@@ -134,6 +136,7 @@ function refreshHubBtns() {
 // ---- Settings panel ----
 function showSettings(tab = 'audio', quiet = false) {
   G.hubView = 'settings';
+  ui.settings.dataset.tab = tab;
   const speedChip = (id, label) =>
     `<button class="st-chip${CFG.textSpeed === id ? ' on' : ''}" data-speed="${id}">${label}</button>`;
   const tabBtn = (id, label) => `<button class="st-tab${tab === id ? ' sel' : ''}" data-stab="${id}">${label}</button>`;
@@ -202,6 +205,11 @@ function showSettings(tab = 'audio', quiet = false) {
           </div>
           <div class="st-hint">Cambia la velocidad del texto letra por letra</div>
         </div>
+        ${chips('textSize', 'Tamaño del texto', [['normal', 'Normal'], ['grande', 'Grande']], 'Letra más grande en los diálogos')}
+        ${chips('difficulty', 'Dificultad', [['facil', 'Fácil'], ['normal', 'Normal'], ['dificil', 'Difícil']], 'Fácil: enemigos con menos vida y menos daño recibido. Se aplica al empezar un combate.')}
+        ${chips('combatSpeed', 'Velocidad de combate', [[1, 'x1'], [1.5, 'x1.5'], [2, 'x2']], 'Acelera las animaciones del combate')}
+        ${toggle('clashOdds', 'Probabilidad de choque', 'Muestra en cada flecha la probabilidad de ganar el choque')}
+        ${toggle('shakeFx', 'Temblor de pantalla', 'Sacudidas de la cámara en golpes y escenas')}
       </div>
       <div ${panel('video')}>
         ${chips('quality', 'Calidad gráfica', [['baja', 'Baja'], ['media', 'Media'], ['alta', 'Alta'], ['ultra', 'Ultra'], ['custom', 'Personalizada']],
@@ -245,7 +253,7 @@ function showSettings(tab = 'audio', quiet = false) {
 function refreshVideoSettings() {
   const main = ui.settings.querySelector('.st-main');
   const scroll = main ? main.scrollTop : 0;
-  showSettings('video', true);
+  showSettings(ui.settings.dataset.tab || 'video', true);
   ui.settings.querySelector('.st-main').scrollTop = scroll;
   SFX.play('select');
 }
@@ -258,6 +266,7 @@ function bindSettingsEvents() {
       e.stopPropagation();
       tabs.forEach(t => t.classList.remove('sel'));
       tab.classList.add('sel');
+      ui.settings.dataset.tab = tab.dataset.stab;
       panels.forEach(p => p.classList.toggle('hidden', p.dataset.panel !== tab.dataset.stab));
       ui.settings.classList.toggle('see-through', tab.dataset.stab === 'video');
       SFX.play('select');
@@ -302,6 +311,7 @@ function bindSettingsEvents() {
   const changed = (key) => {
     if (PRESET_KEYS.includes(key)) CFG.persist('quality', 'custom');
     if (key === 'integer' || key === 'fill') resizeCanvas();
+    if (key === 'textSize') applyTextSize();
     refreshVideoSettings();
   };
   ui.settings.querySelectorAll('[data-cfg]').forEach(el => {
@@ -1043,3 +1053,6 @@ function activateNavBtn(id) {
 function getEnabledNavIndices() {
   return HUB_NAV.map((n, i) => n.enabled ? i : -1).filter(i => i >= 0);
 }
+
+function applyTextSize() { document.body.classList.toggle('big-text', CFG.textSize === 'grande'); }
+applyTextSize();

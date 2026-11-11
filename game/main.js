@@ -37,9 +37,46 @@ function isSceneDone(sc) { return SAVE.get('done_' + sc.id, false); }
 // Init hub (hub.js defines showHub). Episodes finished before the market
 // existed still pay their Enkephalina once.
 showHub();
+G.mode = 'title'; G.titleAt = performance.now();
 {
   const got = awardEpisodes();
   if (got.length) G.notice = { text: `+${ENK_PER_EPISODE * got.length} Enkephalina por los episodios terminados`, start: performance.now() };
+}
+
+// ---------- Title screen ----------
+// Also the first user gesture, which browsers need before playing audio.
+function leaveTitle() {
+  if (G.mode !== 'title' || G.titleOut) return;
+  SFX.init(); Music.resume(); SFX.play('confirm');
+  G.titleOut = performance.now();
+  setTimeout(() => { G.mode = 'hub'; G.titleOut = null; Music.play(MUSIC_FOR.hub); }, 450);
+}
+function drawTitle(t) {
+  const now = performance.now();
+  drawWide(() => drawHubBackdrop(t), 'hub');
+  ctx.globalAlpha = 0.55; rect(-OX, 0, VW, H, '#05040a'); ctx.globalAlpha = 1;
+  const k = Math.min(1, (now - G.titleAt) / 900);
+  // slow red glow behind the title
+  light(160, 70, 120 * k, 40 * k, '#c0283a', 0.18 + 0.05 * Math.sin(t / 700), 5);
+  ctx.globalAlpha = k;
+  txt('PROJECT MOON FAN GAME', 160, 44, '#8a6030', 8, 'center');
+  // glitching title with a chromatic split
+  const g = hash(Math.floor(t / 110)) > 0.9 ? 2 : 0;
+  for (const [dx, col] of g ? [[-g, '#1d3a6a'], [g, '#c0283a'], [0, '#e8e4dc']] : [[1, '#c0283a'], [-1, '#1d3a6a'], [0, '#e8e4dc']]) {
+    txt('LA DISTORSIÓN', 160 + dx, 74, col, 22, 'center');
+    txt('EXTERNA', 160 + dx, 94, col, 22, 'center');
+  }
+  if (g) rect(-OX, 60 + hash(Math.floor(t / 110) + 3) * 40, VW, 2, '#c0283a');
+  rect(100, 101, 120, 1, '#8a6030');
+  txt('Distrito D · Capítulo I', 160, 112, '#a39c90', 8, 'center');
+  // the two of them, small, standing in the rain
+  figure(146, 150, { ...LOB, face: 1, scale: 1, armless: true, bandaged: true }, t);
+  figure(172, 151, { ...GON, face: -1, scale: 1 }, t);
+  rain(t, 30, -OX, 0, VW, H, '#d8d8f8', 0.25, 0.75, 6, 3);
+  if (Math.floor(t / 520) % 2 || G.titleOut) txt(IS_TOUCH ? 'TOCA PARA EMPEZAR' : 'PULSA CUALQUIER TECLA', 160, 168, '#ffd060', 9, 'center');
+  txt('v0.3', W + OX - 4, 177, '#4a4450', 7, 'right');
+  ctx.globalAlpha = 1;
+  if (G.titleOut) { ctx.globalAlpha = Math.min(1, (now - G.titleOut) / 400); rect(-OX, 0, VW, H, '#000'); ctx.globalAlpha = 1; }
 }
 
 // ---------- Story runner ----------
@@ -181,6 +218,49 @@ function walkActors(st) {
   return true;
 }
 
+// ---------- Backlog and auto mode ----------
+G.log = [];
+function logLine(name, text, narr) {
+  G.log.push({ name, text, narr });
+  if (G.log.length > 300) G.log.shift();
+}
+const blEl = $('backlog');
+function toggleBacklog(on = blEl.classList.contains('hidden')) {
+  if (on && G.mode === 'hub') return;
+  blEl.classList.toggle('hidden', !on);
+  if (on) {
+    const esc = (s) => s.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
+    $('backlog-list').innerHTML = G.log.length
+      ? G.log.map(l => `<div class="bl${l.narr ? ' narr' : ''}">${l.name ? `<b>${esc(l.name)}</b>` : ''}${esc(l.text)}</div>`).join('')
+      : '<div class="bl narr">Aún no hay diálogos en esta escena.</div>';
+    $('backlog-list').scrollTop = 1e6;
+  }
+  SFX.play('select');
+}
+function setAuto(on = !G.auto) {
+  G.auto = on;
+  document.querySelector('[data-box="auto"]').classList.toggle('on', on);
+  SFX.play('select');
+  if (on && G.waiting === 'text' && G.typing && G.typing.done) scheduleAuto();
+}
+// in auto mode, finished lines advance by themselves after a reading pause
+function scheduleAuto() {
+  const ty = G.typing;
+  if (!G.auto || !ty) return;
+  const ms = 900 + ty.full.length * 28 * (CFG.textSpeed === 'muyrapido' ? 0.5 : CFG.textSpeed === 'rapido' ? 0.75 : 1);
+  later(ms, () => { if (G.auto && G.typing === ty && G.waiting === 'text' && blEl.classList.contains('hidden')) advance(); });
+}
+document.querySelectorAll('#box-btns button').forEach(b => {
+  b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const k = b.dataset.box;
+    if (k === 'log') toggleBacklog();
+    else if (k === 'auto') setAuto();
+    else if (k === 'skip') { G.skip = !G.skip; b.classList.toggle('on', G.skip); if (G.skip && (G.waiting === 'text' || G.waiting === 'card')) advance(); }
+  });
+});
+blEl.addEventListener('click', (e) => { e.stopPropagation(); toggleBacklog(false); });
+
 function showText(st) {
   ui.box.classList.remove('hidden');
   ui.name.textContent = st.say || (st.scream ? '¿¿??' : '');
@@ -197,6 +277,7 @@ function showText(st) {
   // the voice follows the mood: explicit expression, else shouting, a question or silence
   const mood = st.expr || (shout ? 'shout' : /^[\s.]+$/.test(full) ? 'blank' : /\?\s*$/.test(full) ? 'ask' : null);
   G.typing = { full, shown: 0, who, cut: st.cut, shout, mood };
+  logLine(st.say || (st.scream ? '¿¿??' : null), full, !!st.narr);
   ui.text.textContent = '';
   tick();
 }
@@ -232,6 +313,7 @@ function finishTyping() {
   G.typing = { ...ty, done: true };
   if (ty.cut) later(120, advance);
   else if (G.skip) later(70, advance);
+  else scheduleAuto();
 }
 
 function hideBox() { ui.box.classList.add('hidden'); G.s.typing = false; }
@@ -264,8 +346,14 @@ function advance() {
 
 // ---------- Keyboard ----------
 document.addEventListener('keydown', (e) => {
+  if (G.mode === 'title') { if (!e.repeat) leaveTitle(); return; }
   if (e.key === 'm' || e.key === 'M') { SFX.muted = !SFX.muted; Music.setVolume(); return; }
   if (e.key === 'h' || e.key === 'H') { ui.box.classList.toggle('dim'); return; }
+  if (G.scene && G.mode !== 'hub' && G.mode !== 'combat') {
+    if (e.key === 'l' || e.key === 'L') { toggleBacklog(); return; }
+    if (!blEl.classList.contains('hidden')) { if (e.key === 'Escape') toggleBacklog(false); return; }
+    if (e.key === 'a' || e.key === 'A') { setAuto(); return; }
+  }
   if (e.key === 'Control') { if (!G.skip) { G.skip = true; if (G.waiting === 'text' || G.waiting === 'card' || G.waiting === 'doc') advance(); } return; }
   if (G.mode === 'hub') {
     if (G.hubView === 'main') {
@@ -325,7 +413,8 @@ document.addEventListener('keydown', (e) => {
   }
   if (G.mode === 'combat') {
     if (e.key === 'Escape' && !CB.animating) endCombat();
-    if (e.key === 'Enter') { if (tutBlocking()) advanceTut(); else combatExecute(); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (tutBlocking()) advanceTut(); else combatExecute(); }
+    combatKey(e);
     return;
   }
   if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) advance(); }
@@ -336,6 +425,7 @@ document.addEventListener('keyup', (e) => { if (e.key === 'Control') G.skip = fa
 window.addEventListener('blur', () => { G.skip = false; });
 window.addEventListener('blur', () => { G.skip = false; });
 document.getElementById('game').addEventListener('click', (e) => {
+  if (G.mode === 'title') { leaveTitle(); return; }
   if (G.mode !== 'hub' && G.mode !== 'combat') advance();
 });
 
@@ -579,14 +669,16 @@ function render(t) {
   FRAME_DT = _lastFrame ? Math.min(4, (t - _lastFrame) / (1000 / 60)) : 1;
   _lastFrame = t;
   const now = performance.now();
-  const hintOn = G.mode !== 'hub' && G.mode !== 'combat' && !G.s.doc;
+  const hintOn = G.mode !== 'hub' && G.mode !== 'combat' && G.mode !== 'title' && !G.s.doc;
   if (hintOn !== G._hintOn) { G._hintOn = hintOn; hintEl.classList.toggle('hidden', !hintOn); }
   ctx.save();
   ctx.scale(SCALE, SCALE);
   ctx.translate(OX, 0);
-  if (now < G.shakeUntil) ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
+  if (now < G.shakeUntil && CFG.shakeFx) ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
 
-  if (G.mode === 'hub') {
+  if (G.mode === 'title') {
+    drawTitle(t);
+  } else if (G.mode === 'hub') {
     drawHub(t);
   } else {
     const cam = G.mode === 'combat' && camOn();

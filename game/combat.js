@@ -169,8 +169,17 @@ function shuffle(a) {
   return a;
 }
 
+// Difficulty (Ajustes > Juego): enemy health and the damage allies take
+const DIFFICULTY = {
+  facil: { hp: 0.75, taken: 0.75 },
+  normal: { hp: 1, taken: 1 },
+  dificil: { hp: 1.25, taken: 1.2 },
+};
+const diff = () => DIFFICULTY[CFG.difficulty] || DIFFICULTY.normal;
+
 function makeUnit(t) {
-  const u = { ...t, hp: t.maxHp, st: t.maxSt, staggered: false, staggerTurns: 0, shield: 0 };
+  const hp = t.team === 'enemy' ? Math.round(t.maxHp * diff().hp) : t.maxHp;
+  const u = { ...t, maxHp: hp, hp, st: t.maxSt, staggered: false, staggerTurns: 0, shield: 0 };
   if (t.team === 'ally') {
     if (t.gun) u.ammo = AMMO_MAX;
     // the equipped E.G.O weapon: a one-use ultimate
@@ -426,7 +435,7 @@ async function combatExecute() {
       }
     }
     if (checkEnd()) break;
-    await delay(250);
+    await wait(250);
   }
   CB.view = null;
   endTurn();
@@ -539,6 +548,7 @@ function tween(obj, to, ms, ease = easeOut) {
   const own = obj._tw || (obj._tw = {});
   for (const k in to) { from[k] = obj[k] || 0; own[k] = id; }
   if (CB.instant || ms <= 0) { Object.assign(obj, to); return Promise.resolve(); }
+  ms /= cspd();
   const start = performance.now();
   return new Promise(res => {
     const step = () => {
@@ -550,7 +560,9 @@ function tween(obj, to, ms, ease = easeOut) {
     step();
   });
 }
-const wait = (ms) => (CB.instant ? Promise.resolve() : delay(ms));
+// combat speed (Ajustes > Juego): every animation and pause is scaled by it
+const cspd = () => (G.mode === 'combat' ? CFG.combatSpeed || 1 : 1);
+const wait = (ms) => (CB.instant ? Promise.resolve() : delay(ms / cspd()));
 const actorOf = (u) => G.actors[u.id];
 const dirTo = (A, B) => (Math.sign((actorOf(B) || B).x - (actorOf(A) || A).x) || 1);
 function chest(u) {
@@ -840,6 +852,7 @@ async function koAnim(u, a) {
 // Applies HP damage with stagger at 25% of it (rounded up). Returns the HP damage dealt.
 function dealDamage(u, hpD) {
   if (!alive(u) || hpD <= 0) return 0;
+  if (u.team === 'ally') hpD = Math.max(1, Math.round(hpD * diff().taken));
   if (u.staggered) hpD *= 2;
   if (u.rebooting) hpD = Math.ceil(hpD * 1.5);
   hpD = Math.min(hpD, u.hp);
@@ -1357,10 +1370,47 @@ function arc(x0, y0, x1, y1, col, t, both, top) {
   return P(0.5);
 }
 
-function clashMark(x, y, t) {
+function clashMark(x, y, t, odds) {
   light(x, y, 7, 7, '#ffd060', 0.35 + 0.15 * Math.sin(t / 150), 3);
   line(x - 3, y - 3, x + 3, y + 3, '#fff');
   line(x + 3, y - 3, x - 3, y + 3, '#fff');
+  if (odds == null || !CFG.clashOdds) return;
+  // chance to win this clash, like Limbus' clash preview
+  const pc = Math.round(odds * 100), col = pc >= 60 ? '#3fbf6a' : pc >= 40 ? '#e8c040' : '#ff4a5a';
+  const s = `${pc}%`;
+  ctx.font = '8px VT323, monospace';
+  const w = Math.ceil(ctx.measureText(s).width) + 4;
+  rrect(x - w / 2, y + 4, w, 9, '#08060c', 2);
+  rect(x - w / 2, y + 4, w, 1, col);
+  txt(s, x, y + 11, col, 8, 'center');
+}
+
+// Win chance of an ally page against an enemy page (cached: it only
+// changes when the pages do). E.G.O pages use their own clash rule.
+const _odds = new Map();
+function clashOdds(pa, pb) {
+  const key = JSON.stringify([pa.dice, pb.dice, !!pa.ego]);
+  if (_odds.has(key)) return _odds.get(key);
+  let win = 0;
+  const n = 300;
+  for (let k = 0; k < n; k++) {
+    if (pa.ego) {
+      // coins break one by one; win if the E.G.O page still has coins at the end
+      let ia = 0, ib = 0, guard = 0;
+      while (ia < pa.dice.length && ib < pb.dice.length && guard++ < 50) {
+        const ra = rnd(pa.dice[ia][1], pa.dice[ia][2]), rb = rnd(pb.dice[ib][1], pb.dice[ib][2]);
+        if (ra > rb) ib++; else if (rb > ra) ia++;
+      }
+      if (ia < pa.dice.length) win++;
+    } else {
+      const [a, b] = simClash(pa, pb);
+      win += a > b ? 1 : a === b ? 0.5 : 0;   // [damage dealt by A, by B]
+    }
+  }
+  const p = win / n;
+  if (_odds.size > 400) _odds.clear();
+  _odds.set(key, p);
+  return p;
 }
 
 // Every attack shows its arrow. Each arrow gets its own lane over the top,
@@ -1398,8 +1448,8 @@ function drawArrows(t, focus) {
   for (const { r, top, p0, p1 } of drawn) {
     const on = mine(r);
     ctx.globalAlpha = on ? 1 : 0.22;
-    const m = arc(p0.x, p0.y, p1.x, p1.y, r.col, t, r.both, top);
-    if (r.clash && on) clashMark(m[0], m[1], t);
+    const m = arc(p0.x, p0.y, p1.x, p1.y, r.col, t, r.both, Math.max(9, top));
+    if (r.clash && on) clashMark(m[0], m[1], t, r.b.page && r.a.page ? clashOdds(r.a.page, r.b.page) : null);
     ctx.globalAlpha = 1;
     if (on && focus) { lit.add(r.a); lit.add(r.b); }
   }
@@ -1761,6 +1811,22 @@ function drawCombatHUD(t) {
 }
 
 // ---------------------------------------------------------------------
+//  Keyboard: 1-4 pages, Tab next speed die, Q defense, E E.G.O, A auto
+// ---------------------------------------------------------------------
+function combatKey(e) {
+  if (CB.phase !== 'select' || tutBlocking()) return;
+  const d = CB.sel, u = d && d.unit;
+  if (/^[1-8]$/.test(e.key) && u) { const c = u.hand[+e.key - 1]; if (c) toggleCard(c); }
+  else if (e.key === 'Tab') {
+    e.preventDefault();
+    const ds = allyDice().filter(x => canAct(x.unit));
+    if (ds.length) selectDie(ds[(ds.indexOf(d) + 1) % ds.length]);
+  } else if ((e.key === 'q' || e.key === 'Q') && u) defenseButton(u);
+  else if ((e.key === 'e' || e.key === 'E') && u) egoButton(u);
+  else if (e.key === 'a' || e.key === 'A') autoAssign('win');
+}
+
+// ---------------------------------------------------------------------
 //  Tutorial: guided steps for the first fight, plus one-time tips
 // ---------------------------------------------------------------------
 const bbox = (pts, pad = 0) => {
@@ -1912,6 +1978,7 @@ function spawnAnim(type, x, y, text, color, ms, extra) {
 async function animateSlide(unitId, toX, durMs) {
   const actor = G.actors[unitId];
   if (!actor) return;
+  durMs /= cspd();
   const fromX = actor.x;
   const start = performance.now();
   return new Promise(resolve => {

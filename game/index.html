@@ -41,9 +41,16 @@
     <div id="name"></div>
     <div id="text"></div>
     <div id="next">▼</div>
+    <div id="box-btns">
+      <button data-box="log" title="Historial (L)">LOG</button>
+      <button data-box="auto" title="Avance automático (A)">AUTO</button>
+      <button data-box="skip" title="Saltar (mantén Ctrl)">SKIP</button>
+    </div>
   </div>
 
-  <div id="hint">Clic / Espacio: avanzar · Ctrl: saltar · H: ocultar texto · M: sonido</div>
+  <div id="backlog" class="hidden"><div id="backlog-head">HISTORIAL <span>L / Esc para cerrar</span></div><div id="backlog-list"></div></div>
+
+  <div id="hint">Clic / Espacio: avanzar · Ctrl: saltar · A: auto · L: historial · H: ocultar texto · M: sonido</div>
 </div>
 
 <script src="save.js"></script>

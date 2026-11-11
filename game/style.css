@@ -298,3 +298,25 @@ body {
   padding: .4cqw 3cqw; cursor: pointer; transition: all .15s;
 }
 .cb-result-btn:hover { border-color: var(--accent); color: #fff; box-shadow: 0 0 1cqw rgba(192,40,58,0.2); }
+
+/* ---- dialogue box buttons, backlog, bigger text ---- */
+#box-btns { position: absolute; top: -2.6cqw; right: 2cqw; display: flex; gap: .5cqw; }
+#box-btns button {
+  font: inherit; font-size: 1.6cqw; color: #a39c90; background: rgba(5,4,10,0.85);
+  border: .2cqw solid rgba(201,194,182,0.45); padding: 0 .9cqw; cursor: pointer; line-height: 1.5;
+}
+#box-btns button:hover { color: #fff; border-color: #fff; }
+#box-btns button.on { color: #16121a; background: #ffd060; border-color: #ffd060; }
+body.big-text #text { font-size: 3.4cqw; }
+body.big-text #text.scream { font-size: 3.9cqw; }
+body.big-text #name { font-size: 3cqw; }
+#backlog {
+  position: absolute; inset: 4% 8%; z-index: 8; background: rgba(5,4,10,0.95);
+  border: .3cqw solid rgba(201,194,182,0.6); display: flex; flex-direction: column;
+}
+#backlog-head { padding: 1cqw 2cqw; font-size: 2.6cqw; color: #ffd060; border-bottom: .2cqw solid rgba(201,194,182,0.3); }
+#backlog-head span { font-size: 1.6cqw; color: #8a8070; float: right; margin-top: .6cqw; }
+#backlog-list { overflow-y: auto; padding: 1cqw 2cqw 2cqw; font-size: 2.2cqw; line-height: 1.3; }
+#backlog-list .bl { margin-bottom: 1.2cqw; }
+#backlog-list .bl b { color: #ffd060; display: block; font-weight: normal; font-size: 1.8cqw; }
+#backlog-list .bl.narr { color: #b9b2a6; font-style: italic; }
