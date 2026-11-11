@@ -9,6 +9,15 @@
 //  Light (more for higher risk levels).
 // =====================================================================
 
+// Features opened by the story: the E.G.O extraction (gacha) once the
+// machine is used in the story, the workshop further on. A story step
+// { unlock: 'gacha' } opens one. Ajustes > Datos has a test switch.
+const unlocked = (k) => !!(SAVE.get('unlock_' + k) || CFG.devUnlock);
+const LOCK_TEXT = {
+  gacha: 'Bloqueado: se desbloquea al usar la máquina E.G.O en la historia',
+  taller: 'Bloqueado: el taller se desbloquea al avanzar en la historia',
+};
+
 // Risk levels double as gacha rarities.
 const RISK = {
   ZAYIN: { col: '#2a9a4a', light: 2, sell: 200, rate: 0.45 },
@@ -437,9 +446,12 @@ function drawHubNotice(t) {
   if (k >= 1) { G.notice = null; return; }
   const y = 14 - (k < 0.06 ? (1 - k / 0.06) * 18 : 0);
   ctx.globalAlpha = k > 0.9 ? (1 - k) / 0.1 : 1;
-  rrect(80, y, 160, 14, '#0a1a16', 2); rect(80, y, 160, 1, '#5ae0c0');
-  rect(86, y + 5, 4, 4, '#5ae0c0');
-  txt(N.text, 94, y + 10, '#c8fff0', 8);
+  const col = N.locked ? '#ff6a78' : '#5ae0c0';
+  ctx.font = '8px VT323, monospace';
+  const w = Math.max(160, Math.ceil(ctx.measureText(N.text).width) + 20);
+  rrect(160 - w / 2, y, w, 14, N.locked ? '#1a0a10' : '#0a1a16', 2); rect(160 - w / 2, y, w, 1, col);
+  rect(160 - w / 2 + 6, y + 5, 4, 4, col);
+  txt(N.text, 160 - w / 2 + 14, y + 10, N.locked ? '#ffc8d0' : '#c8fff0', 8);
   ctx.globalAlpha = 1;
 }
 
@@ -478,4 +490,29 @@ function drawRaidPanel(t) {
     txt(hv ? 'LUCHAR ▶' : '', x + w - 10, y + 20, '#ffd060', 7, 'right');
   });
   txt(`Victorias: ${SAVE.get('raid_wins', 0)}`, x + 6, my + mh - 4, '#5d5850', 7);
+}
+
+// ---------------------------------------------------------------------
+//  Workshop (taller): where the Ahn from selling E.G.O weapons will be
+//  spent. Unlocked by the story; its contents come later.
+// ---------------------------------------------------------------------
+function drawTaller(t) {
+  G.hubHits = [];
+  drawWide(() => drawHubBackdrop(t), 'hub');
+  ctx.globalAlpha = 0.88; rect(-OX, 0, VW, NAV_Y, '#07050c'); ctx.globalAlpha = 1;
+  metalFrame(4, 4, W - 8, NAV_Y - 8);
+  rect(8, 10, W - 16, 140, '#0e0c14'); rect(8, 10, W - 16, 1, '#4a3018');
+  txt('TALLER', 16, 22, '#ffd060', 11);
+  drawWallet(240, 14);
+  // a workbench with tools
+  const bx = 70, by = 104;
+  rect(bx, by, 180, 6, '#5a4030'); rect(bx, by, 180, 1, '#8a6a4a');
+  rect(bx + 6, by + 6, 6, 30, '#3a2a20'); rect(bx + 168, by + 6, 6, 30, '#3a2a20');
+  egoIcon('hammer', bx + 40, by - 8, 1.4, '#8a8a96');
+  egoIcon('spear', bx + 90, by - 8, 1.4, '#8a8a96');
+  rect(bx + 120, by - 14, 30, 14, '#2a2a30'); rect(bx + 122, by - 12, 26, 10, '#0c100e');
+  if (Math.floor(t / 500) % 2) rect(bx + 124, by - 10, 8, 1, '#5ae0c0');
+  light(160, 60, 90, 40, '#ffb040', 0.08, 4);
+  txt('Mejora tus armas E.G.O con los Ahn que ganes al venderlas.', 160, 50, '#d8d0c0', 8, 'center');
+  txt('PRÓXIMAMENTE', 160, 70, '#8a6030', 10, 'center');
 }

@@ -150,6 +150,11 @@ function handle(st) {
   }
   if (st.sfx) { SFX.play(st.sfx); return false; }
   if (st.save) { SAVE.save(st.save); return false; }
+  if (st.unlock) {
+    // a feature opened by the story (gacha, taller): told on the next visit to the hub
+    if (!SAVE.get('unlock_' + st.unlock)) { SAVE.save({ ['unlock_' + st.unlock]: true, pending_unlock: st.unlock }); SFX.play('light'); }
+    return false;
+  }
   if (st.hit) { const a = G.actors[st.hit]; if (a) a.flashUntil = now + 140; return false; }
   if (st.voice) { SFX.voice(st.voice, st.kind || 'hurt'); return false; }
   if ('doc' in st) {

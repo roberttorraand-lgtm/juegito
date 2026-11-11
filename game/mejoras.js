@@ -230,7 +230,7 @@ function drawModDetail(sl, t) {
     const eq = W$.equip();
     const owned = EGO_WEAPONS.filter(wp => W$.count(wp.id));
     if (!owned.length) {
-      ['No tienes armas E.G.O.', 'Consíguelas en el Gacha.'].forEach((l, i) => txt(l, x + w / 2, yy + 8 + i * 8, '#4a7a88', 7, 'center'));
+      ['No tienes armas E.G.O.', unlocked('gacha') ? 'Consíguelas en el Gacha.' : 'Llegarán con la historia.'].forEach((l, i) => txt(l, x + w / 2, yy + 8 + i * 8, '#4a7a88', 7, 'center'));
       return;
     }
     owned.slice(0, 7).forEach((wp, i) => {

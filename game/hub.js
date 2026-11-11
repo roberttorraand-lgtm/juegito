@@ -25,6 +25,11 @@ function showHub() {
   hideAllOverlays();
   ui.hub.classList.add('hidden');
   Music.play(MUSIC_FOR.hub);
+  const un = SAVE.get('pending_unlock');
+  if (un) {
+    SAVE.save({ pending_unlock: null });
+    G.notice = { text: `¡Desbloqueado: ${un === 'gacha' ? 'Gacha (extracción E.G.O)' : 'Taller'}!`, start: performance.now() };
+  }
 }
 
 function showLevels() {
@@ -233,6 +238,7 @@ function showSettings(tab = 'audio', quiet = false) {
         </div>
       </div>
       <div ${panel('datos')}>
+        ${toggle('devUnlock', 'Modo pruebas', 'Desbloquea el Gacha y el Taller antes de llegar a ellos en la historia')}
         <div class="st-group">
           <div class="st-label">Copiar partida a otro dispositivo</div>
           <div class="st-hint">Exporta tu progreso como un código y pégalo en el móvil, el PC o el navegador para continuar allí.</div>
@@ -458,7 +464,8 @@ const HUB_NAV = [
   { id: 'ventana', label: 'Ventana', icon: '◫', enabled: true },
   { id: 'pecadores', label: 'Mejoras', icon: '▲', enabled: true },
   { id: 'mapa', label: 'Mapa', icon: '◈', enabled: true },
-  { id: 'mercado', label: 'Gacha', icon: '✦', enabled: true },
+  { id: 'mercado', label: 'Gacha', icon: '✦', enabled: true, lock: 'gacha' },
+  { id: 'taller', label: 'Taller', icon: '⚒', enabled: true, lock: 'taller' },
   { id: 'ajustes', label: 'Ajustes', icon: '⚙', enabled: true },
 ];
 const NAV_Y = 160, NAV_H = 20;
@@ -513,17 +520,24 @@ function drawNavBar(t) {
         rect(bx + 1, NAV_Y + 5, btnW - 2, 12, 'rgba(192,40,58,0.15)');
         ctx.globalAlpha = 1;
       }
+      const locked = nav.lock && !unlocked(nav.lock);
       ctx.font = '10px VT323, monospace';
-      ctx.fillStyle = sel ? '#fff' : (active ? '#c09050' : '#8a8070');
-      ctx.fillText(nav.icon, bx + 7, NAV_Y + 13);
+      ctx.fillStyle = locked ? '#4a4450' : sel ? '#fff' : (active ? '#c09050' : '#8a8070');
+      if (locked) {
+        // small pixel padlock
+        const lx = bx + 6, ly = NAV_Y + 7;
+        rect(lx + 1, ly, 3, 1, '#6a6070'); rect(lx, ly + 1, 1, 3, '#6a6070'); rect(lx + 4, ly + 1, 1, 3, '#6a6070');
+        rect(lx - 1, ly + 4, 7, 5, '#6a6070'); px(lx + 2, ly + 6, '#16121a');
+      } else ctx.fillText(nav.icon, bx + 5, NAV_Y + 13);
       ctx.font = '8px VT323, monospace';
-      ctx.fillText(nav.label, bx + 17, NAV_Y + 13);
+      ctx.fillStyle = locked ? '#4a4450' : sel ? '#fff' : (active ? '#c09050' : '#8a8070');
+      ctx.fillText(nav.label, bx + 15, NAV_Y + 13, btnW - 17);
     }
   });
 }
 
 function getNavBtnBounds() {
-  const btnW = 52, gap = 6;
+  const btnW = 46, gap = 4;
   const totalW = HUB_NAV.length * btnW + (HUB_NAV.length - 1) * gap;
   const startX = Math.round((W - totalW) / 2);
   return HUB_NAV.map((nav, i) => ({
@@ -537,6 +551,7 @@ function drawHub(t) {
   if (G.hubTab === 'mapa') drawMap(t);
   else if (G.hubTab === 'mercado') drawMarket(t);
   else if (G.hubTab === 'pecadores') drawPecadores(t);
+  else if (G.hubTab === 'taller') drawTaller(t);
   else drawVentana(t);
 
   if (!G.pull) drawNavBar(t);
@@ -1086,7 +1101,14 @@ cv.addEventListener('mousemove', (e) => {
 });
 
 function activateNavBtn(id) {
-  SFX.init(); SFX.play('select');
+  SFX.init();
+  const nav = HUB_NAV.find(n => n.id === id);
+  if (nav && nav.lock && !unlocked(nav.lock)) {
+    SFX.play('error');
+    G.notice = { text: LOCK_TEXT[nav.lock], start: performance.now(), locked: true };
+    return;
+  }
+  SFX.play('select');
   if (G.hubTab === 'mercado' && id !== 'mercado') Music.play(MUSIC_FOR.hub);
   if (id === 'mercado') { if (G.hubTab !== 'mercado') openMarket(); return; }
   G.pull = null;
@@ -1095,6 +1117,7 @@ function activateNavBtn(id) {
   if (id === 'ventana') { G.hubTab = 'ventana'; }
   else if (id === 'mapa') { G.hubTab = 'mapa'; }
   else if (id === 'pecadores') { G.hubTab = 'pecadores'; }
+  else if (id === 'taller') { G.hubTab = 'taller'; }
   else if (id === 'ajustes') { showSettings(); }
 }
 
