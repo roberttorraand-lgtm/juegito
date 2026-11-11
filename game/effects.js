@@ -39,6 +39,7 @@ let gridPattern = null;
 const shadowBuf = makeCanvas(W * SCALE, H * SCALE);
 const fpsMeter = { last: 0, frames: 0, fps: 0 };
 
+const shadowScale = () => Math.min(SCALE, 2);
 function onResizeFX() {
   const n = SCALE;
   const p = makeCanvas(n, n), g = p.getContext('2d');
@@ -46,8 +47,9 @@ function onResizeFX() {
   g.fillRect(n - 1, 0, 1, n);
   g.fillRect(0, n - 1, n - 1, 1);
   gridPattern = vctx.createPattern(p, 'repeat');
-  shadowBuf.width = scene.width;
-  shadowBuf.height = scene.height;
+  // shadows are soft dark shapes: 2x resolution is plenty and much cheaper
+  shadowBuf.width = VW * shadowScale();
+  shadowBuf.height = H * shadowScale();
 }
 onResizeFX();
 
@@ -56,19 +58,20 @@ onResizeFX();
 // is touched, and the silhouette is made black with a composite fill
 // (no canvas filter), which keeps this cheap even at high resolutions.
 function drawActorShadow(a, draw) {
+  const SS = shadowScale();
   const sc = a.scale || 1;
   const bw = Math.ceil(130 * sc), bh = Math.ceil(140 * sc);
   const x0 = Math.floor(a.x + (a.ox || 0) - bw / 2), y0 = Math.floor(a.y - bh + 10);
-  const px0 = Math.max(0, (x0 + OX) * SCALE), py0 = Math.max(0, y0 * SCALE);
-  const pw = Math.min(shadowBuf.width - px0, (x0 + OX) * SCALE + bw * SCALE - px0);
-  const ph = Math.min(shadowBuf.height - py0, y0 * SCALE + bh * SCALE - py0);
+  const px0 = Math.max(0, (x0 + OX) * SS), py0 = Math.max(0, y0 * SS);
+  const pw = Math.min(shadowBuf.width - px0, (x0 + OX) * SS + bw * SS - px0);
+  const ph = Math.min(shadowBuf.height - py0, y0 * SS + bh * SS - py0);
   if (pw <= 0 || ph <= 0) return;
   const sb = shadowBuf.getContext('2d');
   sb.setTransform(1, 0, 0, 1, 0, 0);
   sb.clearRect(px0, py0, pw, ph);
   sb.save();
   sb.beginPath(); sb.rect(px0, py0, pw, ph); sb.clip();
-  sb.setTransform(SCALE, 0, 0, SCALE, OX * SCALE, 0);
+  sb.setTransform(SS, 0, 0, SS, OX * SS, 0);
   sb.imageSmoothingEnabled = false;
   const prev = ctx;
   ctx = sb;
@@ -82,7 +85,7 @@ function drawActorShadow(a, draw) {
   ctx.transform(1, 0, -0.9, -0.32, 0, 0);
   ctx.translate(-a.x, -a.y);
   ctx.globalAlpha = 0.38;
-  ctx.drawImage(shadowBuf, px0, py0, pw, ph, px0 / SCALE - OX, py0 / SCALE, pw / SCALE, ph / SCALE);
+  ctx.drawImage(shadowBuf, px0, py0, pw, ph, px0 / SS - OX, py0 / SS, pw / SS, ph / SS);
   ctx.restore();
 }
 

@@ -598,6 +598,13 @@ function drawVentana(t) {
   const epScenes = episodeScenes(curEp), epDone = epScenes.filter(isSceneDone).length;
   rect(cx, cy + ch + 4, cw, 12, '#0c0a14'); rect(cx, cy + ch + 4, cw, 1, '#2a1810');
   drawWallet(cx + 6, cy + ch + 7);
+  // rotating tips
+  const TIPS = ['Mini raid (Mapa) da Enkephalina', 'Gana choques: +1 Luz', 'El % de la flecha es tu probabilidad', 'Aturde: el enemigo recibe x2', 'E.G.O: gana el choque y remata', 'A: auto · L: historial', 'Copia tu partida en Ajustes → Datos', 'Velocidad de combate en Ajustes'];
+  const ti = Math.floor(t / 5000) % TIPS.length, tk = (t % 5000) / 5000;
+  ctx.globalAlpha = tk < 0.06 ? tk / 0.06 : tk > 0.94 ? (1 - tk) / 0.06 : 1;
+  txt('▸', cx + 76, cy + ch + 12, '#c0283a', 8);
+  txtFit(TIPS[ti], cx + 82, cy + ch + 12, '#a39c90', 7, cw - 88);
+  ctx.globalAlpha = 1;
   if (nextScene) {
     // quick way back into the story without going through the map
     const hv = G.ventHover;
