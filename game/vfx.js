@@ -96,3 +96,35 @@ function turnBanner() {
     }
   };
 }
+
+// ---- K.O. burst: shock rings and rays
+FX_DRAW.koBurst = (f, k) => {
+  const e = easeOut(Math.min(1, k * 1.4));
+  ctx.globalAlpha = 1 - k;
+  for (let r = 0; r < 3; r++) ring(Math.round(f.x), Math.round(f.y), Math.round(6 + e * (26 + r * 12)), r ? f.col : '#ffffff', 1);
+  for (let i = 0; i < 12; i++) {
+    const a = i / 12 * Math.PI * 2 + 0.2, r0 = 4 + e * 10, r1 = 10 + e * 40;
+    line(f.x + Math.cos(a) * r0, f.y + Math.sin(a) * r0, f.x + Math.cos(a) * r1, f.y + Math.sin(a) * r1, i % 2 ? f.col : '#ffffff');
+  }
+  light(f.x, f.y, 30 * (1 - k) + 6, 30 * (1 - k) + 6, f.col, 0.5 * (1 - k), 3);
+  ctx.globalAlpha = 1;
+};
+
+// ---- story: background changes get a quick slanted wipe instead of a cut
+{
+  const handle0 = handle;
+  handle = function (st) {
+    if (st.bg && G.s.bg && G.s.bg !== st.bg && G.fade < 0.5) G.bgWipe = performance.now();
+    return handle0(st);
+  };
+  const post0 = postFX;
+  postFX = function (s, t) {
+    post0(s, t);
+    const k = G.bgWipe ? (performance.now() - G.bgWipe) / 380 : 1;
+    if (k < 1 && G.mode !== 'combat') {
+      const x = -OX - 60 + easeOut(k) * (VW + 120);
+      poly([[x, 0], [W + OX, 0], [W + OX, H], [x - 50, H]], '#000');
+      line(x, 0, x - 50, H, '#c9a35a');
+    }
+  };
+}

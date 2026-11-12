@@ -467,6 +467,13 @@ function endTurn() {
     CB.phase = 'done';
     const won = CB.enemies.every(u => !alive(u));
     SFX.play(won ? 'victory' : 'defeat');
+    if (won && !CB.instant) {
+      // gold confetti rising from the winners
+      for (const u of CB.allies.filter(alive)) {
+        const c = chest(u);
+        for (let i = 0; i < 26 * CFG.particles; i++) CB.parts.push({ x: c.x + (Math.random() - 0.5) * 20, y: c.y, vx: (Math.random() - 0.5) * 2.2, vy: -1.5 - Math.random() * 2.2, g: 0.05, life: 60, max: 60, col: ['#ffd060', '#fff0b0', '#c9a35a'][i % 3], glow: true });
+      }
+    }
     if (won) { const u = CB.allies.find(alive); if (u) bark(u, 'win'); }
     if (won && CB.cfg && CB.cfg.raid && !CB.instant) { W$.add(CB.cfg.raid); SAVE.save({ raid_wins: SAVE.get('raid_wins', 0) + 1 }); }
     renderCombatUI();
@@ -562,7 +569,9 @@ function tween(obj, to, ms, ease = easeOut) {
 }
 // combat speed (Ajustes > Juego): every animation and pause is scaled by it
 const cspd = () => (G.mode === 'combat' ? CFG.combatSpeed || 1 : 1);
-const wait = (ms) => (CB.instant ? Promise.resolve() : delay(ms / cspd()));
+// slow motion after a K.O. stretches pauses for a moment
+const slowMo = () => (CB.slowUntil && performance.now() < CB.slowUntil ? 2.2 : 1);
+const wait = (ms) => (CB.instant ? Promise.resolve() : delay(ms * slowMo() / cspd()));
 const actorOf = (u) => G.actors[u.id];
 const dirTo = (A, B) => (Math.sign((actorOf(B) || B).x - (actorOf(A) || A).x) || 1);
 function chest(u) {
@@ -888,6 +897,12 @@ function dealDamage(u, hpD) {
     spawnAnim('text', p.x, p.y - 10, 'K.O.', '#ff4a5a', 1400, { big: true });
     SFX.play('ko');
     shake(500);
+    if (!CB.instant) {
+      // the last blow: a burst, a white flash and a short slow-motion beat
+      fx('koBurst', c.x, c.y, 900, { col: u.team === 'ally' ? '#ff4a5a' : '#ffd060' });
+      G.flash = { color: '#ffffff', start: performance.now(), ms: 160, a: 0.5 };
+      CB.slowUntil = performance.now() + 450;
+    }
   } else if (!u.staggered && u.st <= 0) {
     u.staggered = true;
     u.staggerTurns = 2;
