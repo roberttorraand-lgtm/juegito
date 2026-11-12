@@ -195,7 +195,7 @@ function figure(x, y, o, t) {
   }
   // the hand that holds things: the leading arm in a pose, else the free one
   const hand = P ? (o.armless ? armL : f > 0 ? armR : armL) : o.armless ? armL : f > 0 ? armR : armL;
-  for (const [col, extra] of o.flash ? [['#ffffff', 1], ['#ffd0d0', 0]] : [[FIG.edge, 1], [FIG.body, 0]]) {
+  for (const [col, extra] of o.flash ? [['#ffffff', 1], ['#ffd0d0', 0]] : o.tint ? [[o.tint, 0]] : [[FIG.edge, 1], [FIG.body, 0]]) {
     const th = 2 + extra * 2;
     disc(hx, hy, 5 + extra, col);
     line(hx, hy + 4, x, hip, col, th);

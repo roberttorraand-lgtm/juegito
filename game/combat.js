@@ -295,8 +295,7 @@ function newTurn() {
     d.target = targets[rnd(0, targets.length - 1)] || null;
   }
   CB.sel = allyDice().find(d => canAct(d.unit)) || null;
-  spawnAnim('text', 160, 72, `TURNO ${CB.turn}`, '#e8c060', 1200, { big: true });
-  CB.turnStart = performance.now();
+  CB.turnStart = performance.now() + turnBanner();
   SFX.play('turn');
 }
 
@@ -576,7 +575,7 @@ function dust(u, n = 6, dir = 0) {
   const f = feet(u);
   for (let i = 0; i < n * CFG.particles; i++) {
     CB.parts.push({ x: f.x + (Math.random() - 0.5) * 8, y: f.y - 1, vx: (Math.random() - 0.5) * 0.8 - dir * 0.6, vy: -Math.random() * 0.5,
-      g: -0.005, life: 22, max: 22, col: i % 2 ? '#8a8070' : '#5a5048' });
+      g: -0.004, life: 28, max: 28, col: i % 2 ? '#8a8070' : '#5a5048', kind: 'smoke', r0: 1, r1: 2.5 + Math.random() * 2.5 });
   }
 }
 
@@ -714,9 +713,15 @@ const FX_DRAW = {
 
 // screen-space effects are drawn outside the camera (fixed on screen)
 const FX_SCREEN = new Set(['egoBanner']);
+// drawn last, over the whole HUD (encounter card, turn banner)
+const FX_TOP = new Set();
+function drawTopFx() {
+  const now = performance.now();
+  for (const f of CB.fx) if (FX_TOP.has(f.type)) { const k = (now - f.start) / f.ms; if (k >= 0 && k < 1) FX_DRAW[f.type](f, k); }
+}
 function drawScreenFx() {
   const now = performance.now();
-  for (const f of CB.fx) if (FX_SCREEN.has(f.type)) { const k = (now - f.start) / f.ms; if (k >= 0 && k < 1) FX_DRAW[f.type](f, k); }
+  for (const f of CB.fx) if (FX_SCREEN.has(f.type) && !FX_TOP.has(f.type)) { const k = (now - f.start) / f.ms; if (k >= 0 && k < 1) FX_DRAW[f.type](f, k); }
 }
 function drawFx() {
   const now = performance.now();
@@ -730,8 +735,21 @@ function drawFx() {
     const dt = FRAME_DT;
     p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.vx *= Math.pow(0.97, dt);
     ctx.globalAlpha = Math.max(0, p.life / p.max);
-    if (p.len) line(p.x, p.y, p.x - p.vx * p.len, p.y - p.vy * p.len, p.col);
-    else rect(p.x, p.y, 1, 1, p.col);
+    if (p.kind === 'smoke') {
+      // a soft puff that swells as it fades
+      const q = 1 - p.life / p.max;
+      ctx.globalAlpha = 0.34 * (1 - q);
+      disc(Math.round(p.x), Math.round(p.y), Math.round(p.r0 + q * p.r1), p.col);
+    } else {
+      if (p.glow) {
+        const op = ctx.globalCompositeOperation, al = ctx.globalAlpha;
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = al * 0.45;
+        disc(Math.round(p.x), Math.round(p.y), 2, p.col);
+        ctx.globalCompositeOperation = op; ctx.globalAlpha = al;
+      }
+      if (p.len) line(p.x, p.y, p.x - p.vx * p.len, p.y - p.vy * p.len, p.col);
+      else rect(p.x, p.y, 1, 1, p.col);
+    }
     return (p.life -= dt) > 0;
   });
   ctx.globalAlpha = 1;
@@ -865,7 +883,7 @@ function dealDamage(u, hpD) {
   if (stD) spawnAnim('text', p.x + 12, p.y + 10, `-${stD}`, '#ffd060', 900);
   particles(c.x, c.y, Math.min(14, 4 + hpD), u.team === 'ally' ? ['#ff4a5a', '#ffffff'] : ['#ff6a3a', '#ffd060', '#ffffff'], 1.8);
   u._hurt = performance.now() + 300;
-  G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 110, a: u.team === 'ally' ? 0.45 : 0.25 };
+  G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 110, a: u.team === 'ally' ? 0.2 : 0.12 };
   if (u.hp <= 0) {
     spawnAnim('text', p.x, p.y - 10, 'K.O.', '#ff4a5a', 1400, { big: true });
     SFX.play('ko');
@@ -1845,6 +1863,7 @@ function drawCombatHUD(t) {
   if (CB.phase === 'select') selectPanel(t); else clashPanel();
   tooltip();
   drawTutorial(t);
+  drawTopFx();
   if (CB.help && CB.phase === 'select') drawHelp(t);
   cv.style.cursor = CB.hits.some(h => h.hot) ? 'pointer' : 'default';
 }

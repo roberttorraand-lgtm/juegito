@@ -702,7 +702,7 @@ function render(t) {
       const enemyDraw = { corrupted, machine: egoMachine, operator, cableskel: cableSkel }[a.kind];
       if (!enemyDraw) blendPose(a, now, t);
       const flash = (a.flashUntil || 0) > now;
-      const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk, flash, poseData: a._pNow }, t));
+      const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk, flash, tint: a._tint, poseData: a._pNow }, t));
       // combat animation offsets: ox/oy move, tilt rotates and sq squashes around the feet
       const posed = () => {
         if (!a.ox && !a.oy && !a.tilt && !a.sq) return base();
@@ -717,8 +717,11 @@ function render(t) {
       if (CFG.shadows && !a.lifted && !a.dying) drawActorShadow(a, () => { ctx.save(); ctx.translate(a.ox || 0, 0); base(); ctx.restore(); });
       const fade = a.alpha == null ? 1 : a.alpha;
       for (const g of a.ghosts || []) {
-        ctx.save(); ctx.globalAlpha = g.a * fade; ctx.translate(g.dx, 0); posed(); ctx.restore();
+        // afterimages take the colour of the move
+        a._tint = a.ghostCol || null;
+        ctx.save(); ctx.globalAlpha = g.a * fade * (a._tint ? 1.6 : 1); ctx.translate(g.dx, 0); posed(); ctx.restore();
       }
+      a._tint = null;
       ctx.globalAlpha = fade;
       posed();
       if (flash && enemyDraw) {
@@ -760,12 +763,19 @@ function render(t) {
       }
       ctx.textAlign = 'center';
       if (a.type === 'dmg') {
-        const bounce = progress < 0.15 ? progress / 0.15 * -8 : -8 + (progress - 0.15) * 12;
-        ctx.font = a.big ? '18px VT323, monospace' : '16px VT323, monospace';
-        ctx.fillStyle = '#200';
-        ctx.fillText(a.text, (a.x + 1) | 0, (a.y + bounce + 1) | 0);
-        ctx.fillStyle = a.color;
-        ctx.fillText(a.text, a.x | 0, (a.y + bounce) | 0);
+        // damage pops in big, tilted, and drifts up
+        const pop = progress < 0.12 ? 2 - (progress / 0.12) : 1 + Math.max(0, 0.18 - (progress - 0.12)) * 0.6;
+        const jx = (hash(Math.floor(a.start)) - 0.5) * 12;
+        ctx.save();
+        ctx.translate(Math.round(a.x + jx), Math.round(a.y - 6 - progress * 10));
+        ctx.rotate(a.big ? -0.16 : -0.07); ctx.scale(pop, pop);
+        ctx.font = `${a.big ? 21 : 15}px VT323, monospace`;
+        ctx.fillStyle = '#000';
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [1, 1]]) ctx.fillText(a.text, dx, dy);
+        if (a.big) { ctx.fillStyle = '#ffffff'; ctx.fillText(a.text, -1, -1); }
+        ctx.fillStyle = a.color; ctx.fillText(a.text, 0, 0);
+        if (a.big) { const w = ctx.measureText(a.text).width; ctx.fillRect(-w / 2 - 2, 3, w + 6, 1); }
+        ctx.restore();
       } else {
         ctx.font = `${a.big ? 16 : 11}px VT323, monospace`;
         const yOff = -progress * 6;

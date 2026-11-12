@@ -104,6 +104,17 @@ function present(t) {
   if (F.x || F.y) { vctx.fillStyle = '#000'; vctx.fillRect(0, 0, cv.width, cv.height); vctx.globalCompositeOperation = 'source-over'; }
   vctx.drawImage(scene, F.x, F.y, F.w, F.h);
   vctx.restore();
+  // impact blur: on heavy hits the image splits sideways for a few frames
+  if (G.aberr) {
+    const k = 1 - (performance.now() - G.aberr.start) / G.aberr.ms;
+    if (k <= 0) G.aberr = null;
+    else {
+      const d = G.aberr.px * k * F.w / VW * 1.5;
+      vctx.save(); vctx.globalAlpha = 0.3 * k;
+      vctx.drawImage(scene, F.x + d, F.y, F.w, F.h); vctx.drawImage(scene, F.x - d, F.y, F.w, F.h);
+      vctx.restore();
+    }
+  }
 
   if (CFG.bloom) {
     bloomActx.globalCompositeOperation = 'copy';

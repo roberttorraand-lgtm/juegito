@@ -135,7 +135,7 @@ FX_SCREEN.add('focus'); FX_SCREEN.add('speed'); FX_SCREEN.add('invert');
 function sparks(x, y, n, cols, dir, speed = 2.5) {
   for (let i = 0; i < n * CFG.particles; i++) {
     const a = (Math.random() - 0.5) * 1.9 + (dir < 0 ? Math.PI : 0), v = speed * (0.5 + Math.random());
-    CB.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 0.4, g: 0.06, life: 14 + (i % 6), max: 20, col: cols[i % cols.length], len: 2.2 });
+    CB.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 0.4, g: 0.06, life: 14 + (i % 6), max: 20, col: cols[i % cols.length], len: 2.2, glow: true });
   }
 }
 
@@ -162,6 +162,7 @@ function impactAt(c, power, o = {}) {
   }
   if (power >= 2) G.flash = { color: '#ffffff', start: performance.now(), ms: 50 + power * 10, a: 0.35 };
   if (power >= 3) fx('invert', 160, 0, 110, { col: c.col });
+  if (power >= 2 && CFG.shakeFx) G.aberr = { start: performance.now(), ms: 180, px: power };
 }
 const hitFx = (power, o) => (c) => impactAt(c, (o && o.power) || Math.max(power, c.power), o);
 // a cosmetic hit inside a combo: sparks and a sound, no shake
@@ -416,7 +417,7 @@ async function playFrame(U, a, fr, base, c) {
     // cable skeletons and other monsters only know a punch
     a.pose = U.kind ? (U.kind === 'cableskel' && fr.hit ? 'punch' : null) : fr.pose;
   }
-  if (fr.ghost) trail(a, c.dir, fr.ghost);
+  if (fr.ghost) { trail(a, c.dir, fr.ghost); a.ghostCol = c.col; }
   const to = {};
   if (fr.x != null) to.ox = base + c.dir * fr.x;
   if (fr.y != null) to.oy = fr.y;
