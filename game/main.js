@@ -680,7 +680,13 @@ function render(t) {
   ctx.save();
   ctx.scale(SCALE, SCALE);
   ctx.translate(OX, 0);
-  if (now < G.shakeUntil && CFG.shakeFx) ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
+  if (now < G.shakeUntil && CFG.shakeFx) {
+    if (CFG.softFlash) {
+      // a smooth sway that dies out, instead of random jitter
+      const amp = Math.min(1, (G.shakeUntil - now) / 220);
+      ctx.translate(Math.round(Math.sin(now / 17) * 2.5 * amp), Math.round(Math.cos(now / 23) * 1.5 * amp));
+    } else ctx.translate(Math.round((Math.random() - 0.5) * 6), Math.round((Math.random() - 0.5) * 4));
+  }
 
   if (G.mode === 'title') {
     drawTitle(t);
@@ -726,7 +732,7 @@ function render(t) {
       posed();
       if (flash && enemyDraw) {
         // brighten the enemy for a frame or two when it is hit
-        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.65; posed();
+        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = CFG.softFlash ? 0.28 : 0.65; posed();
         ctx.globalCompositeOperation = 'source-over';
       }
       ctx.globalAlpha = 1;
@@ -744,7 +750,7 @@ function render(t) {
   if (G.flash) {
     const k = 1 - (now - G.flash.start) / G.flash.ms;
     if (k <= 0) G.flash = null;
-    else { ctx.globalAlpha = Math.min(1, k * 1.2) * (G.flash.a || 1); rect(-OX, 0, VW, H, G.flash.color); ctx.globalAlpha = 1; }
+    else { ctx.globalAlpha = Math.min(1, k * 1.2) * (G.flash.a || 1) * (CFG.softFlash ? (G.mode === 'combat' ? 0.2 : 0.45) : 1); rect(-OX, 0, VW, H, G.flash.color); ctx.globalAlpha = 1; }
   }
 
   const animCam = CB.active && CB.anims.length > 0 && camOn();

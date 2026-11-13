@@ -162,7 +162,7 @@ function impactAt(c, power, o = {}) {
   }
   if (power >= 2) G.flash = { color: '#ffffff', start: performance.now(), ms: 50 + power * 10, a: 0.35 };
   if (power >= 3) fx('invert', 160, 0, 110, { col: c.col });
-  if (power >= 2 && CFG.shakeFx) G.aberr = { start: performance.now(), ms: 180, px: power };
+  if (power >= 3 && CFG.shakeFx && !CFG.softFlash) G.aberr = { start: performance.now(), ms: 180, px: power };
 }
 const hitFx = (power, o) => (c) => impactAt(c, (o && o.power) || Math.max(power, c.power), o);
 // a cosmetic hit inside a combo: sparks and a sound, no shake
@@ -413,7 +413,7 @@ async function playMove(U, T, frames, c) {
 }
 async function playFrame(U, a, fr, base, c) {
   if (fr.pose !== undefined) {
-    a.poseMs = fr.blend ?? 26;
+    a.poseMs = fr.blend ?? Math.round((fr.ms ?? 60) * (fr.hit ? 1.9 : 1.2));
     // cable skeletons and other monsters only know a punch
     a.pose = U.kind ? (U.kind === 'cableskel' && fr.hit ? 'punch' : null) : fr.pose;
   }
@@ -423,13 +423,17 @@ async function playFrame(U, a, fr, base, c) {
   if (fr.y != null) to.oy = fr.y;
   if (fr.tilt != null) to.tilt = c.dir * fr.tilt;
   if (fr.sq != null) to.sq = fr.sq;
-  const ms = fr.ms ?? 60, mv = Math.min(ms, fr.move ?? 34);
+  // Every frame flows into the next: wind-ups ease in and out, the strike
+  // accelerates into the impact, and limbs blend over the whole motion.
+  const hit = !!fr.hit;
+  const ms = Math.round((fr.ms ?? 60) * (hit ? 2.4 : 1.6));
+  const mv = Math.round(ms * (hit ? 0.9 : 0.75));
   if (fr.sfx) SFX.play(fr.sfx);
-  await tween(a, to, mv, easeOut);
+  await tween(a, to, mv, hit ? easeIn : easeInOut);
   if (fr.fx) { c.c = chest(c.T); c.h = handOf(c.U, c.dir); c.f = feet(c.T); fr.fx(c); }
-  if (fr.ghost) setTimeout(() => { if (a.ghosts) a.ghosts = null; }, 70);
+  if (fr.ghost) setTimeout(() => { if (a.ghosts) a.ghosts = null; }, 110);
   await wait(ms - mv);
-  if (fr.hit) await wait(fr.stop ?? (50 + c.power * 20));   // hit-stop
+  if (fr.hit) await wait(Math.min(110, fr.stop ?? (40 + c.power * 20)));   // hit-stop
 }
 function handOf(U, dir) {
   const a = actorOf(U), s = (U.scale || 1) * (U.hat === 'cap' ? 0.86 : 1);

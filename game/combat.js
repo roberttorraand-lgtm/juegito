@@ -803,7 +803,7 @@ async function recoilAnim(T, from, dmg = 0) {
   const a = actorOf(T);
   if (!a) return;
   const dir = -dirTo(T, from), heavy = dmg >= 8;
-  a.poseMs = 20;
+  a.poseMs = 70;
   a.pose = T.kind ? null : 'hurt';
   a.flashUntil = performance.now() + 90;
   await tween(a, { ox: dir * (heavy ? 12 : 7), oy: heavy ? -4 : -1, tilt: -(heavy ? 0.24 : 0.14) * dir, sq: -0.06 }, 70);
@@ -842,11 +842,12 @@ async function guardAnim(u, from) {
 
 async function clashCollide(A, E) {
   const a = actorOf(A), e = actorOf(E);
-  for (const [x, u] of [[a, A], [e, E]]) if (x) { x.poseMs = 20; x.pose = u.kind ? null : 'cock'; x.atk = true; }
-  await Promise.all([tween(a, { ox: -3, tilt: -0.08 }, 50), tween(e, { ox: 3, tilt: 0.08 }, 50)]);
+  for (const [x, u] of [[a, A], [e, E]]) if (x) { x.poseMs = 110; x.pose = u.kind ? null : 'cock'; x.atk = true; }
+  await Promise.all([tween(a, { ox: -4, tilt: -0.1 }, 130, easeInOut), tween(e, { ox: 4, tilt: 0.1 }, 130, easeInOut)]);
   for (const [x, u] of [[a, A], [e, E]]) if (x) { x.pose = u.kind ? (u.kind === 'cableskel' ? 'punch' : null) : 'cross'; }
   trail(a, 1, 2); trail(e, -1, 2);
-  await Promise.all([tween(a, { ox: 9, tilt: 0.12 }, 45, easeIn), tween(e, { ox: -9, tilt: -0.12 }, 45, easeIn)]);
+  for (const x of [a, e]) if (x) x.poseMs = 90;
+  await Promise.all([tween(a, { ox: 9, tilt: 0.12 }, 95, easeIn), tween(e, { ox: -9, tilt: -0.12 }, 95, easeIn)]);
   const pa = chest(A), pe = chest(E);
   const mx = (pa.x + pe.x) / 2, my = Math.min(pa.y, pe.y) - 2;
   fx('clash', mx, my, 380);

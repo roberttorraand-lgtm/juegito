@@ -160,6 +160,20 @@ function drawEyes(o, mpx, t) {
   for (const [dx, dy] of E.brows || []) mpx(dx, dy - up, FIG.eye);
 }
 
+// A limb of length L from (x0,y0) to (x1,y1): straight when stretched,
+// bent at a joint when the end is closer than L (two-bone IK).
+function limb(x0, y0, x1, y1, L, side, f, col, th) {
+  const dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
+  if (d >= L - 0.6 || d < 0.5) return line(x0, y0, x1, y1, col, th);
+  const h = Math.sqrt(L * L / 4 - d * d / 4);
+  let px = -dy / d, py = dx / d;
+  // elbows hang down (and back when the arm is vertical); knees go forward
+  const flip = side === 'down' ? (Math.abs(py) > 0.15 ? py < 0 : px * f > 0) : px * f < 0;
+  if (flip) { px = -px; py = -py; }
+  const ex = Math.round((x0 + x1) / 2 + px * h), ey = Math.round((y0 + y1) / 2 + py * h);
+  line(x0, y0, ex, ey, col, th); line(ex, ey, x1, y1, col, th);
+}
+
 function figure(x, y, o, t) {
   const kid = o.hat === 'cap';
   const sc = (o.scale || 1) * (kid ? 0.86 : 1);
@@ -199,9 +213,17 @@ function figure(x, y, o, t) {
     const th = 2 + extra * 2;
     disc(hx, hy, 5 + extra, col);
     line(hx, hy + 4, x, hip, col, th);
-    line(sx, sh, armL[0], armL[1], col, th);
-    line(sx, sh, armR[0], armR[1], col, th);
-    for (const l of legs) line(x, hip, l[0], l[1], col, th);
+    if (P || o.walking) {
+      // in motion the limbs bend: elbows drop, knees push forward
+      limb(sx, sh, armL[0], armL[1], 10.8, 'down', f, col, th);
+      if (o.armless) line(sx, sh, armR[0], armR[1], col, th);
+      else limb(sx, sh, armR[0], armR[1], 10.8, 'down', f, col, th);
+      for (const l of legs) limb(x, hip, l[0], l[1], 10.8, 'fwd', f, col, th);
+    } else {
+      line(sx, sh, armL[0], armL[1], col, th);
+      line(sx, sh, armR[0], armR[1], col, th);
+      for (const l of legs) line(x, hip, l[0], l[1], col, th);
+    }
   }
   // mirrored helpers: dx is measured toward the facing direction
   const mpx = (dx, dy, c) => px(hx + dx * f, hy + dy, c);
