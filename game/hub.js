@@ -239,7 +239,7 @@ function showSettings(tab = 'audio', quiet = false) {
         </div>
       </div>
       <div ${panel('datos')}>
-        ${toggle('devUnlock', 'Modo pruebas', 'Desbloquea el Gacha y el Workshop antes de llegar a ellos en la historia')}
+        ${toggle('devUnlock', 'Modo pruebas', 'Desbloquea el Workshop antes de llegar a él en la historia')}
         <div class="st-group">
           <div class="st-label">Copiar partida a otro dispositivo</div>
           <div class="st-hint">Exporta tu progreso como un código y pégalo en el móvil, el PC o el navegador para continuar allí.</div>

@@ -12,9 +12,11 @@
 // Features opened by the story: the E.G.O extraction (gacha) once the
 // machine is used in the story, the workshop further on. A story step
 // { unlock: 'gacha' } opens one. Ajustes > Datos has a test switch.
-const unlocked = (k) => !!(SAVE.get('unlock_' + k) || CFG.devUnlock);
+// the extraction machine stays shut until its weapons exist
+const GACHA_READY = () => EGO_WEAPONS.length > 0;
+const unlocked = (k) => (k === 'gacha' && !GACHA_READY() ? false : !!(SAVE.get('unlock_' + k) || CFG.devUnlock));
 const LOCK_TEXT = {
-  gacha: 'Bloqueado: se desbloquea al usar la máquina E.G.O en la historia',
+  gacha: 'Bloqueado: la E.G.O Extraction Machine llegará con la historia',
   taller: 'Bloqueado: el Workshop se desbloquea al avanzar en la historia',
 };
 
@@ -29,37 +31,21 @@ const RISK = {
 const RISK_ORDER = ['ZAYIN', 'TETH', 'HE', 'WAW', 'ALEPH'];
 const PULL_COST = 100, ENK_PER_EPISODE = 1000, PITY = 80;
 
-// First batch, made up to test the gacha; replace freely.
-const EGO_WEAPONS = [
-  { id: 'taza', name: 'Taza Rota', risk: 'ZAYIN', kind: 'mug',
-    desc: 'La taza que Lobelto estampó en la cara de aquella cosa. Ahora pesa más de lo que debería.',
-    dice: [['blunt', 6, 10], ['blunt', 5, 8]] },
-  { id: 'pieza', name: 'Pieza Olvidada', risk: 'ZAYIN', kind: 'hammer',
-    desc: 'Nadie recuerda haberla fabricado, pero encaja en la mano como si fuera tuya.',
-    dice: [['blunt', 5, 9], ['blunt', 5, 9]] },
-  { id: 'cable', name: 'Cable Pelado', risk: 'TETH', kind: 'whip',
-    desc: 'Aún chisporrotea. A veces se mueve solo cuando nadie lo mira.',
-    dice: [['slash', 4, 7], ['slash', 4, 7], ['slash', 4, 7]] },
-  { id: 'pantalla', name: 'Pantalla Azul', risk: 'TETH', kind: 'monitor',
-    desc: 'Un monitor reventado atado a un palo. Se reinicia en el peor momento.',
-    dice: [['blunt', 7, 11], ['blunt', 6, 10]] },
-  { id: 'prensa', name: 'Prensa', risk: 'HE', kind: 'hammer',
-    desc: 'Un trozo de la prensa hidráulica de la máquina ZAYIN. Golpea como una cadena de montaje.',
-    dice: [['blunt', 10, 15], ['blunt', 8, 12]] },
-  { id: 'llamada', name: 'Llamada Perdida', risk: 'HE', kind: 'spear',
-    desc: 'Una lanza fina que suena con un tono de llamada cada vez que atraviesa algo.',
-    dice: [['pierce', 6, 10], ['pierce', 6, 10], ['pierce', 6, 10]] },
-  { id: 'dentada', name: 'Hoja Dentada', risk: 'WAW', kind: 'blade',
-    desc: 'El arma que se fundió al brazo de aquel empleado. Todavía está caliente.',
-    dice: [['slash', 12, 18], ['slash', 10, 15]] },
-  { id: 'gudbais', name: 'Gud Bais', risk: 'WAW', kind: 'gun',
-    desc: 'Por fin un E.G.O gud bais. Gonza sabrá lo que prometió.',
-    dice: [['pierce', 9, 14], ['pierce', 9, 14], ['pierce', 9, 14]] },
-  { id: 'cantox', name: 'Canto X', risk: 'ALEPH', kind: 'scythe',
-    desc: 'Lobelto lo dijo: «si o si en el canto 10 sacan un E.G.O Aleph». Tenía razón.',
-    dice: [['slash', 16, 24], ['slash', 14, 20], ['slash', 12, 18]] },
-];
+// The E.G.O weapons are being designed: the list is empty until they are
+// added. Each entry: { id, name, risk, kind, desc, dice } (kind picks the
+// icon and the generic ultimate moves; a FINISHERS[id] entry in cinema.js
+// gives it its own finisher).
+const EGO_WEAPONS = [];
 const EGO_BY_ID = Object.fromEntries(EGO_WEAPONS.map(w => [w.id, w]));
+// forget saved weapons that no longer exist
+{
+  const own = SAVE.get('ego_owned', {}), eq = SAVE.get('ego_eq', {});
+  const o2 = Object.fromEntries(Object.entries(own).filter(([id]) => EGO_BY_ID[id]));
+  const e2 = Object.fromEntries(Object.entries(eq).filter(([, id]) => EGO_BY_ID[id]));
+  if (Object.keys(o2).length !== Object.keys(own).length || Object.keys(e2).length !== Object.keys(eq).length) SAVE.save({ ego_owned: o2, ego_eq: e2 });
+  const log = SAVE.get('pull_log', []);
+  if (log.some(e => !EGO_BY_ID[e.id])) SAVE.save({ pull_log: log.filter(e => EGO_BY_ID[e.id]) });
+}
 const egoCol = (w) => RISK[w.risk].col;
 // the combat page of a weapon's ultimate
 const egoPage = (w) => ({ name: w.name, tier: 'E', ego: w, dice: w.dice });
@@ -104,7 +90,7 @@ function rollRisk(forceHigh) {
 }
 
 function extract(n) {
-  if (W$.enk() < PULL_COST * n) { SFX.play('error'); return; }
+  if (!GACHA_READY() || W$.enk() < PULL_COST * n) { SFX.play('error'); return; }
   W$.add(-PULL_COST * n);
   let pity = SAVE.get('pity', 0);
   const out = [];
