@@ -52,7 +52,7 @@ const EGO_BY_ID = Object.fromEntries(EGO_WEAPONS.map(w => [w.id, w]));
 // Economy resets: when ECONOMY_VERSION goes up, every save starts again
 // from zero (Enkephalina, Ahn, pity, pulls, raid wins), and episode rewards
 // are paid again from the story progress, so all players end up equal.
-const ECONOMY_VERSION = 2;
+const ECONOMY_VERSION = 3;
 if (SAVE.get('eco_v', 1) < ECONOMY_VERSION) {
   const wipe = { eco_v: ECONOMY_VERSION, enk: 0, ahn: 0, pity: 0, pulls: 0, pull_log: [], raid_wins: 0, ego_owned: {}, ego_eq: {} };
   for (const k of Object.keys(SAVE._data)) if (k.startsWith('enk_ep')) wipe[k] = false;
