@@ -3,7 +3,7 @@
 //  and the Mejoras tab where each character equips one weapon.
 //
 //  Enkephalina: earned by finishing an episode; pays for extractions.
-//  Ahn: earned by selling E.G.O weapons or exchanging Enkephalina; pays
+//  Ahn: earned only by selling E.G.O weapons; pays
 //  for future features (the shop is gone for now).
 //  An equipped E.G.O weapon is a one-use-per-fight ultimate that costs
 //  Light (more for higher risk levels).
@@ -27,7 +27,7 @@ const RISK = {
   ALEPH: { col: '#e03040', light: 6, sell: 8000, rate: 0.015 },
 };
 const RISK_ORDER = ['ZAYIN', 'TETH', 'HE', 'WAW', 'ALEPH'];
-const PULL_COST = 100, ENK_PER_EPISODE = 1000, ENK_TO_AHN = 10, PITY = 80;
+const PULL_COST = 100, ENK_PER_EPISODE = 1000, PITY = 80;
 
 // First batch, made up to test the gacha; replace freely.
 const EGO_WEAPONS = [
@@ -138,12 +138,6 @@ function sellWeapon(id) {
   o[id]--; if (!o[id]) delete o[id];
   SAVE.save({ ego_owned: o });
   W$.add(0, RISK[w.risk].sell);
-  SFX.play('coins');
-  MK.say('sell');
-}
-function exchangeEnk() {
-  if (W$.enk() < PULL_COST) { SFX.play('error'); return; }
-  W$.add(-PULL_COST, PULL_COST * ENK_TO_AHN);
   SFX.play('coins');
   MK.say('sell');
 }
@@ -387,11 +381,7 @@ function drawSellTab(b, t) {
     const ok = W$.free(w.id) > 0;
     hubButton(b.x + b.w - 54, y + 1, 52, 8, ok ? `+${RISK[w.risk].sell}` : 'EQUIPADA', () => sellWeapon(w.id), ok, '#a08030');
   });
-  const y = b.y + b.h - 15;
-  rect(b.x, y - 3, b.w, 1, '#3a2418');
-  txt(`Cambiar ${PULL_COST} Enkephalina`, b.x + 2, y + 6, '#c8fff0', 8);
-  txt(`→ ${PULL_COST * ENK_TO_AHN} Ahn`, b.x + 2, y + 13, '#ffe8b0', 7);
-  hubButton(b.x + b.w - 54, y, 52, 12, 'CAMBIAR', exchangeEnk, W$.enk() >= PULL_COST, '#a08030');
+  txt('Los Ahn se usarán en el Workshop.', b.x + b.w / 2, b.y + b.h - 4, '#6a6070', 7, 'center');
 }
 
 // ---- extraction reveal: the box shakes and glows in the colour of the best
