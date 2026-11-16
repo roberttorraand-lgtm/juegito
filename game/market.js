@@ -31,11 +31,23 @@ const RISK = {
 const RISK_ORDER = ['ZAYIN', 'TETH', 'HE', 'WAW', 'ALEPH'];
 const PULL_COST = 100, ENK_PER_EPISODE = 1000, PITY = 80;
 
-// The E.G.O weapons are being designed: the list is empty until they are
-// added. Each entry: { id, name, risk, kind, desc, dice } (kind picks the
-// icon and the generic ultimate moves; a FINISHERS[id] entry in cinema.js
-// gives it its own finisher).
-const EGO_WEAPONS = [];
+// The E.G.O weapons. Each entry: { id, name, risk, kind, abno, desc, dice, clashPower }.
+//  kind        icon and generic moves
+//  dice        the damage the finisher deals (only the finisher deals damage)
+//  clashPower  the fixed power of every coin in the special E.G.O clash; the
+//              E.G.O page copies the rival page's number of coins
+// Each weapon has a finisher per character in cinema.js (FINISHERS['id:unit']).
+const EGO_WEAPONS = [
+  { id: 'soda', name: 'Pistola de soda', risk: 'ZAYIN', kind: 'sodagun', abno: 'Opened Can of WellCheers', clashPower: 6,
+    desc: 'Una pistola que dispara soda a presión. Huele a camarón. Choque: potencia fija 6.',
+    dice: [['pierce', 4, 7], ['pierce', 4, 7]] },
+  { id: 'latigo', name: 'Látigo electrificado', risk: 'ZAYIN', kind: 'whip', abno: 'The Disconnected Operator', clashPower: 6,
+    desc: 'Un cable pelado con mango aislante. Cada azote suelta una descarga. Choque: potencia fija 6.',
+    dice: [['slash', 3, 5], ['slash', 3, 5], ['slash', 3, 6]] },
+  { id: 'hacha', name: 'Hacha de batalla de pantalla', risk: 'ZAYIN', kind: 'axe', abno: 'The Disconnected Operator', clashPower: 7,
+    desc: 'Un monitor viejo afilado como un hacha. Pesa muchísimo. Choque: potencia fija 7.',
+    dice: [['blunt', 6, 9], ['blunt', 5, 8]] },
+];
 const EGO_BY_ID = Object.fromEntries(EGO_WEAPONS.map(w => [w.id, w]));
 // Economy resets: when ECONOMY_VERSION goes up, every save starts again
 // from zero (Enkephalina, Ahn, pity, pulls, raid wins), and episode rewards
@@ -58,6 +70,8 @@ if (SAVE.get('eco_v', 1) < ECONOMY_VERSION) {
 const egoCol = (w) => RISK[w.risk].col;
 // the combat page of a weapon's ultimate
 const egoPage = (w) => ({ name: w.name, tier: 'E', ego: w, dice: w.dice });
+// the special clash: as many coins as the rival page, all at the weapon's fixed power
+const egoClashDice = (w, n) => Array.from({ length: Math.max(1, n) }, () => [w.dice[0][0], w.clashPower || 6, w.clashPower || 6]);
 
 // ---------------------------------------------------------------------
 //  Wallet and inventory (all in SAVE)
@@ -154,6 +168,16 @@ function egoIcon(kind, cx, cy, s, col) {
     let px0 = -3, py0 = 3;
     for (let k = 1; k <= 6; k++) { const x = -3 + k * 1.5, y = 3 - k * 1.6 + (k % 2 ? 1.5 : -1.5); line(px0, py0, x, y, col, 1); px0 = x; py0 = y; }
     px(px0 + 1, py0, '#ffffff');
+  } else if (kind === 'sodagun') {
+    // a soda pistol: can-shaped tank on top, chunky nozzle
+    rect(-5, -2, 9, 3, '#2a6a9a'); rect(-5, -2, 9, 1, '#8ae0ff'); rect(-2, 1, 3, 5, '#3a3a42');
+    rect(-4, -6, 5, 4, '#d8e8f0'); rect(-4, -6, 5, 1, '#ffffff'); rect(-4, -4, 5, 1, '#e04040');
+    rect(4, -1, 3, 2, col); px(7, -1, '#ffffff');
+  } else if (kind === 'axe') {
+    // a battle axe whose head is an old CRT monitor with a sharpened edge
+    line(0, 7, 0, -7, '#6a4a30', 2);
+    rect(-1, -9, 7, 7, '#3a3a42'); rect(0, -8, 5, 5, col); rect(1, -7, 2, 1, '#ffffff'); rect(1, -5, 3, 1, '#c8fff0');
+    line(6, -10, 7, -1, '#e8f0f0', 1); px(-1, -9, '#5a5a66');
   } else if (kind === 'monitor') {
     line(0, 6, 0, 0, '#6a4a30', 2); rect(-5, -7, 10, 8, '#3a3a42'); rect(-4, -6, 8, 6, col); rect(-3, -4, 4, 1, '#ffffff'); rect(-3, -2, 2, 1, '#ffffff');
   } else if (kind === 'spear') {
@@ -475,6 +499,7 @@ function drawHubNotice(t) {
 // ---------------------------------------------------------------------
 const RAIDS = [
   { set: 'tut_skeletons', name: 'Esqueletos cableados', place: 'Pasillo de la sucursal', reward: 150, skulls: 1 },
+  { set: 'wellcheers', name: 'Opened Can of WellCheers', place: 'Sucursal de L Corp', reward: 200, skulls: 1 },
   { set: 'machine', name: 'E.G.O Extraction Machine', place: 'Celda de contención', reward: 250, skulls: 2 },
   { set: 'corrupted', name: 'Empleado distorsionado', place: 'Callejón del Distrito D', reward: 400, skulls: 3 },
   { set: 'operator', name: 'The Disconnected Operator', place: 'Celda de contención', reward: 500, skulls: 4 },

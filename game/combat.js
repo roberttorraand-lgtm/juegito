@@ -120,6 +120,19 @@ const COMBAT_UNITS = {
       { name: 'Sobrecarga', dice: [['pierce', 5, 9], ['counter', 4, 7]] },
     ],
   },
+  // ZAYIN (L Corp branch): a soda machine kept by shrimp. Two pages a turn on a fixed cycle.
+  wellcheers: {
+    id: 'wellcheers', name: 'OPENED CAN OF WELLCHEERS', tag: 'ZAYIN', tagCol: '#2a7a3a', team: 'enemy', maxHp: 75, maxSt: 18, speed: [2, 5], nDice: 2,
+    kind: 'wellcheers', bg: 'cell', height: 80, bx: 258, by: 106, scale: 0.6,
+    pattern: [[0, 1], [2, 3], [1, 0], [3, 2]],
+    defeat: 'La máquina de WellCheers suelta un último chorro de soda. Los camarones se dispersan.',
+    pages: [
+      { name: 'Chorro a presión', dice: [['pierce', 3, 6], ['pierce', 3, 6]] },
+      { name: 'Lata disparada', dice: [['blunt', 5, 9]] },
+      { name: 'Pinzas de camarón', dice: [['slash', 2, 5], ['slash', 2, 5], ['slash', 2, 5]] },
+      { name: 'Espuma burbujeante', dice: [['block', 4, 7], ['pierce', 3, 5]] },
+    ],
+  },
   // Episode 2: corpses moved by the Disconnected Operator's cables
   skel: {
     id: 'skel', name: 'ESQUELETO CABLEADO', tag: 'TETH?', tagCol: '#2a5aa0', team: 'enemy', maxHp: 30, maxSt: 11, speed: [2, 5], nDice: 1,
@@ -137,6 +150,7 @@ const COMBAT_SETS = {
   corrupted: { enemies: ['corrupted'] },
   machine: { enemies: ['machine'] },
   operator: { enemies: ['operator'] },
+  wellcheers: { enemies: ['wellcheers'] },
   tut_skeletons: {
     name: 'Esqueletos cableados', enemies: ['skel', 'skel'], bg: 'corridor', music: 'battle_teth', tutorial: true,
     defeat: 'Los cables chisporrotean, se sueltan y los huesos caen al suelo.',
@@ -568,7 +582,8 @@ function tween(obj, to, ms, ease = easeOut) {
   });
 }
 // combat speed (Ajustes > Juego): every animation and pause is scaled by it
-const cspd = () => (G.mode === 'combat' ? CFG.combatSpeed || 1 : 1);
+// E.G.O cinematics always play at normal speed, whatever the combat speed
+const cspd = () => (G.mode === 'combat' && !CB.cine ? CFG.combatSpeed || 1 : 1);
 // slow motion after a K.O. stretches pauses for a moment
 const slowMo = () => (CB.slowUntil && performance.now() < CB.slowUntil ? 2.2 : 1);
 const wait = (ms) => (CB.instant ? Promise.resolve() : delay(ms * slowMo() / cspd()));
@@ -1013,8 +1028,15 @@ async function doClash(ad, ed) {
   if (ad.page.ego) {
     // E.G.O: a pure clash with no damage; only a win plays the finisher,
     // which deals all the damage. A loss lets the enemy's coins hit.
+    // special clash: the E.G.O page copies the rival's number of coins, every
+    // coin at the weapon's fixed power. Winning a coin breaks the rival's coin
+    // and deals no damage.
+    const real = sa.page, w = real.ego;
+    sa.page = { ...real, dice: egoClashDice(w, qe.length - se.i) };
     await egoClashLoop(A, E, sa, se);
-    if (sa.i < qa.length && canAct(A) && alive(E)) await egoCinematic(sa, E, stats);
+    const won = sa.i < sa.page.dice.length;
+    sa.page = real; sa.i = 0;
+    if (won && canAct(A) && alive(E)) await egoCinematic(sa, E, stats);
     else if (alive(A)) { const p = headPos(A); spawnAnim('text', p.x, p.y - 24, 'E.G.O ROTO', '#ff4a5a', 1100, { big: true }); SFX.play('stagger'); }
     await leftovers(se, A, stats);
   } else {
@@ -1439,13 +1461,15 @@ function clashOdds(pa, pb) {
   const n = 300;
   for (let k = 0; k < n; k++) {
     if (pa.ego) {
-      // coins break one by one; win if the E.G.O page still has coins at the end
-      let ia = 0, ib = 0, guard = 0;
-      while (ia < pa.dice.length && ib < pb.dice.length && guard++ < 50) {
-        const ra = rnd(pa.dice[ia][1], pa.dice[ia][2]), rb = rnd(pb.dice[ib][1], pb.dice[ib][2]);
-        if (ra > rb) ib++; else if (rb > ra) ia++;
+      // special clash: as many coins as the rival, all at a fixed power;
+      // coins break one by one, win if the E.G.O page still has coins at the end
+      const P = pa.ego.clashPower || 6, na = pb.dice.length;
+      let ia = 0, ib = 0, ties = 0, guard = 0;
+      while (ia < na && ib < pb.dice.length && guard++ < 50) {
+        const rb = rnd(pb.dice[ib][1], pb.dice[ib][2]);
+        if (P > rb) { ib++; ties = 0; } else if (rb > P) { ia++; ties = 0; } else if (++ties > 2) { ia++; ib++; ties = 0; }
       }
-      if (ia < pa.dice.length) win++;
+      if (ia < na) win++;
     } else {
       const [a, b] = simClash(pa, pb);
       win += a > b ? 1 : a === b ? 0.5 : 0;   // [damage dealt by A, by B]
@@ -1868,7 +1892,7 @@ function drawCombatHUD(t) {
   if (cam) ctx.restore();
   drawScreenFx();
   // during an E.G.O finisher the HUD steps aside for letterbox bars
-  if (CB.cine) { drawCineOverlay(t); return; }
+  if (CB.cine) { drawCineOverlay(t); drawTopFx(); return; }
   for (const u of CB.enemies) if (alive(u)) enemyPlate(u, t);
   if (CB.phase === 'select') {
     const focus = focusUnit();

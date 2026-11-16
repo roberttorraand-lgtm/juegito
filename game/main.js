@@ -699,13 +699,15 @@ function render(t) {
     // combat: back to front by depth; story: monsters behind, then Gonza, Lobelto in front
     const STORY_ORDER = ['corrupted', 'skel1', 'skel2', 'gonza', 'lobelto'];
     const order = G.mode === 'combat'
-      ? Object.keys(G.actors).sort((a, b) => G.actors[a].y - G.actors[b].y)
+      ? Object.keys(G.actors).sort((a, b) => (CB.cine && CB.cine.ids && CB.cine.front !== false ? (a === CB.cine.ids[0]) - (b === CB.cine.ids[0]) : 0) || G.actors[a].y - G.actors[b].y)
       : [...STORY_ORDER, ...Object.keys(G.actors).filter(k => !STORY_ORDER.includes(k))];
     for (const id of order) {
       const a = G.actors[id];
       if (!a) continue;
+      // E.G.O cinematics show only the duel
+      if (G.mode === 'combat' && CB.cine && CB.cine.ids && !CB.cine.ids.includes(id)) continue;
       const talk = G.s.typing && G.s.speaker === id;
-      const enemyDraw = { corrupted, machine: egoMachine, operator, cableskel: cableSkel }[a.kind];
+      const enemyDraw = { corrupted, machine: egoMachine, operator, cableskel: cableSkel, wellcheers: wellCheers }[a.kind];
       if (!enemyDraw) blendPose(a, now, t);
       const flash = (a.flashUntil || 0) > now;
       const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk, flash, tint: a._tint, poseData: a._pNow }, t));

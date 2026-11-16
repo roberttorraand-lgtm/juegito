@@ -256,6 +256,7 @@ function figure(x, y, o, t) {
     const [gx, gy] = hand;
     light(gx + f * 3, gy - 3, 6, 6, o.ego.col, 0.18, 2);
     ctx.save(); ctx.translate(gx + f * 3, gy - 3); if (f < 0) ctx.scale(-1, 1);
+    if (o.ego.rot) ctx.rotate(o.ego.rot);
     egoIcon(o.ego.kind, 0, 0, o.ego.s || 0.75, o.ego.col);
     ctx.restore();
   } else if (o.item === 'pistol') {
@@ -628,6 +629,82 @@ function egoMachine(x, y, o, t) {
   rect(x - 25, y - 7, 50, 1, HI);
   for (const vx of [x - 3, x, x + 3]) rect(vx, y - 6, 1, 3, glow);
   rect(x - 30, y - 3, 8, 3, D); rect(x + 22, y - 3, 8, 3, D);
+
+  if (sc !== 1) ctx.restore();
+}
+
+// ---- Opened Can of WellCheers (ZAYIN): a soda vending machine kept by shrimp ----
+function shrimp(x, y, f, t, seed) {
+  // a little pink shrimp standing on its tail; f = facing
+  const bob = Math.round(Math.sin(t / 220 + seed) * 1);
+  const P = '#f08a8a', PD = '#c05a6a', PH = '#ffc0b8';
+  y += bob;
+  for (let k = 0; k < 5; k++) {
+    const sx = x + f * Math.round(Math.sin(k * 0.7) * 3), sy = y - k * 3;
+    rect(sx - 2, sy - 3, 4, 3, k % 2 ? P : PD); px(sx - f, sy - 3, PH);
+  }
+  // tail fan, eye and feelers
+  rect(x - 3, y - 1, 6, 1, PD);
+  px(x + f * 4, y - 14, '#101014');
+  line(x + f * 4, y - 15, x + f * 9, y - 22 + Math.round(Math.sin(t / 150 + seed) * 2), PD);
+  line(x + f * 3, y - 15, x + f * 7, y - 24, PD);
+  // legs
+  for (let k = 0; k < 3; k++) px(x + f * 3, y - 4 - k * 2, PD);
+}
+function wellCheers(x, y, o, t) {
+  const sc = o.scale || 1;
+  if (sc !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.translate(-x, -y); }
+  if (o.shake || o.atk) x += Math.round(Math.sin(t / 25) * 1.5);
+  const D = '#101420', BODY = '#d8e4ec', BODYD = '#9aaab8', RED = '#c8283a', BLUE = '#2a6ab8';
+  const hum = (Math.sin(t / 300) + 1) / 2;
+
+  ctx.globalAlpha = 0.35; ellipse(x, y + 1, 26, 3, '#000'); ctx.globalAlpha = 1;
+  // spilled soda puddle
+  ctx.globalAlpha = 0.6; ellipse(x + 22, y, 14, 2, '#4ad8ff'); ctx.globalAlpha = 1;
+
+  // cabinet
+  rect(x - 20, y - 78, 40, 78, D);
+  rect(x - 19, y - 77, 38, 76, BODY);
+  rect(x + 13, y - 77, 6, 76, BODYD);
+  // red header with the logo
+  rect(x - 19, y - 77, 38, 12, RED); rect(x - 19, y - 77, 38, 1, '#ff6a7a');
+  ctx.font = '8px VT323, monospace';
+  txt('WellCheers', x - 1, y - 68, '#ffffff', 8, 'center');
+  light(x, y - 71, 22, 8, '#ff6a7a', 0.25 + hum * 0.2, 3);
+  // glass front with rows of cans
+  rect(x - 16, y - 62, 24, 38, '#0a1a28');
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+    const cx = x - 15 + c * 6, cy = y - 60 + r * 9;
+    rect(cx, cy, 4, 7, r % 2 ? BLUE : '#e8eef4'); rect(cx, cy + 2, 4, 2, RED); px(cx, cy, '#ffffff');
+  }
+  ctx.globalAlpha = 0.15; poly([[x - 16, y - 62], [x - 8, y - 62], [x - 16, y - 40]], '#ffffff'); ctx.globalAlpha = 1;
+  light(x - 4, y - 44, 16, 22, '#8ae0ff', 0.2 + hum * 0.15, 4);
+  // coin slot and buttons
+  rect(x + 10, y - 60, 3, 22, '#c0ccd8');
+  for (let k = 0; k < 4; k++) px(x + 11, y - 58 + k * 4, k === Math.floor(t / 400) % 4 ? '#ffd060' : '#5a6a7a');
+  rect(x + 10, y - 34, 3, 5, '#2a2a30');
+  // dispenser flap with an opened can poking out, soda foaming over
+  rect(x - 16, y - 18, 28, 9, '#1a1e28'); rect(x - 16, y - 18, 28, 1, '#3a4250');
+  const lean = o.atk ? 0.6 : 0.25;
+  ctx.save(); ctx.translate(x + 4, y - 12); ctx.rotate(lean);
+  rect(-3, -8, 6, 9, BLUE); rect(-3, -5, 6, 2, RED); rect(-3, -8, 6, 1, '#c0ccd8');
+  ctx.restore();
+  for (let k = 0; k < 6; k++) {
+    const q = ((t / 600 + k / 6) % 1);
+    px(x + 7 + q * 10, y - 18 + q * q * 18, k % 2 ? '#4ad8ff' : '#c8f8ff');
+  }
+  for (let k = 0; k < 4; k++) {
+    const q = ((t / 900 + k / 4) % 1);
+    ctx.globalAlpha = 1 - q;
+    px(x + 5 + Math.sin(t / 200 + k) * 2, y - 22 - q * 14, '#c8f8ff');
+  }
+  ctx.globalAlpha = 1;
+  // feet
+  rect(x - 19, y - 3, 6, 3, D); rect(x + 13, y - 3, 6, 3, D);
+  // shrimp keeping the machine: one on top, one on each side
+  shrimp(x - 26, y, 1, t, 0);
+  shrimp(x + 30, y, -1, t, 2);
+  shrimp(x - 6, y - 78, 1, t, 4);
 
   if (sc !== 1) ctx.restore();
 }
