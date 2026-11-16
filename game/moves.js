@@ -378,7 +378,7 @@ const EGO_MOVES = {
      { pose: 'aim', ms: 90 }],
   ],
 };
-const EGO_KIND = { blade: 'blade', scythe: 'blade', hammer: 'heavy', mug: 'heavy', monitor: 'heavy', whip: 'whip', spear: 'spear', gun: 'gun', sodagun: 'gun', axe: 'heavy' };
+const EGO_KIND = { blade: 'blade', scythe: 'blade', hammer: 'heavy', mug: 'heavy', monitor: 'heavy', whip: 'whip', spear: 'spear', gun: 'gun', sodagun: 'gun', axe: 'heavy', rocket: 'heavy' };
 
 // Picks the move for one coin: E.G.O weapon → page → die type.
 function pickMove(U, type, gun, dry, info) {

@@ -47,6 +47,9 @@ const EGO_WEAPONS = [
   { id: 'hacha', name: 'Hacha de batalla de pantalla', risk: 'ZAYIN', kind: 'axe', abno: 'The Disconnected Operator', clashPower: 7,
     desc: 'Un monitor viejo afilado como un hacha. Pesa muchísimo. Choque: potencia fija 7.',
     dice: [['blunt', 6, 9], ['blunt', 5, 8]] },
+  { id: 'cohete', name: 'Lanzacohetes de soda', risk: 'TETH', kind: 'rocket', abno: 'Opened Can of WellCheers', clashPower: 8, stage: 'soda',
+    desc: 'Dispara latas de WellCheers agitadas hasta reventar. Lobelto: daño en área (2 enemigos). Gonza: x2 de aturdimiento. Choque: potencia fija 8.',
+    dice: [['blunt', 7, 11], ['blunt', 6, 10]] },
 ];
 const EGO_BY_ID = Object.fromEntries(EGO_WEAPONS.map(w => [w.id, w]));
 // Economy resets: when ECONOMY_VERSION goes up, every save starts again
@@ -183,6 +186,11 @@ function egoIcon(kind, cx, cy, s, col) {
     rect(-5, -2, 9, 3, '#2a6a9a'); rect(-5, -2, 9, 1, '#8ae0ff'); rect(-2, 1, 3, 5, '#3a3a42');
     rect(-4, -6, 5, 4, '#d8e8f0'); rect(-4, -6, 5, 1, '#ffffff'); rect(-4, -4, 5, 1, '#e04040');
     rect(4, -1, 3, 2, col); px(7, -1, '#ffffff');
+  } else if (kind === 'rocket') {
+    // a launch tube with a WellCheers can loaded in the front, grip and stock
+    rect(-7, -3, 12, 4, '#2a5a7a'); rect(-7, -3, 12, 1, '#6ab0d0'); rect(-8, -4, 2, 6, '#1a3a50');
+    rect(5, -4, 3, 6, '#e8eef4'); rect(5, -2, 3, 2, '#c8283a'); px(7, -4, '#ffffff');
+    rect(-1, 1, 2, 4, '#3a3a42'); rect(-5, 1, 2, 3, '#3a3a42'); px(-3, -2, col);
   } else if (kind === 'axe') {
     // a battle axe whose head is an old CRT monitor with a sharpened edge
     line(0, 7, 0, -7, '#6a4a30', 2);

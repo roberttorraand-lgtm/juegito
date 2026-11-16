@@ -901,7 +901,8 @@ function dealDamage(u, hpD) {
   if (u.rebooting) hpD = Math.ceil(hpD * 1.5);
   hpD = Math.min(hpD, u.hp);
   u.hp -= hpD;
-  const stD = u.staggered ? 0 : Math.ceil(hpD * ST_RATIO);
+  // CB.stMul: some E.G.O finishers multiply the stagger damage they deal
+  const stD = u.staggered ? 0 : Math.ceil(hpD * ST_RATIO * (u.team === 'enemy' && CB.stMul ? CB.stMul : 1));
   if (stD) u.st = Math.max(0, u.st - stD);
   const p = headPos(u), c = chest(u);
   spawnAnim('dmg', p.x, p.y, `-${hpD}`, '#ff4a5a', 1100, { big: hpD >= 10 });

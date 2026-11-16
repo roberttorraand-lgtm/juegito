@@ -387,7 +387,7 @@ function wpnW(a, px, py) {
   return toWorld(a, lx, ly);
 }
 // the part of each weapon that touches: blade edge, muzzle, butt
-const WP = { axeHead: [5, -6], axeEdge: [7, -6], muzzle: [7, -1], butt: [-1, 5] };
+const WP = { axeHead: [5, -6], axeEdge: [7, -6], muzzle: [7, -1], butt: [-1, 5], rocketMuzzle: [8, -1], rocketStock: [-8, -1] };
 
 // ---- debris
 function debris(type, x, y, n, o = {}) {
@@ -602,16 +602,17 @@ FX_DRAW.cineLayer = () => {
 
 // ---- the target's body reacts to every blow: knocked back, bent, springing back
 const springEase = (k) => 1 - Math.cos(k * Math.PI * 3) * Math.exp(-5 * k);
-async function react(c, o = {}) {
-  const ta = c.ta, d = c.dir, big = !!c.T.kind, m = big ? 0.55 : 1;
+async function react(c, o = {}, who) {
+  const ta = who ? who.ta : c.ta, T = who ? who.T : c.T;
+  const d = c.dir, big = !!T.kind, m = big ? 0.55 : 1;
   const kb = (o.kb ?? 6) * m, up = (o.up ?? 0) * m, tilt = (o.tilt ?? 0.2) * m;
   ta.flashUntil = performance.now() + 55;
   ta.shake = true; setTimeout(() => { ta.shake = false; }, 90);
   if (!big) { ta.poseMs = 50; ta.pose = 'hurt'; }
   tween(ta, { sq: -0.1 * m }, 30).then(() => tween(ta, { sq: 0.07 * m }, 90).then(() => tween(ta, { sq: 0 }, 260, springEase)));
   await tween(ta, { ox: (ta.ox || 0) + d * kb, oy: -up, tilt: d * tilt }, 110 + kb * 4, easeOut);
-  if (kb > 8) { dust(c.T, 4 + Math.floor(kb / 4), -d); }
-  tween(ta, { oy: 0 }, 140 + up * 10, easeIn).then(() => { if (up > 4) { dust(c.T, 6); SFX.play('blunt'); } });
+  if (kb > 8) { dust(T, 4 + Math.floor(kb / 4), -d); }
+  tween(ta, { oy: 0 }, 140 + up * 10, easeIn).then(() => { if (up > 4) { dust(T, 6); SFX.play('blunt'); } });
   await tween(ta, { tilt: 0 }, 520, springEase);
   if (!big && !o.keep) { ta.pose = null; ta.poseMs = null; }
 }
@@ -624,8 +625,17 @@ async function egoCinematic(s, T, stats) {
   s.i = s.page.dice.length;
   const total = coins.reduce((x, y) => x + y, 0);
   const a = actorOf(U), ta = actorOf(T);
-  if (CB.instant || !a || !ta) { for (const r of coins) resolveHit(T, r, stats, U); return; }
   const script = FINISHERS[`${w.id}:${U.id}`] || FINISHERS[w.id] || FINISHERS._default;
+  // area finishers also hit one other enemy at random
+  const others = script.aoe ? (T.team === 'enemy' ? CB.enemies : CB.allies).filter(u => u !== T && alive(u)) : [];
+  const T2 = others.length ? others[Math.floor(Math.random() * others.length)] : null;
+  CB.stMul = script.stMul || 1;
+  if (CB.instant || !a || !ta) {
+    for (const r of coins) { resolveHit(T, r, stats, U); if (T2) resolveHit(T2, r, stats, U); }
+    CB.stMul = 1;
+    return;
+  }
+  const ta2 = T2 ? actorOf(T2) : null;
   const col = script.col || egoCol(w), dir = dirTo(U, T);
   // each hit mark lands a share of the damage, in proportion to its power
   const marks = script.marks;
@@ -638,7 +648,7 @@ async function egoCinematic(s, T, stats) {
   const sc = (U.scale || 1) * (U.hat === 'cap' ? 0.86 : 1);
   const half = T.kind ? (T.kind === 'cableskel' ? 6 : 13) : 5;
   const c = {
-    U, T, a, ta, w, col, dir, mc, half,
+    U, T, a, ta, w, col, dir, mc, half, T2, ta2,
     f: (fr) => playFrame(U, a, fr, base, mc),
     wait,
     // distance from the attacker's start to the target's centre
@@ -676,8 +686,11 @@ async function egoCinematic(s, T, stats) {
       if (roll > 0) {
         const dealt = resolveHit(T, roll, stats, U);
         dealtTotal += dealt || 0;
+        // area: the same blow lands on the second enemy
+        if (o.area && T2 && alive(T2)) { dealtTotal += resolveHit(T2, roll, stats, U) || 0; }
       }
       if (alive(T)) react(c, o.react || { kb: 3 + p * 2, tilt: 0.1 + p * 0.04 });
+      if (o.area && T2 && ta2 && alive(T2)) react(c, o.react2 || o.react || { kb: 8, tilt: 0.2 }, { ta: ta2, T: T2 });
     },
     title(text, o = {}) { fx('title', o.x || 160, o.y || 48, o.ms || 1200, { text, col: o.col || col, size: o.size || 20, rot: o.rot || 0 }); },
     word(text, o = {}) { refresh(); fx('onoma', mc.c.x + (o.dx || 0) * dir, mc.c.y - 18 + (o.dy || 0), o.ms || 700, { text, col: o.col || col, size: o.size || 16, rot: o.rot }); },
@@ -687,7 +700,7 @@ async function egoCinematic(s, T, stats) {
   const t0 = performance.now();
   cineReset();
   CP.floor = Math.max(a.y, ta.y) + 1;
-  CB.cine = { w, col, stage: w.id, start: t0, cx: (a.x + ta.x) / 2, cy: mc.c.y, ids: [U.id, T.id] };
+  CB.cine = { w, col, stage: w.stage || w.id, start: t0, cx: (a.x + ta.x) / 2, cy: mc.c.y, ids: T2 ? [U.id, T.id, T2.id] : [U.id, T.id] };
   fx('cineLayer', 0, 0, 60000);
   SFX.play(w.risk === 'ALEPH' ? 'aleph' : 'rare');
   // 1) the cut-in
@@ -707,6 +720,8 @@ async function egoCinematic(s, T, stats) {
   await wait(Math.max(1500, 7000 - 280 - (performance.now() - t0)));
   CB.cine.out = performance.now();
   tween(ta, { ox: 0, oy: 0, tilt: 0, sq: 0 }, 300, easeInOut);
+  if (ta2) tween(ta2, { ox: 0, oy: 0, tilt: 0, sq: 0 }, 300, easeInOut);
+  CB.stMul = 1;
   if (a.y !== y0) tween(a, { y: y0 }, 200);
   await wait(280);
   CB.cine = null;
@@ -714,6 +729,7 @@ async function egoCinematic(s, T, stats) {
   cineReset();
   ta.shake = false;
   if (!T.kind) { ta.pose = null; ta.poseMs = null; }
+  if (ta2) { ta2.shake = false; if (!T2.kind) { ta2.pose = null; ta2.poseMs = null; } }
   a.ego = null;
   a.face = U.team === 'ally' ? 1 : -1;
   await settleMove(U);
@@ -1002,6 +1018,106 @@ const FINISHERS = {
     await c.wait(200);
   } },
 
+  // ================= LANZACOHETES DE SODA (TETH) =================
+  // Lobelto: a first can-rocket into the floor in front of the enemy raises a
+  // smoke screen; the second flies through it and blows up on the target.
+  // Area: the blast also catches one other enemy.
+  'cohete:lobelto': { col: '#4ad8ff', band: '#0a3a4a', name: 'CORTINA BURBUJEANTE', cutPose: 'aim', aoe: true, marks: [5], async run(c) {
+    const a = c.a;
+    await chargeUp(c, 'soda', 600, 'aim');
+    a.ego.rot = 0;
+    const X = c.at('aim', 40);
+    await c.f({ pose: 'run', x: X, tilt: 0.06, ms: 120 }); dust(c.U, 3, c.dir);
+    await c.f({ pose: 'aim', x: X, tilt: -0.04, ms: 200 });
+    await c.cam(1.6, 240, 10);
+    // first rocket: aimed low, at the floor in front of the enemy
+    c.weapon({ rot: 0.25 }, 160, easeInOut);
+    await c.wait(200);
+    SFX.play('gun_click'); await c.wait(140);
+    let m = rocketLaunch(c);
+    const ground = { x: c.front(0).x - c.dir * 12, y: CP.floor - 1 };
+    fx('rocket', 0, 0, 300, { x0: m.x, y0: m.y, x1: ground.x, y1: ground.y, arc: 4 });
+    await c.f({ pose: 'kickback', x: X - 6, tilt: -0.14, ms: 50 });
+    c.weapon({ rot: 0 }, 300, easeOutBack);
+    await c.wait(260);
+    sodaBlast(c, ground, false);
+    fx('smokeCloud', ground.x + c.dir * 10, ground.y - 14, 2600, { r: 26, col: '#9ab8c8', seed: 5 });
+    c.word('¡FOOMP!', { size: 13, col: '#c8f8ff', dy: 18 });
+    await c.f({ pose: 'aim', x: X - 4, tilt: 0, ms: 200 });
+    // through the smoke: reload, aim at where the enemy was
+    await c.wait(200);
+    SFX.play('gun_click');
+    for (let i = 0; i < 4; i++) { const t = wpnW(a, -6, -1); debris('foam', t.x, t.y, 1, { speed: 0.5, cols: SODA, size: 1.4, life: 50 }); await c.wait(70); }
+    if (c.ta2) camTo({ z: 1.35, x: (a.x + (a.ox || 0) + c.ta.x + c.ta2.x) / 3, y: camY(c.U, c.T) }, 260);
+    fx('focus', 160, 0, 700, { cy: 60, col: '#4ad8ff' });
+    await c.wait(240);
+    // second rocket: straight into the cloud
+    m = rocketLaunch(c);
+    const at = c.front(0.5);
+    fx('rocket', 0, 0, 220, { x0: m.x, y0: m.y, x1: at.x, y1: at.y, arc: 0 });
+    await c.f({ pose: 'kickback', x: X - 8, tilt: -0.18, sq: 0.04, ms: 50 });
+    c.weapon({ rot: -0.3 }, 60).then(() => c.weapon({ rot: 0 }, 320, easeOutBack));
+    await c.wait(180);
+    // the blast: a glow inside the smoke, then it blows the cloud apart
+    CB.slowUntil = performance.now() + 220;
+    c.hit({ at, sfx: 'blunt', area: true, camDy: 2, react: { kb: 22, up: 8, tilt: 0.4 }, react2: { kb: 18, up: 6, tilt: 0.35 } });
+    sodaBlast(c, at, true);
+    for (const f of CB.fx) if (f.type === 'smokeCloud') f.burst = performance.now();
+    if (c.ta2) {
+      const p2 = { x: c.ta2.x + (c.ta2.ox || 0), y: chest(c.T2).y };
+      fx('ring2', at.x, at.y, 420, { r: Math.abs(p2.x - at.x) + 10, col: '#c8f8ff', sy: 0.5 });
+      setTimeout(() => { if (CB.cine) sodaBlast(c, p2, false); }, 140);
+    }
+    c.word('¡¡KA-BOOM!!', { size: 20, col: '#ffffff' });
+    await c.f({ pose: 'aim', x: X - 6, tilt: 0, sq: 0, ms: 260 });
+    c.weapon({ rot: 0.6 }, 320, easeInOut);
+    for (let i = 0; i < 6; i++) { const t = wpnW(a, ...WP.rocketMuzzle); debris('smoke', t.x, t.y, 1, { speed: 0.4, col: '#8aa0b0', size: 1.6, life: 70 }); await c.wait(70); }
+  } },
+
+  // Gonza: fires backwards; the blast throws him forward and he rams the
+  // enemy with the launcher's stock. Double stagger damage.
+  'cohete:gonza': { col: '#4ad8ff', band: '#0a3a4a', name: 'PROPULSIÓN CARBONATADA', cutPose: 'aim', stMul: 2, marks: [5], async run(c) {
+    const a = c.a;
+    await chargeUp(c, 'soda', 600, 'hold');
+    // turns his back to the enemy and points the launcher behind him, low
+    const X0 = -10;
+    await c.f({ pose: 'run', x: X0, tilt: -0.06, ms: 120 });
+    a.face = -c.dir; a.ego.rot = 0.35;
+    await c.f({ pose: 'aim', x: X0, tilt: 0, ms: 180 });
+    await c.cam(1.55, 220);
+    SFX.play('gun_click');
+    for (let i = 0; i < 5; i++) { a.sq = i % 2 ? 0.03 : -0.02; await c.wait(70); }
+    a.sq = 0;
+    // fire backwards: the blast right behind him
+    const m = rocketLaunch(c, true);
+    const boom = { x: m.x - c.dir * 14, y: CP.floor - 4 };
+    fx('rocket', 0, 0, 90, { x0: m.x, y0: m.y, x1: boom.x, y1: boom.y });
+    await c.wait(90);
+    sodaBlast(c, boom, true, -1);
+    decal('scorch', boom.x, CP.floor, { r: 16, col: '#4ad8ff' });
+    // launched: he swings round mid-air, stock first
+    a.face = c.dir; a.ego.rot = Math.PI;
+    fx('speed', 160, 0, 500, { dir: c.dir, seed: 11 });
+    CB.slowUntil = performance.now() + 120;
+    c.trail(WP.rocketStock);
+    await c.f({ pose: 'lunge', x: c.at('lunge', 10), y: -6, tilt: 0.3, ms: 40, ghost: 4 });
+    await c.f({ pose: 'butt', x: c.at('butt', 8), y: 0, tilt: 0.24, sq: 0.08, ms: 30, hit: true, stop: 140, ghost: 2 });
+    c.trail(null, false);
+    const at = wpnW(a, ...WP.rocketStock);
+    c.hit({ at, sfx: 'blunt', camDy: 1, react: { kb: 30, up: 6, tilt: 0.45 } });
+    debris('px', at.x, at.y, 12, { angle: away(c, 0.6), speed: 2.6, cols: ['#d8e4ec', '#9aaab8', '#ffffff', '#c8283a'], size: 1.5, bounce: 0.45 });
+    debris('foam', at.x, at.y, 8, { angle: away(c, 1), speed: 1, cols: SODA, size: 1.5, life: 70 });
+    fx('ring2', at.x, at.y, 320, { r: 22, col: '#ffd060' });
+    c.word('¡¡ATURDIDO!!', { size: 15, col: '#ffd060', dy: -14 });
+    c.word('¡BONK!', { size: 18, col: '#ffffff', dy: 4 });
+    // tumbles and skids to a stop
+    await c.f({ pose: 'land', x: c.at('butt', 8) - 6, y: 0, tilt: -0.1, sq: 0.1, ms: 90 });
+    dust(c.U, 8, -c.dir); SFX.play('scrape');
+    await c.f({ pose: 'hold', x: c.at('butt', 8) - 12, tilt: 0, sq: 0, ms: 220 });
+    a.ego.rot = 0;
+    await c.wait(260);
+  } },
+
   // ================= HACHA DE BATALLA DE PANTALLA =================
   // Lobelto: the axe is so heavy he drags it, scraping sparks off the floor;
   // he heaves it overhead, jumps and splits the enemy with one vertical cut.
@@ -1089,6 +1205,60 @@ const FINISHERS = {
     tween(a, { tilt: 0.25 }, 140).then(() => tween(a, { tilt: 0 }, 700, springEase));
     await c.wait(500);
   } },
+};
+
+// the launch: back-blast, foam and a recoil sound
+function rocketLaunch(c, back) {
+  const m = wpnW(c.a, ...WP.rocketMuzzle), r = wpnW(c.a, ...WP.rocketStock);
+  const out = back ? -c.dir : c.dir;
+  fx('muzzle', m.x, m.y, 130, { dir: out });
+  debris('smoke', r.x, r.y, 6, { angle: out > 0 ? Math.PI : 0, spread: 0.8, speed: 1.4, col: '#a0b8c8', size: 2, life: 60 });
+  debris('foam', m.x, m.y, 5, { angle: out > 0 ? 0 : Math.PI, spread: 0.8, speed: 1.6, cols: SODA, size: 1.4, life: 50 });
+  light(m.x, m.y, 18, 18, '#c8f8ff', 0.5, 2);
+  SFX.play('gunshot'); SFX.play('whoosh');
+  return m;
+}
+// a can-rocket going off: fireball tinted soda, shockwave, drops, foam, smoke, tabs
+function sodaBlast(c, at, big, side = 1) {
+  const ang = side > 0 ? away(c, 0.9) : (c.dir > 0 ? Math.PI + 0.9 : -0.9);
+  fx('star', at.x, at.y, 300, { r: big ? 22 : 14, col: '#c8f8ff', rot: Math.random() * TAU, n: 10 });
+  fx('ring2', at.x, at.y, 360, { r: big ? 34 : 22, col: '#4ad8ff' });
+  fx('ring2', at.x, CP.floor, 420, { r: big ? 40 : 26, col: '#ffffff', sy: 0.25 });
+  light(at.x, at.y, big ? 50 : 30, big ? 50 : 30, '#ffe8b0', 0.5, 4);
+  debris('drop', at.x, at.y, big ? 34 : 16, { angle: -Math.PI / 2, spread: 3, speed: big ? 3.6 : 2.6, cols: SODA, size: 1.6, g: 0.16 });
+  debris('foam', at.x, at.y, big ? 18 : 8, { spread: 6, speed: 1.2, cols: SODA, size: 1.8, life: 80, jx: 10, jy: 8 });
+  debris('smoke', at.x, at.y, big ? 14 : 8, { spread: 6, speed: 0.9, col: '#8aa0b0', size: 3, life: 100, jx: 10, jy: 8 });
+  debris('tab', at.x, at.y, big ? 5 : 2, { angle: ang, spread: 2, speed: 3, bounce: 0.5, life: 130 });
+  decal('puddle', at.x, CP.floor, { col: '#2a9ac0', r: big ? 20 : 12, grow: 400 });
+  shake(big ? 380 : 200);
+  SFX.play('stagger');
+  if (big) G.flash = { color: '#ffffff', start: performance.now(), ms: 90, a: 0.25 };
+}
+// a can-rocket in flight (world): spinning can, foam and smoke trail
+FX_DRAW.rocket = (f, k) => {
+  const x = f.x0 + (f.x1 - f.x0) * k, y = f.y0 + (f.y1 - f.y0) * k - Math.sin(k * Math.PI) * (f.arc || 0);
+  const an = Math.atan2(f.y1 - f.y0, f.x1 - f.x0);
+  if (Math.random() < 0.8) debris('smoke', x, y, 1, { speed: 0.2, col: '#a0b8c8', size: 1.4, life: 40 });
+  if (Math.random() < 0.5) debris('foam', x, y, 1, { speed: 0.4, cols: SODA, size: 1.2, life: 40 });
+  ctx.save(); ctx.translate(x, y); ctx.rotate(an);
+  rect(-4, -2, 7, 4, '#e8eef4'); rect(-4, -1, 7, 1, '#c8283a'); rect(3, -1, 2, 2, '#c0ccd8');
+  ctx.restore();
+  light(x, y, 8, 8, '#ffe8b0', 0.5, 2);
+};
+// a smoke screen: puffs swelling, drifting; a burst blows them outward (world)
+FX_DRAW.smokeCloud = (f, k) => {
+  const now = performance.now();
+  const blow = f.burst ? Math.min(1, (now - f.burst) / 500) : 0;
+  const grow = Math.min(1, k / 0.12);
+  ctx.globalAlpha = Math.min(1, (1 - k) / 0.3) * (1 - blow * 0.9);
+  for (let i = 0; i < 22; i++) {
+    const an = hash(i + f.seed) * TAU, d = hash(i * 3 + f.seed) * f.r * grow * (1 + blow * 2.2);
+    const x = f.x + Math.cos(an) * d * 1.3 + Math.sin(now / 700 + i) * 2, y = f.y + Math.sin(an) * d * 0.7 - k * 6;
+    const r = (6 + hash(i * 7) * 7) * grow * (1 + blow * 0.5);
+    disc(x, y, r, i % 3 ? f.col : '#c8dce8');
+  }
+  if (f.burst && blow < 0.4) light(f.x, f.y, 40, 30, '#ffe8b0', 0.6 * (1 - blow / 0.4), 4);
+  ctx.globalAlpha = 1;
 };
 
 // a dotted aiming line, fizzing (world)
