@@ -105,13 +105,22 @@ function awardEpisodes() {
 // ---------------------------------------------------------------------
 //  Extraction (gacha)
 // ---------------------------------------------------------------------
+// Only the risk levels that have weapons can come out; their chances are
+// the table's, scaled so they add up to 100%.
+const AVAIL_RISKS = () => RISK_ORDER.filter(k => EGO_WEAPONS.some(w => w.risk === k));
+const HIGH_RISKS = () => AVAIL_RISKS().filter(k => k === 'WAW' || k === 'ALEPH');
+const riskRate = (k) => {
+  const av = AVAIL_RISKS();
+  return av.includes(k) ? RISK[k].rate / av.reduce((s, x) => s + RISK[x].rate, 0) : 0;
+};
 function rollRisk(forceHigh) {
-  if (forceHigh) return Math.random() < 0.2 ? 'ALEPH' : 'WAW';
+  const high = HIGH_RISKS();
+  if (forceHigh && high.length) return high.length > 1 && Math.random() < 0.2 ? 'ALEPH' : high[0];
   let r = Math.random();
-  for (const k of [...RISK_ORDER].reverse()) { if (r < RISK[k].rate) return k; r -= RISK[k].rate; }
-  return 'ZAYIN';
+  const av = AVAIL_RISKS();
+  for (const k of [...av].reverse()) { if (r < riskRate(k)) return k; r -= riskRate(k); }
+  return av[0];
 }
-
 function extract(n) {
   if (!GACHA_READY() || W$.enk() < PULL_COST * n) { SFX.play('error'); return; }
   W$.add(-PULL_COST * n);
@@ -121,9 +130,10 @@ function extract(n) {
     pity++;
     let risk = rollRisk(pity >= PITY);
     // a 10-extraction always holds at least one HE or better
-    if (n === 10 && i === n - 1 && !out.some(r => RISK_ORDER.indexOf(r.w.risk) >= 2) && RISK_ORDER.indexOf(risk) < 2) risk = 'HE';
-    if (risk === 'WAW' || risk === 'ALEPH') pity = 0;
-    const pool = EGO_WEAPONS.filter(w => w.risk === risk);
+    if (n === 10 && i === n - 1 && AVAIL_RISKS().includes('HE') && !out.some(r => RISK_ORDER.indexOf(r.w.risk) >= 2) && RISK_ORDER.indexOf(risk) < 2) risk = 'HE';
+    if (risk === 'WAW' || risk === 'ALEPH' || !HIGH_RISKS().length) pity = 0;
+    let pool = EGO_WEAPONS.filter(w => w.risk === risk);
+    if (!pool.length) pool = EGO_WEAPONS;
     const w = pool[Math.floor(Math.random() * pool.length)];
     const isNew = W$.count(w.id) === 0;
     W$.give(w.id);
@@ -366,16 +376,27 @@ function drawExtractTab(b, t) {
   txt('Armas E.G.O de una sucursal abandonada.', b.x + 6, b.y + 19, '#a09080', 7);
   txt('Equípalas en Mejoras: son tu ultimate.', b.x + 6, b.y + 27, '#a09080', 7);
   egoIcon('scythe', b.x + b.w - 18, b.y + 24, 1.6, RISK.ALEPH.col);
-  // rates
-  RISK_ORDER.forEach((k, i) => {
+  // rates: only the levels that have weapons
+  AVAIL_RISKS().forEach((k, i) => {
     const x = b.x + 4 + i * 34;
     riskChip(k, x, b.y + 34, 30);
-    txt(`${(RISK[k].rate * 100).toFixed(1).replace('.0', '')}%`, x + 15, b.y + 45, '#d8d0c0', 7, 'center');
+    txt(`${(riskRate(k) * 100).toFixed(1).replace('.0', '')}%`, x + 15, b.y + 45, '#d8d0c0', 7, 'center');
   });
-  const pity = SAVE.get('pity', 0);
-  txt(`Garantía WAW o ALEPH: ${pity}/${PITY}`, b.x + 4, b.y + 58, '#c8b0e8', 8);
-  rect(b.x + 4, b.y + 61, b.w - 8, 2, '#2a1830'); rect(b.x + 4, b.y + 61, Math.round((b.w - 8) * pity / PITY), 2, RISK.WAW.col);
-  txt('Cada 10 extracciones: mínimo un HE.', b.x + 4, b.y + 72, '#8a8070', 7);
+  let y = b.y + 50;
+  if (HIGH_RISKS().length) {
+    const pity = SAVE.get('pity', 0);
+    txt(`Garantía WAW o ALEPH: ${pity}/${PITY}`, b.x + 4, y + 6, '#c8b0e8', 7);
+    rect(b.x + 4, y + 8, b.w - 8, 1, '#2a1830'); rect(b.x + 4, y + 8, Math.round((b.w - 8) * pity / PITY), 1, RISK.WAW.col);
+    y += 10;
+  }
+  // what the machine holds right now
+  txt('CONTENIDO:', b.x + 4, y + 6, '#8a8070', 7);
+  const cols = 2, cw = (b.w - 8) / cols, rows = Math.max(1, Math.floor((b.y + 78 - y - 8) / 9));
+  EGO_WEAPONS.slice(0, cols * rows).forEach((w, i) => {
+    const x = b.x + 4 + (i % cols) * cw, yy = y + 9 + Math.floor(i / cols) * 9;
+    egoIcon(w.kind, x + 4, yy + 3, 0.5, egoCol(w));
+    txtFit(w.name, x + 10, yy + 6, W$.count(w.id) ? '#e8e4dc' : '#a09890', 7, cw - 14);
+  });
   const e = W$.enk();
   hubButton(b.x + 4, b.y + 80, 82, 16, '', () => extract(1), e >= PULL_COST);
   hubButton(b.x + 92, b.y + 80, 82, 16, '', () => extract(10), e >= PULL_COST * 10, '#d8a830');
