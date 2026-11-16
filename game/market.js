@@ -37,6 +37,15 @@ const PULL_COST = 100, ENK_PER_EPISODE = 1000, PITY = 80;
 // gives it its own finisher).
 const EGO_WEAPONS = [];
 const EGO_BY_ID = Object.fromEntries(EGO_WEAPONS.map(w => [w.id, w]));
+// Economy resets: when ECONOMY_VERSION goes up, every save starts again
+// from zero (Enkephalina, Ahn, pity, pulls, raid wins), and episode rewards
+// are paid again from the story progress, so all players end up equal.
+const ECONOMY_VERSION = 2;
+if (SAVE.get('eco_v', 1) < ECONOMY_VERSION) {
+  const wipe = { eco_v: ECONOMY_VERSION, enk: 0, ahn: 0, pity: 0, pulls: 0, pull_log: [], raid_wins: 0, ego_owned: {}, ego_eq: {} };
+  for (const k of Object.keys(SAVE._data)) if (k.startsWith('enk_ep')) wipe[k] = false;
+  SAVE.save(wipe);
+}
 // forget saved weapons that no longer exist
 {
   const own = SAVE.get('ego_owned', {}), eq = SAVE.get('ego_eq', {});
