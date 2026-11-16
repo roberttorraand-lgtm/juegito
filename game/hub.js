@@ -1110,7 +1110,7 @@ function activateNavBtn(id) {
     return;
   }
   SFX.play('select');
-  if (G.hubTab === 'mercado' && id !== 'mercado') Music.play(MUSIC_FOR.hub);
+  if ((G.hubTab === 'mercado' || G.hubTab === 'taller') && id !== G.hubTab) Music.play(MUSIC_FOR.hub);
   if (id === 'mercado') { if (G.hubTab !== 'mercado') openMarket(); return; }
   G.pull = null;
   const ni = HUB_NAV.findIndex(n => n.id === id);
@@ -1118,7 +1118,7 @@ function activateNavBtn(id) {
   if (id === 'ventana') { G.hubTab = 'ventana'; }
   else if (id === 'mapa') { G.hubTab = 'mapa'; }
   else if (id === 'pecadores') { G.hubTab = 'pecadores'; }
-  else if (id === 'taller') { G.hubTab = 'taller'; }
+  else if (id === 'taller') { if (G.hubTab !== 'taller') { MK.say('hello'); Music.play('market'); } G.hubTab = 'taller'; }
   else if (id === 'ajustes') { showSettings(); }
 }
 

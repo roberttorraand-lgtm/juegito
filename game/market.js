@@ -125,7 +125,7 @@ function extract(n) {
   const best = out.reduce((b, r) => Math.max(b, RISK_ORDER.indexOf(r.w.risk)), 0);
   G.pull = { out, start: performance.now(), best: RISK_ORDER[best], shown: 0 };
   SFX.play('gacha');
-  MK.say(best >= 3 ? 'big' : 'pull');
+  machSay(best >= 3 ? 'big' : 'pull');
 }
 
 // ---------------------------------------------------------------------
@@ -188,7 +188,12 @@ function riskChip(risk, x, y, w = 24) {
 }
 
 // Enkephalina (a glowing PE box) and Ahn (a coin) with their amounts
-function drawWallet(x, y) {
+function drawWallet(x, y, right) {
+  if (right != null) {
+    ctx.font = '8px VT323, monospace';
+    const w = 19 + ctx.measureText(String(W$.enk())).width + ctx.measureText(`${W$.ahn()} Ahn`).width;
+    x = Math.floor(right - w);
+  }
   rect(x, y, 4, 4, '#5ae0c0'); rect(x, y, 4, 1, '#c8fff0'); px(x + 4, y + 1, '#2a8a70');
   txt(String(W$.enk()), x + 7, y + 5, '#c8fff0', 8);
   ctx.font = '8px VT323, monospace';
@@ -233,39 +238,30 @@ const MK = {
 };
 
 function openMarket() {
-  G.hubTab = 'mercado'; G.pull = null; MK.tab = 'extraer'; MK.say('hello');
+  G.hubTab = 'mercado'; G.pull = null; MK.tab = 'extraer'; machSay('idle');
   G.hubNavSel = HUB_NAV.findIndex(n => n.id === 'mercado');
   SFX.play('confirm');
-  Music.play('market');
+  Music.play(MUSIC_FOR.machine);
 }
 
-function drawMarket(t) {
-  G.hubHits = [];
-  drawWide(() => drawHubBackdrop(t), 'hub');
-  ctx.globalAlpha = 0.88; rect(-OX, 0, VW, NAV_Y, '#07050c'); ctx.globalAlpha = 1;
-  metalFrame(4, 4, W - 8, NAV_Y - 8);
-
-  // ---- the stall
-  const sx = 8, sy = 10, sw = 116, sh = 140;
+// The black-market stall with the (placeholder) trader, used by the Workshop.
+function drawStall(t, sx, sy, sw, sh) {
   rect(sx, sy, sw, sh, '#0a0810');
   rect(sx, sy, sw, 1, '#4a3018');
   const neon = hash(Math.floor(t / 90)) > 0.06;
   pixText('MERCADO', sx + 31, sy + 8, neon ? '#ff5ac0' : '#4a1838');
   pixText('NEGRO', sx + 39, sy + 15, neon ? '#ff5ac0' : '#4a1838');
   if (neon) light(sx + 58, sy + 14, 40, 10, '#ff3aa0', 0.18, 3);
-  // trader (placeholder silhouette): hat, coat, glowing eyes
   const tx = sx + 58, ty = sy + 98, bob = Math.round(Math.sin(t / 700));
   ellipse(tx, ty - 26 + bob, 15, 22, '#040306');
   rect(tx - 13, ty - 52 + bob, 26, 3, '#040306'); rect(tx - 8, ty - 60 + bob, 16, 9, '#040306');
   disc(tx, ty - 42 + bob, 7, '#040306');
   if (Math.floor(t / 90) % 60) { rect(tx - 4, ty - 43 + bob, 2, 1, '#ffd060'); rect(tx + 2, ty - 43 + bob, 2, 1, '#ffd060'); }
   light(tx, ty - 42, 10, 4, '#ffb030', 0.12, 2);
-  // counter with goods
   rect(sx + 4, ty - 6, sw - 8, 4, '#3a2a20'); rect(sx + 4, ty - 6, sw - 8, 1, '#6a4a30');
   rect(sx + 6, ty - 2, sw - 12, 22, '#1e1612');
   egoIcon('gun', sx + 20, ty - 10, 0.8, '#5ae0c0'); egoIcon('mug', sx + 96, ty - 10, 0.8, '#5ae0c0');
   rect(sx + 30, ty - 12, 8, 6, '#5ae0c0'); rect(sx + 30, ty - 12, 8, 1, '#c8fff0');
-  // speech bubble
   const bl = wrap(MK.line, sw - 16, 8);
   const by = sy + 22, bh = 4 + bl.length * 8;
   const k = Math.min(1, (performance.now() - MK.lineAt) / 150);
@@ -275,23 +271,57 @@ function drawMarket(t) {
   bl.forEach((ln, i) => txt(ln, sx + 10, by + 9 + i * 8, '#16121a', 8));
   ctx.globalAlpha = 1;
   txt('(traficante provisional)', sx + sw / 2, sy + sh - 4, '#4a4450', 6, 'center');
+}
 
-  // ---- right side: tabs and wallet
+// The E.G.O Extraction Machine in its cell, with a status screen.
+const MACH_LINES = {
+  idle: ['ESPERANDO MATERIAL...', 'CINTA EN PAUSA', 'LISTA PARA EXTRAER'],
+  pull: ['EXTRAYENDO...', 'PROCESANDO E.G.O', 'PIEZA ENSAMBLADA'],
+  big: ['¡¡SOBRECARGA!!', 'LECTURA ANÓMALA', 'RIESGO ELEVADO'],
+};
+let MACH = { line: MACH_LINES.idle[0], at: 0 };
+function machSay(kind) { const l = MACH_LINES[kind] || MACH_LINES.idle; MACH = { line: l[Math.floor(Math.random() * l.length)], at: performance.now() }; }
+function drawMachineBay(t, sx, sy, sw, sh) {
+  rect(sx, sy, sw, sh, '#0a0c0a'); rect(sx, sy, sw, 1, '#4a3018');
+  // cell wall with a hazard band
+  rect(sx + 1, sy + 1, sw - 2, 90, '#1a1d1a');
+  for (let x = sx + 1; x < sx + sw - 1; x += 8) poly([[x, sy + 68], [x + 4, sy + 68], [x + 8, sy + 74], [x + 4, sy + 74]], '#c8a030');
+  rect(sx + 1, sy + 91, sw - 2, sh - 92, '#141614');
+  for (let y = sy + 96; y < sy + sh; y += 7) rect(sx + 1, y, sw - 2, 1, '#0e100e');
+  // working: the press pumps faster right after an extraction
+  const busy = performance.now() - MACH.at < 2500;
+  egoMachine(sx + sw / 2, sy + 118, { scale: 0.9, atk: busy && Math.floor(t / 180) % 2 === 0 }, t);
+  light(sx + sw / 2, sy + 90, 46, 30, busy ? '#ffb040' : '#5ae0c0', busy ? 0.16 : 0.08, 4);
+  // status screen
+  rect(sx + 8, sy + 6, sw - 16, 22, '#050806'); rect(sx + 8, sy + 6, sw - 16, 1, '#2a4a3a');
+  txt('E.G.O EXTRACTION MACHINE', sx + sw / 2, sy + 13, '#5ae0c0', 7, 'center');
+  const ln = MACH.line.slice(0, Math.floor((performance.now() - MACH.at) / 40) + 1);
+  txt(ln + (Math.floor(t / 400) % 2 ? '_' : ''), sx + sw / 2, sy + 23, busy ? '#ffd060' : '#8ad8b0', 8, 'center');
+  riskChip('ZAYIN', sx + sw / 2 - 14, sy + sh - 12, 28);
+}
+
+function drawMarket(t) {
+  G.hubHits = [];
+  drawWide(() => drawHubBackdrop(t), 'hub');
+  ctx.globalAlpha = 0.88; rect(-OX, 0, VW, NAV_Y, '#07050c'); ctx.globalAlpha = 1;
+  metalFrame(4, 4, W - 8, NAV_Y - 8);
+  drawMachineBay(t, 8, 10, 116, 140);
+
   const rx = 130, ry = 10, rw = 182, rh = 140;
   rect(rx, ry, rw, rh, '#0e0c14');
   rect(rx, ry, rw, 1, '#4a3018');
-  [['extraer', 'EXTRACCIÓN'], ['vender', 'VENDER'], ['historial', 'HISTORIAL']].forEach(([id, label], i) => {
-    const bx = rx + 2 + i * 45, on = MK.tab === id;
-    const hv = hubHit(bx, ry + 2, 44, 11, () => { MK.tab = id; SFX.play('select'); });
-    rect(bx, ry + 2, 44, 11, on ? '#3a1820' : hv ? '#241820' : '#16121a');
-    if (on) rect(bx, ry + 12, 44, 1, '#c0283a');
-    txt(label, bx + 22, ry + 10, on ? '#fff' : '#a09080', 7, 'center');
+  if (MK.tab !== 'historial') MK.tab = 'extraer';
+  [['extraer', 'EXTRACCIÓN'], ['historial', 'HISTORIAL']].forEach(([id, label], i) => {
+    const bx = rx + 2 + i * 50, on = MK.tab === id;
+    const hv = hubHit(bx, ry + 2, 48, 11, () => { MK.tab = id; SFX.play('select'); });
+    rect(bx, ry + 2, 48, 11, on ? '#3a1820' : hv ? '#241820' : '#16121a');
+    if (on) rect(bx, ry + 12, 48, 1, '#c0283a');
+    txt(label, bx + 24, ry + 10, on ? '#fff' : '#a09080', 7, 'center');
   });
-  drawWallet(rx + 141, ry + 4);
+  drawWallet(0, ry + 4, rx + rw - 3);
   const body = { x: rx + 4, y: ry + 17, w: rw - 8, h: rh - 21 };
   if (MK.tab === 'extraer') drawExtractTab(body, t);
-  else if (MK.tab === 'historial') drawHistoryTab(body, t);
-  else drawSellTab(body, t);
+  else drawHistoryTab(body, t);
 
   if (G.pull) drawPull(t);
 }
@@ -503,20 +533,29 @@ const WORKSHOP_PLAN = [
   ['MEJORAR', 'Sube de nivel el equipamiento que ya tienes.'],
   ['BALAS ESPECIALES', 'Munición con efectos para la pistola de Gonza.'],
 ];
+const WS = { tab: 'vender' };
 function drawTaller(t) {
   G.hubHits = [];
   drawWide(() => drawHubBackdrop(t), 'hub');
   ctx.globalAlpha = 0.88; rect(-OX, 0, VW, NAV_Y, '#07050c'); ctx.globalAlpha = 1;
   metalFrame(4, 4, W - 8, NAV_Y - 8);
-  lbTitle('WORKSHOP', 14, 22, 12, LB.goldHi, 120);
-  drawWallet(240, 14);
-  WORKSHOP_PLAN.forEach(([title, desc], i) => {
-    const x = 14 + (i % 2) * 150, y = 34 + Math.floor(i / 2) * 50;
-    lbPanel(x, y, 142, 44, { accent: i % 2 ? LB.red : LB.gold });
-    lbNum(title, x + 6, y + 13, LB.goldHi, 9);
-    wrap(desc, 130, 7).forEach((ln, k) => txt(ln, x + 6, y + 23 + k * 7, LB.mute, 7));
-    lbSkew(x + 84, y + 32, 54, 9, '#0c0a09', LB.line, 3);
-    txt('PRÓXIMAMENTE', x + 111, y + 39, LB.dim, 7, 'center');
+  drawStall(t, 8, 10, 116, 140);
+  const rx = 130, ry = 10, rw = 182, rh = 140;
+  rect(rx, ry, rw, rh, '#0e0c14'); rect(rx, ry, rw, 1, '#4a3018');
+  const tabs = [['vender', 'VENDER'], ['equipo', 'EQUIPO'], ['mejorar', 'MEJORAR'], ['balas', 'BALAS']];
+  tabs.forEach(([id, label], i) => {
+    const bx = rx + 2 + i * 34, on = WS.tab === id;
+    const hv = hubHit(bx, ry + 2, 33, 11, () => { WS.tab = id; SFX.play('select'); });
+    rect(bx, ry + 2, 33, 11, on ? '#3a1820' : hv ? '#241820' : '#16121a');
+    if (on) rect(bx, ry + 12, 33, 1, '#c0283a');
+    txt(label, bx + 16.5, ry + 10, on ? '#fff' : '#a09080', 7, 'center');
   });
-  txt('Los Ahn se ganan vendiendo armas E.G.O.', 160, 142, LB.mute, 7, 'center');
+  drawWallet(0, ry + 20, rx + rw - 3);
+  const body = { x: rx + 4, y: ry + 17, w: rw - 8, h: rh - 21 };
+  if (WS.tab === 'vender') { drawSellTab({ ...body, y: body.y + 10, h: body.h - 10 }, t); return; }
+  const plan = WORKSHOP_PLAN[tabs.findIndex(x => x[0] === WS.tab)];
+  lbPanel(body.x, body.y + 14, body.w, 60, { accent: LB.red });
+  lbNum(plan[0], body.x + 6, body.y + 28, LB.goldHi, 9);
+  wrap(plan[1], body.w - 12, 7).forEach((ln, k) => txt(ln, body.x + 6, body.y + 38 + k * 7, LB.mute, 7));
+  txt('PRÓXIMAMENTE', body.x + body.w / 2, body.y + 66, LB.dim, 8, 'center');
 }
