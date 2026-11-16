@@ -380,3 +380,12 @@ body.big-text #name { font-size: 3cqw; }
 #backlog-head { color: var(--lb-gold-hi); border-bottom-color: var(--lb-gold); letter-spacing: .3cqw; }
 #card .c-title { letter-spacing: 1cqw; color: var(--lb-gold-hi); }
 #card .c-title::after { content: ''; display: block; height: .2cqw; margin: 1cqw auto 0; width: 40%; background: linear-gradient(90deg, transparent, var(--lb-red-hi), transparent); }
+
+/* feel like a native app: no blue tap highlight, no text selection or
+   long-press menu, no focus outlines, no double-tap zoom */
+* { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+textarea { -webkit-user-select: text; user-select: text; }
+button, canvas, div { outline: none; }
+button:focus, button:focus-visible, canvas:focus { outline: none; }
+html, body, #game, canvas { touch-action: manipulation; overscroll-behavior: none; }
+canvas { -webkit-user-drag: none; }

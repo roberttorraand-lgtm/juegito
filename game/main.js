@@ -811,3 +811,6 @@ function render(t) {
   requestAnimationFrame(render);
 }
 requestAnimationFrame(render);
+
+// no long-press / right-click menu inside the game
+document.addEventListener('contextmenu', (e) => { if (e.target.tagName !== 'TEXTAREA') e.preventDefault(); });
