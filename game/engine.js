@@ -175,6 +175,7 @@ function limb(x0, y0, x1, y1, L, side, f, col, th) {
 }
 
 function figure(x, y, o, t) {
+  const X0 = x, Y0 = y;
   const kid = o.hat === 'cap';
   const sc = (o.scale || 1) * (kid ? 0.86 : 1);
   if (sc !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.translate(-x, -y); }
@@ -209,6 +210,12 @@ function figure(x, y, o, t) {
   }
   // the hand that holds things: the leading arm in a pose, else the free one
   const hand = P ? (o.armless ? armL : f > 0 ? armR : armL) : o.armless ? armL : f > 0 ? armR : armL;
+  // remember where the hand (and the held weapon) really are, in the actor's
+  // own space, so E.G.O finishers can make things touch exactly
+  if (o._src && !o.tint) {
+    o._src._hand = { x: (hand[0] - X0) * sc, y: (hand[1] - Y0) * sc, f, sc };
+    o._src._back = { x: ((f > 0 ? armL : armR)[0] - X0) * sc, y: ((f > 0 ? armL : armR)[1] - Y0) * sc };
+  }
   for (const [col, extra] of o.flash ? [['#ffffff', 1], ['#ffd0d0', 0]] : o.tint ? [[o.tint, 0]] : [[FIG.edge, 1], [FIG.body, 0]]) {
     const th = 2 + extra * 2;
     disc(hx, hy, 5 + extra, col);

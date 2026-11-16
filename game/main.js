@@ -710,7 +710,7 @@ function render(t) {
       const enemyDraw = { corrupted, machine: egoMachine, operator, cableskel: cableSkel, wellcheers: wellCheers }[a.kind];
       if (!enemyDraw) blendPose(a, now, t);
       const flash = (a.flashUntil || 0) > now;
-      const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk, flash, tint: a._tint, poseData: a._pNow }, t));
+      const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk, flash, tint: a._tint, poseData: a._pNow, _src: a }, t));
       // combat animation offsets: ox/oy move, tilt rotates and sq squashes around the feet
       const posed = () => {
         if (!a.ox && !a.oy && !a.tilt && !a.sq) return base();
