@@ -909,7 +909,7 @@ function dealDamage(u, hpD) {
   if (stD) spawnAnim('text', p.x + 12, p.y + 10, `-${stD}`, '#ffd060', 900);
   particles(c.x, c.y, Math.min(14, 4 + hpD), u.team === 'ally' ? ['#ff4a5a', '#ffffff'] : ['#ff6a3a', '#ffd060', '#ffffff'], 1.8);
   u._hurt = performance.now() + 300;
-  G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 110, a: u.team === 'ally' ? 0.2 : 0.12 };
+  G.flash = { color: u.team === 'ally' ? '#ff2a3c' : '#ffffff', start: performance.now(), ms: 110, a: u.team === 'ally' ? 0.2 : CB.cine ? 0.05 : 0.12 };
   if (u.hp <= 0) {
     spawnAnim('text', p.x, p.y - 10, 'K.O.', '#ff4a5a', 1400, { big: true });
     SFX.play('ko');

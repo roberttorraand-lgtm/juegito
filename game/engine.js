@@ -187,10 +187,12 @@ function figure(x, y, o, t) {
   const nod = o.nod ? Math.round(Math.abs(Math.sin(t / 70)) * 2) : 0;
   // a blended pose (combat) wins over a named one; both are facing-relative
   const P = o.poseData || FIG_POSES[o.pose];
-  const lean = P ? Math.round(P.lean || 0) : 0, cr = P ? Math.round(P.crouch || 0) : 0;
+  // smooth (spring-driven E.G.O fighters) keeps sub-pixel lean/crouch so the body glides
+  const rnd = o.smooth ? (v) => v : Math.round;
+  const lean = P ? rnd(P.lean || 0) : 0, cr = P ? rnd(P.crouch || 0) : 0;
   const hx = x + lean * f, hy = y - 27 + nod + cr;
-  const sx = x + Math.round(lean * 0.8) * f;              // shoulder
-  const sh = y - 20 + cr, hip = y - 10 + Math.round(cr * 0.7);
+  const sx = x + rnd(lean * 0.8) * f;              // shoulder
+  const sh = y - 20 + cr, hip = y - 10 + rnd(cr * 0.7);
   let legs = o.lifted
     ? [[x - 2, y + 1], [x + 3, y + 2]]
     : o.sitting ? [[x - 8, y], [x + 8, y]] : [[x - 4, y], [x + 4, y]];
@@ -685,7 +687,7 @@ function wellCheers(x, y, o, t) {
   const sc = o.scale || 1;
   if (sc !== 1) { ctx.save(); ctx.translate(x, y); ctx.scale(sc, sc); ctx.translate(-x, -y); }
   if (o.shake || o.atk) x += Math.round(Math.sin(t / 25) * 1.5);
-  const D = '#101420', BODY = '#d8e4ec', BODYD = '#9aaab8', RED = '#c8283a', BLUE = '#2a6ab8';
+  const D = '#101420', BODY = '#bccad6', BODYD = '#8a9aa8', RED = '#c8283a', BLUE = '#2a6ab8';
   const hum = (Math.sin(t / 300) + 1) / 2;
 
   ctx.globalAlpha = 0.35; ellipse(x, y + 1, 26, 3, '#000'); ctx.globalAlpha = 1;

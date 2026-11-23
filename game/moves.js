@@ -160,7 +160,8 @@ function impactAt(c, power, o = {}) {
     const z = CB.cam.z;
     tween(CB.cam, { z: z + 0.025 * power }, 40).then(() => tween(CB.cam, { z }, 180));
   }
-  if (power >= 2) G.flash = { color: '#ffffff', start: performance.now(), ms: 50 + power * 10, a: 0.35 };
+  // inside an E.G.O finisher many blows land close together: keep the flash faint
+  if (power >= 2) G.flash = { color: '#ffffff', start: performance.now(), ms: 50 + power * 10, a: CB.cine ? 0.1 : 0.35 };
   if (power >= 3) fx('invert', 160, 0, 110, { col: c.col });
   if (power >= 3 && CFG.shakeFx && !CFG.softFlash) G.aberr = { start: performance.now(), ms: 180, px: power };
 }

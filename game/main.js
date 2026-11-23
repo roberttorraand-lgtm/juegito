@@ -629,6 +629,65 @@ function drawDoc(d, t) {
 // fast moves (strikes) blend quickly, everything else eases in more softly.
 // Combat figures stand in a breathing guard stance and slump when staggered.
 const FAST_POSES = { strike: 45, slam: 60, follow: 70 };
+// Spring-driven motion for E.G.O fighters. Every value chases its target
+// (set by tweens and keyframes) with inertia, so moves flow from one into
+// the next instead of stopping dead at each keyframe, and a little
+// overshoot gives follow-through. Turns of more than half a circle are
+// unwound, so a finished spin does not play backwards.
+const TAU_ = Math.PI * 2;
+// run fn with every globalAlpha it sets multiplied by k
+const _GA = Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'globalAlpha');
+function withAlphaScale(k, fn) {
+  const c = ctx;
+  Object.defineProperty(c, 'globalAlpha', { configurable: true, get() { return _GA.get.call(c) / k; }, set(v) { _GA.set.call(c, Math.min(1, v) * k); } });
+  try { c.globalAlpha = 1; fn(); } finally { delete c.globalAlpha; _GA.set.call(c, 1); }
+}
+
+function smoothActor(a, now) {
+  const fresh = !a._sm;
+  const S = a._sm || (a._sm = { ox: a.ox || 0, oy: a.oy || 0, tilt: a.tilt || 0, fs: a.face || 1, rot: (a.ego && a.ego.rot) || 0, v: {}, t: now });
+  let dt = Math.min(0.05, Math.max(0, (now - S.t) / 1000)) / (typeof slowMo === 'function' ? slowMo() : 1);
+  S.t = now;
+  if (fresh || CB.instant) return S;
+  const wrap = (k, target) => { while (S[k] - target > Math.PI) S[k] -= TAU_; while (target - S[k] > Math.PI) S[k] += TAU_; };
+  wrap('tilt', a.tilt || 0); wrap('rot', (a.ego && a.ego.rot) || 0);
+  const spring = (k, target, w, z, h) => {
+    const v = S.v[k] || 0;
+    S.v[k] = v + (w * w * (target - S[k]) - 2 * z * w * v) * h;
+    S[k] += S.v[k] * h;
+  };
+  for (let i = 0; i < 3; i++) {
+    const h = dt / 3;
+    spring('ox', a.ox || 0, 40, 0.9, h);
+    spring('oy', a.oy || 0, 36, 0.75, h);
+    spring('tilt', a.tilt || 0, 30, 0.7, h);
+    spring('fs', a.face || 1, 28, 0.95, h);
+    spring('rot', (a.ego && a.ego.rot) || 0, 34, 0.62, h);
+  }
+  return S;
+}
+
+const poseVec = (p) => [p.front[0], p.front[1], p.back[0], p.back[1], p.legs[0][0], p.legs[0][1], p.legs[1][0], p.legs[1][1], p.lean || 0, p.crouch || 0];
+const vecPose = (v) => ({ front: [v[0], v[1]], back: [v[2], v[3]], legs: [[v[4], v[5]], [v[6], v[7]]], lean: v[8], crouch: v[9] });
+function springPose(a, target, now) {
+  const T = poseVec(target);
+  if (!a._pS) { a._pS = { x: poseVec(a._pNow || FIG_NEUTRAL), v: new Array(10).fill(0), t: now }; }
+  const S = a._pS;
+  const dt = Math.min(0.05, Math.max(0, (now - S.t) / 1000)) / (typeof slowMo === 'function' ? slowMo() : 1);
+  S.t = now;
+  // quick keyframes get a stiffer spring; z < 1 lets the limbs overshoot a touch
+  const w = Math.max(20, Math.min(62, 5200 / Math.max(40, a._pMs || 120)));
+  const z = 0.68;
+  for (let n = 0; n < 3; n++) {
+    const h = dt / 3;
+    for (let i = 0; i < 10; i++) {
+      S.v[i] += (w * w * (T[i] - S.x[i]) - 2 * z * w * S.v[i]) * h;
+      S.x[i] += S.v[i] * h;
+    }
+  }
+  return vecPose(S.x);
+}
+
 function blendPose(a, now, t) {
   if (a.lifted || a.sitting) { a._pNow = null; return; }
   const want = a.pose || (a.combat ? (a.stag ? 'slump' : 'ready') : null);
@@ -640,8 +699,16 @@ function blendPose(a, now, t) {
     a._pMs = a.poseMs != null ? Math.max(1, a.poseMs) : FAST_POSES[want] || 120;
   }
   const k = Math.min(1, (now - a._pStart) / a._pMs);
-  const e = 1 - Math.pow(1 - k, 3);
-  const P = lerpPose(a._pFrom, FIG_POSES[want] || FIG_NEUTRAL, e);
+  let P;
+  if (a.ego && G.mode === 'combat') {
+    // E.G.O fighters: every joint is a spring chasing the keyframe, so
+    // limbs keep their momentum through one pose into the next
+    P = springPose(a, FIG_POSES[want] || FIG_NEUTRAL, now);
+  } else {
+    a._pS = null;
+    const e = 1 - Math.pow(1 - k, 3);
+    P = lerpPose(a._pFrom, FIG_POSES[want] || FIG_NEUTRAL, e);
+  }
   if (want === 'ready' || want === 'slump') {
     const br = Math.sin(t / 520 + a.x) * (want === 'slump' ? 1.2 : 0.8);
     P.front[1] += br; P.back[1] += br;
@@ -709,20 +776,27 @@ function render(t) {
       const talk = G.s.typing && G.s.speaker === id;
       const enemyDraw = { corrupted, machine: egoMachine, operator, cableskel: cableSkel, wellcheers: wellCheers }[a.kind];
       if (!enemyDraw) blendPose(a, now, t);
+      // a fighter holding an E.G.O weapon moves through springs (smoothActor):
+      // V is what gets drawn, the raw ox/oy/tilt/face are only its targets
+      const S = !enemyDraw && G.mode === 'combat' && a.ego ? smoothActor(a, now) : (a._sm = null);
+      const V = S || a;
+      const fsK = S ? Math.max(0.35, Math.abs(S.fs)) : 1;
       const flash = (a.flashUntil || 0) > now;
-      const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, talk, flash, tint: a._tint, poseData: a._pNow, _src: a }, t));
+      const look = S ? { face: S.fs < 0 ? -1 : 1, ego: { ...a.ego, rot: S.rot }, smooth: true } : null;
+      const base = () => (enemyDraw ? enemyDraw(a.x, a.y, a, t) : figure(a.x, a.y, { ...a, ...look, talk, flash, tint: a._tint, poseData: a._pNow, _src: a }, t));
       // combat animation offsets: ox/oy move, tilt rotates and sq squashes around the feet
       const posed = () => {
-        if (!a.ox && !a.oy && !a.tilt && !a.sq) return base();
+        if (!V.ox && !V.oy && !V.tilt && !a.sq && fsK === 1) return base();
         ctx.save();
-        ctx.translate(a.x + (a.ox || 0), a.y + (a.oy || 0));
-        if (a.tilt) ctx.rotate(a.tilt);
+        ctx.translate(a.x + (V.ox || 0), a.y + (V.oy || 0));
+        if (V.tilt) ctx.rotate(V.tilt);
         if (a.sq) ctx.scale(1 + a.sq, 1 - a.sq);
+        if (fsK !== 1) ctx.scale(fsK, 1);          // turning round: the body narrows, flips, widens
         ctx.translate(-a.x, -a.y);
         base();
         ctx.restore();
       };
-      if (CFG.shadows && !a.lifted && !a.dying) drawActorShadow(a, () => { ctx.save(); ctx.translate(a.ox || 0, 0); base(); ctx.restore(); });
+      if (CFG.shadows && !a.lifted && !a.dying) drawActorShadow(a, () => { ctx.save(); ctx.translate(V.ox || 0, 0); base(); ctx.restore(); });
       const fade = a.alpha == null ? 1 : a.alpha;
       for (const g of a.ghosts || []) {
         // afterimages take the colour of the move
@@ -734,7 +808,10 @@ function render(t) {
       posed();
       if (flash && enemyDraw) {
         // brighten the enemy for a frame or two when it is hit
-        ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = CFG.softFlash ? 0.28 : 0.65; posed();
+        // the enemy drawers set globalAlpha themselves, so scale every alpha
+        // they set: otherwise the "faint" flash would paint at full strength
+        ctx.globalCompositeOperation = 'lighter';
+        withAlphaScale(CFG.softFlash ? (CB.cine ? 0.14 : 0.22) : 0.65, posed);
         ctx.globalCompositeOperation = 'source-over';
       }
       ctx.globalAlpha = 1;

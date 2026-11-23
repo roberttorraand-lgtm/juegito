@@ -372,8 +372,10 @@ function cineReset() { Object.assign(CP, { parts: [], decals: [], trail: [], rop
 
 // a point in the actor's own (untilted) space, in world coordinates
 function toWorld(a, lx, ly) {
-  const t = a.tilt || 0, q = a.sq || 0, sx = lx * (1 + q), sy = ly * (1 - q);
-  return { x: a.x + (a.ox || 0) + sx * Math.cos(t) - sy * Math.sin(t), y: a.y + (a.oy || 0) + sx * Math.sin(t) + sy * Math.cos(t) };
+  // what is drawn: the spring-smoothed body when there is one
+  const V = a._sm || a, fk = a._sm ? Math.max(0.35, Math.abs(a._sm.fs)) : 1;
+  const t = V.tilt || 0, q = a.sq || 0, sx = lx * (1 + q) * fk, sy = ly * (1 - q);
+  return { x: a.x + (V.ox || 0) + sx * Math.cos(t) - sy * Math.sin(t), y: a.y + (V.oy || 0) + sx * Math.sin(t) + sy * Math.cos(t) };
 }
 const handW = (a) => (a._hand ? toWorld(a, a._hand.x, a._hand.y) : { x: a.x + (a.ox || 0), y: a.y - 18 });
 const backW = (a) => (a._back ? toWorld(a, a._back.x, a._back.y) : handW(a));
@@ -381,7 +383,7 @@ const backW = (a) => (a._back ? toWorld(a, a._back.x, a._back.y) : handW(a));
 function wpnW(a, px, py) {
   const h = a._hand;
   if (!h || !a.ego) return handW(a);
-  const r = a.ego.rot || 0, s = (a.ego.s || 0.75) * h.sc, f = h.f;
+  const r = a._sm ? a._sm.rot : a.ego.rot || 0, s = (a.ego.s || 0.75) * h.sc, f = h.f;
   const lx = h.x + f * 3 * h.sc + f * s * (px * Math.cos(r) - py * Math.sin(r));
   const ly = h.y - 3 * h.sc + s * (px * Math.sin(r) + py * Math.cos(r));
   return toWorld(a, lx, ly);
@@ -1187,7 +1189,7 @@ const FINISHERS = {
       // front half: it comes round into the target
       a.face = c.dir;
       c.weapon({ rot: last ? -1.2 : 1.8 }, 40, easeIn);
-      await c.f({ pose: last ? 'slashUp' : 'sweep', x: c.at(last ? 'slashUp' : 'sweep', 5), y: last ? -4 : 0, ms: Math.max(16, ms * 0.35), hit: true, stop: last ? 120 : 22 });
+      await c.f({ pose: last ? 'slashUp' : 'sweep', x: c.at(last ? 'slashUp' : 'sweep', 1), y: last ? -4 : 0, ms: Math.max(16, ms * 0.35), hit: true, stop: last ? 120 : 22 });
       const at = c.front(last ? 0.6 : 0.45 + (i % 2) * 0.1);
       c.hit({ at, sfx: 'slash', camDy: last ? -2 : 0, react: last ? { kb: 18, up: 12, tilt: 0.4 } : { kb: 4 + i, tilt: 0.12 } });
       debris('shard', at.x, at.y, last ? 10 : 3, { angle: away(c, last ? 1.2 : 0.4), speed: 2.4, cols: GLASS, size: 1.3, bounce: 0.4, life: 90 });
