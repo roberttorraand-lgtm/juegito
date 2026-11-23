@@ -1097,7 +1097,58 @@ function drawHallway() {
 }
 
 const HALL_DRIPS = [[96, 0.2], [188, 0.45], [232, 0.12]];
+
+// ---------------------------------------------------------------------
+// Pre-rendered backgrounds: modelled and lit in Blender
+// (tools/blender/*.py), turned into pixel art (tools/blender/pixelize.py).
+// They are wider than the screen by IMG_MARGIN on each side for fill mode.
+// Until an image has loaded, the procedural drawing is used.
+// ---------------------------------------------------------------------
+const BG_IMG = {}, IMG_MARGIN = 48;
+function bgImg(name) {
+  let im = BG_IMG[name];
+  if (!im) { im = BG_IMG[name] = new Image(); im.src = 'img/' + name + '.png'; }
+  return im.complete && im.naturalWidth ? im : null;
+}
+bgImg('hallway_closed'); bgImg('hallway_open');
+// the Blender camera of the hallway: world X (right), Z (up) at depth D → screen
+const HALL3D = { f: 147.9, camZ: 2.15, horizon: 74 };
+const hall3d = (X, Z, D) => [160 + HALL3D.f * X / D, HALL3D.horizon + HALL3D.f * (HALL3D.camZ - Z) / D];
+// the wall lamps' lenses (projected by hallway.py) and the size they show
+const HALL3D_LAMPS = [[16.7, 41.6, 10, 4], [105.4, 64.3, 4, 2], [203.7, 67, 3, 2]];
+// drips fall from the ceiling pipes: [pipe X, pipe bottom Z, depth]
+const HALL3D_DRIPS = [[-2.25, 3.33, 6], [2.3, 3.32, 9], [-2.7, 3.22, 4.5]].map(([X, Z, D]) => [hall3d(X, Z, D), hall3d(X, 0, D)]);
+
+function drawHallway3D(s, t, img) {
+  ctx.drawImage(img, -IMG_MARGIN, 0);
+  // the sign over the break-room door
+  pixText('SALA DE', 259, 43, '#8ac0a0'); pixText('DESCANSO', 257, 50, '#8ac0a0');
+  light(272, 50, 24, 10, '#6ac090', 0.08, 3);
+  // emergency lamps: they flicker; an unlit lens goes dark
+  s._lamps = [];
+  HALL3D_LAMPS.forEach(([x, y, w, h], k) => {
+    const on = hash(Math.floor(t / 110) + (k + 1) * 77) > 0.12;
+    if (on) { light(x, y + 3, 16 + w * 1.5, 12 + w, '#ff6a30', 0.13, 3); s._lamps.push([x, y + 6]); }
+    else { ctx.globalAlpha = 0.85; rect(x - w / 2, y - h / 2, w, h, '#1a0e0a'); ctx.globalAlpha = 1; }
+  });
+  // water dripping from the pipes, splashing on the floor
+  HALL3D_DRIPS.forEach(([[x, yTop], [, yFloor]], k) => {
+    const period = 1700 + k * 430, ph = (t + k * 900) % period;
+    const fall = ph / 520;
+    if (fall < 1) rect(x, yTop + (yFloor - yTop) * fall * fall, 1, 2, '#8ab4d0');
+    else if (fall < 1.8) {
+      const q = (fall - 1) / 0.8, r = 1 + q * 6;
+      ctx.globalAlpha = 0.6 * (1 - q);
+      rect(x - r, yFloor + 1, 2, 1, '#7a9ab0'); rect(x + r - 1, yFloor + 1, 2, 1, '#7a9ab0');
+      rect(x - r * 0.5, yFloor, r, 1, '#5a7a90');
+      ctx.globalAlpha = 1;
+    }
+  });
+}
+
 BG.hallway = (s, t) => {
+  const img = bgImg(s.doorOpen ? 'hallway_open' : 'hallway_closed');
+  if (img) return drawHallway3D(s, t, img);
   blit(layer('hallway', drawHallway));
   if (s.doorOpen) {
     const d0 = 0.24, d1 = 0.4;
@@ -1325,7 +1376,7 @@ function drawDarkness(s, t) {
 //  WIDE SCREENS — when the view is wider than 320 (fill mode), scenery
 //  repeats into the side margins; UI-style screens get a flat colour.
 // =====================================================================
-const BG_EDGE = { call: '#121218', share: '#121218' };
+const BG_EDGE = { call: '#121218', share: '#121218', hallway: '#07090b' };
 function drawWide(fn, key) {
   if (OX > 0) {
     if (BG_EDGE[key]) rect(-OX, 0, VW, H, BG_EDGE[key]);
