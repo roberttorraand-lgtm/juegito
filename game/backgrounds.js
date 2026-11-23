@@ -1268,13 +1268,14 @@ function drawDarkness(s, t) {
       g.beginPath(); g.arc(Math.round(x + OX), Math.round(y), r * k / 3, 0, Math.PI * 2); g.fill();
     }
   };
-  const beams = [];
+  const beams = [], glows = [];
   for (const id in G.actors) {
     const a = G.actors[id];
     if (!a || (a.kind && a.kind !== 'fig')) continue;
     const sc = (a.scale || 1) * (a.hat === 'cap' ? 0.86 : 1);
     hole(a.x, a.y - 16 * sc, 13 * sc + 6, 0.45);   // keep the characters readable
     if (a.phone) beams.push([a.x + (a.face || 1) * 7 * sc, a.y - 19 * sc, a.face || 1, sc]);
+    if (a.glow) { hole(a.x - (a.face || 1) * 6 * sc, a.y - 10 * sc, 34 * sc + 10, 0.7); glows.push([a.x - (a.face || 1) * 6 * sc, a.y - 10 * sc, sc]); }
   }
   for (const [x, y, r] of (DARK_LIGHTS[s.bg] ? DARK_LIGHTS[s.bg](s) : [])) hole(x, y, r, 0.75);
   const flick = 0.94 + 0.06 * Math.sin(t / 40) * Math.sin(t / 13);
@@ -1292,6 +1293,8 @@ function drawDarkness(s, t) {
   }
   g.globalAlpha = 1;
   ctx.drawImage(_darkC, -OX, 0, VW, H);
+  // the fluorescent light's cold green halo
+  for (const [gx, gy, sc] of glows) light(gx, gy, 40 * sc, 34 * sc, '#b8ffd8', 0.06, 4);
   // visible light: a cold tint in the beam, a hot spot where it lands,
   // dust floating inside it and the glare of the phone's flash
   const op = ctx.globalCompositeOperation;

@@ -253,6 +253,21 @@ function figure(x, y, o, t) {
     for (const ex of [1, 3]) for (let j = 0; j < 3; j++) if ((j + k) % 4 !== 3) mpx(ex, j + 1, '#6ab4ff');
     if (k === 0) mpx(4, 4, '#6ab4ff');
   }
+  if (o.bag) {
+    // improvised bag of rope and suit cloth: strap across the chest, pouch on the back hip
+    const bx = x - f * 6, by = hip + 1;
+    line(sx + f * 2, sh, bx, by - 3, '#7a6a4a', 1);
+    rect(bx - 3, by - 4, 6, 6, '#3a3440'); rect(bx - 3, by - 4, 6, 1, '#5a5260');
+    rect(bx - 2, by - 6, 3, 2, '#e8e0d0');                         // a report sticking out
+    px(bx + 1, by - 1, '#c8283a');                                 // the first-aid kit's cross
+  }
+  if (o.glow) {
+    // a fluorescent emergency light in the free hand
+    const [lx, ly] = f > 0 ? armL : armR;
+    const on = 0.85 + 0.15 * Math.sin(t / 90);
+    light(lx, ly + 2, 16, 16, '#b8ffd8', 0.22 * on, 3);
+    rect(lx - 1, ly - 2, 2, 7, '#c8ffe0'); px(lx - 1, ly - 2, '#ffffff'); rect(lx - 1, ly + 5, 2, 1, '#3a4a40');
+  }
   if (o.phone) {
     // phone in hand, its flash pointing forward
     rect(hand[0] - 1, hand[1] - 3, 3, 4, '#2a2a38');
@@ -266,6 +281,14 @@ function figure(x, y, o, t) {
     if (o.ego.rot) ctx.rotate(o.ego.rot);
     egoIcon(o.ego.kind, 0, 0, o.ego.s || 0.75, o.ego.col);
     ctx.restore();
+  } else if (o.item === 'baton') {
+    // a self-defence baton: rubber grip in the fist, black shaft pointing forward and down
+    const [gx, gy] = hand, d = f > 0 ? 1 : -1;
+    const ang = o.batonUp ? -1.2 : 0.5;
+    const ex = gx + d * Math.cos(ang) * 10, ey = gy + Math.sin(ang) * 10;
+    line(gx - d * Math.cos(ang) * 2, gy - Math.sin(ang) * 2, gx, gy, '#5a3a2a', 2);
+    line(gx, gy, ex, ey, '#1a1a22', 2);
+    px(ex, ey, '#5a5a66');
   } else if (o.item === 'pistol') {
     // small low-calibre pistol held by the grip, barrel pointing forward
     const [gx, gy] = hand, d = f > 0 ? 1 : -1;
